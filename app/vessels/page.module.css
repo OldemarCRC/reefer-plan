@@ -1,0 +1,224 @@
+/* ============================================================================
+   VESSELS PAGE
+   ============================================================================ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.pageTitle {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+}
+
+.pageSubtitle {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  margin-top: var(--space-1);
+}
+
+.btnPrimary {
+  background: var(--color-blue);
+  color: white;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  transition: all var(--transition-fast);
+}
+
+.btnPrimary:hover {
+  background: var(--color-blue-dark);
+}
+
+.btnGhost {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.btnGhost:hover {
+  color: var(--color-blue-light);
+  background: var(--color-blue-muted);
+}
+
+/* --- Vessel grid --- */
+
+.vesselGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: var(--space-4);
+}
+
+/* --- Vessel card --- */
+
+.vesselCard {
+  background: var(--color-surface);
+  border: var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  transition: all var(--transition-fast);
+}
+
+.vesselCard:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--color-surface-hover);
+}
+
+/* --- Card top --- */
+
+.cardTop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.shipIcon {
+  width: 64px;
+  height: 40px;
+  margin-bottom: var(--space-1);
+}
+
+.shipIcon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.vesselName {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.vesselImo {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+.activeVoyage {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-cyan-light);
+  background: var(--color-cyan-muted);
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-weight: var(--weight-medium);
+}
+
+.activeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-cyan);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* --- Specs grid --- */
+
+.specsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+}
+
+.specItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.specValue {
+  font-family: var(--font-heading);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.specLabel {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* --- Temperature range --- */
+
+.tempRange {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.tempRangeBar {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.tempFrozen {
+  flex: 2.5;
+  background: linear-gradient(90deg, #1D4ED8, #3B82F6);
+}
+
+.tempChilled {
+  flex: 2.5;
+  background: linear-gradient(90deg, #3B82F6, #06B6D4);
+}
+
+.tempBanana {
+  flex: 1.5;
+  background: linear-gradient(90deg, #06B6D4, #FCD34D);
+}
+
+.tempLabels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+}
+
+/* --- Card footer --- */
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--space-3);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.flag {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}

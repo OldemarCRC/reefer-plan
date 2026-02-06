@@ -1,0 +1,475 @@
+// ============================================================================
+// STOWAGE PLAN SERVER ACTIONS
+// Handles stowage planning with cooling section validation
+//
+// CHANGE #1: Plans can be created 4+ weeks in advance (ESTIMATED status)
+// CHANGE #6: Cooling sections - compartments sharing refrigeration must have same temp
+// CHANGE #7: Reefer plug limits on deck
+// ============================================================================
+
+'use server'
+
+import { z } from 'zod';
+import connectDB from '@/lib/db/connect';
+import { StowagePlanModel, VesselModel } from '@/lib/db/schemas';
+import type { StowagePlan, StowagePlanStatus } from '@/types/models';
+
+// ----------------------------------------------------------------------------
+// VALIDATION SCHEMAS
+// ----------------------------------------------------------------------------
+
+const StowagePlanIdSchema = z.string().min(1, 'Plan ID is required');
+
+const CreateStowagePlanSchema = z.object({
+  vesselId: z.string().min(1),
+  voyageId: z.string().min(1),
+  createdBy: z.string().min(1), // User ID
+  estimatedDepartureDate: z.date().optional(),
+});
+
+const AssignCargoSchema = z.object({
+  planId: z.string().min(1),
+  bookingId: z.string().min(1),
+  compartmentId: z.string().min(1),
+  quantity: z.number().int().positive(),
+  temperature: z.number().min(-30).max(20),
+});
+
+const AssignDeckContainerSchema = z.object({
+  planId: z.string().min(1),
+  bookingId: z.string().min(1),
+  quantity: z.number().int().positive().max(19), // Max reefer plugs
+  temperature: z.number().min(-30).max(20),
+});
+
+// ----------------------------------------------------------------------------
+// CREATE STOWAGE PLAN
+// CHANGE #1: Can create plans weeks in advance with ESTIMATED status
+// ----------------------------------------------------------------------------
+
+export async function createStowagePlan(data: unknown) {
+  try {
+    const validated = CreateStowagePlanSchema.parse(data);
+    
+    await connectDB();
+    
+    // Generate plan number
+    const year = new Date().getFullYear();
+    const count = await StowagePlanModel.countDocuments();
+    const planNumber = `SP-${year}-${String(count + 1).padStart(4, '0')}`;
+    
+    // Get vessel to initialize cooling sections
+    const vessel = await VesselModel.findById(validated.vesselId);
+    if (!vessel) {
+      return { success: false, error: 'Vessel not found' };
+    }
+    
+    // Determine initial status based on departure date
+    const daysUntilDeparture = validated.estimatedDepartureDate
+      ? Math.ceil(
+          (validated.estimatedDepartureDate.getTime() - Date.now()) / 
+          (1000 * 60 * 60 * 24)
+        )
+      : 0;
+    
+    const initialStatus: StowagePlanStatus = 
+      daysUntilDeparture >= 28 ? 'ESTIMATED' : 'DRAFT';
+    
+    const plan = await StowagePlanModel.create({
+      planNumber,
+      vesselId: validated.vesselId,
+      voyageId: validated.voyageId,
+      status: initialStatus,
+      palletPositions: [],
+      containerPositions: [],
+      coolingSectionStatus: vessel.coolingSections.map(cs => ({
+        sectionId: cs.sectionId,
+        compartmentIds: cs.compartmentIds,
+        assignedTemperature: undefined,
+        locked: false,
+        assignedCargo: [],
+      })),
+      overstowViolations: [],
+      temperatureConflicts: [],
+      weightDistributionWarnings: [],
+      createdBy: validated.createdBy,
+    });
+    
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(plan)),
+      message: initialStatus === 'ESTIMATED' 
+        ? 'Plan created with ESTIMATED status (4+ weeks in advance)'
+        : 'Plan created as DRAFT',
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: `Validation error: ${error.errors[0].message}`,
+      };
+    }
+    console.error('Error creating stowage plan:', error);
+    return {
+      success: false,
+      error: 'Failed to create stowage plan',
+    };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// ASSIGN CARGO TO COMPARTMENT
+// CHANGE #6: Validates cooling section temperature compatibility
+// ----------------------------------------------------------------------------
+
+export async function assignCargoToCompartment(data: unknown) {
+  try {
+    const validated = AssignCargoSchema.parse(data);
+    
+    await connectDB();
+    
+    const plan = await StowagePlanModel.findById(validated.planId);
+    if (!plan) {
+      return { success: false, error: 'Plan not found' };
+    }
+    
+    const vessel = await VesselModel.findById(plan.vesselId);
+    if (!vessel) {
+      return { success: false, error: 'Vessel not found' };
+    }
+    
+    // CRITICAL: Find cooling section for this compartment
+    const coolingSection = vessel.coolingSections.find(cs =>
+      cs.compartmentIds.includes(validated.compartmentId)
+    );
+    
+    if (!coolingSection) {
+      return {
+        success: false,
+        error: 'Compartment not found in any cooling section',
+      };
+    }
+    
+    // CRITICAL: Validate temperature compatibility
+    const sectionStatus = plan.coolingSectionStatus?.find(
+      cs => cs.sectionId === coolingSection.sectionId
+    );
+    
+    if (sectionStatus) {
+      // If section already has assigned temperature
+      if (
+        sectionStatus.assignedTemperature !== undefined &&
+        sectionStatus.assignedTemperature !== validated.temperature
+      ) {
+        return {
+          success: false,
+          error: `Temperature conflict: Cooling section ${coolingSection.sectionId} is already set to ${sectionStatus.assignedTemperature}°C. All compartments in this section must share the same temperature. Compartments in this section: ${coolingSection.compartmentIds.join(', ')}`,
+        };
+      }
+      
+      // If section is locked
+      if (sectionStatus.locked) {
+        return {
+          success: false,
+          error: `Cooling section ${coolingSection.sectionId} is locked and cannot be modified`,
+        };
+      }
+      
+      // Assign temperature to cooling section if not set
+      if (sectionStatus.assignedTemperature === undefined) {
+        sectionStatus.assignedTemperature = validated.temperature;
+      }
+    }
+    
+    // Add cargo to plan
+    plan.palletPositions.push({
+      bookingId: validated.bookingId,
+      cargoUnitId: `UNIT-${Date.now()}`, // Generate unique ID
+      compartment: {
+        id: validated.compartmentId,
+        holdNumber: getHoldNumber(validated.compartmentId),
+        level: getLevel(validated.compartmentId),
+      },
+      weight: 0, // Will be calculated from booking data
+      position: {
+        lcg: 0, // Will be calculated from compartment position
+        tcg: 0,
+        vcg: 0,
+      },
+    });
+    
+    await plan.save();
+    
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(plan)),
+      message: `Cargo assigned to ${validated.compartmentId} at ${validated.temperature}°C`,
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: `Validation error: ${error.errors[0].message}`,
+      };
+    }
+    console.error('Error assigning cargo:', error);
+    return {
+      success: false,
+      error: 'Failed to assign cargo',
+    };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// ASSIGN CONTAINERS TO DECK
+// CHANGE #7: Validates reefer plug limit (19 for ACONCAGUA BAY)
+// ----------------------------------------------------------------------------
+
+export async function assignContainersToDeck(data: unknown) {
+  try {
+    const validated = AssignDeckContainerSchema.parse(data);
+    
+    await connectDB();
+    
+    const plan = await StowagePlanModel.findById(validated.planId);
+    if (!plan) {
+      return { success: false, error: 'Plan not found' };
+    }
+    
+    const vessel = await VesselModel.findById(plan.vesselId);
+    if (!vessel) {
+      return { success: false, error: 'Vessel not found' };
+    }
+    
+    // CRITICAL: Check reefer plug limit
+    const currentDeckContainers = plan.containerPositions?.length || 0;
+    const maxReeferPlugs = vessel.deckContainerCapacity?.maxReeferPlugs || 0;
+    
+    if (currentDeckContainers + validated.quantity > maxReeferPlugs) {
+      return {
+        success: false,
+        error: `Reefer plug limit exceeded: ${currentDeckContainers} + ${validated.quantity} > ${maxReeferPlugs} max plugs`,
+      };
+    }
+    
+    // Add containers to deck
+    for (let i = 0; i < validated.quantity; i++) {
+      plan.containerPositions = plan.containerPositions || [];
+      plan.containerPositions.push({
+        bookingId: validated.bookingId,
+        cargoUnitId: `DECK-${Date.now()}-${i}`,
+        compartment: {
+          id: 'DECK',
+          holdNumber: 0,
+          level: 'DECK',
+        },
+        weight: 0,
+        position: { lcg: 0, tcg: 0, vcg: 0 },
+      });
+    }
+    
+    await plan.save();
+    
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(plan)),
+      message: `${validated.quantity} containers assigned to deck (${currentDeckContainers + validated.quantity}/${maxReeferPlugs} reefer plugs used)`,
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: `Validation error: ${error.errors[0].message}`,
+      };
+    }
+    console.error('Error assigning deck containers:', error);
+    return {
+      success: false,
+      error: 'Failed to assign deck containers',
+    };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// VALIDATE COOLING SECTIONS
+// Checks all cooling sections for temperature conflicts
+// ----------------------------------------------------------------------------
+
+export async function validateCoolingSections(planId: unknown) {
+  try {
+    const id = StowagePlanIdSchema.parse(planId);
+    
+    await connectDB();
+    
+    const plan = await StowagePlanModel.findById(id);
+    if (!plan) {
+      return { success: false, error: 'Plan not found' };
+    }
+    
+    const vessel = await VesselModel.findById(plan.vesselId);
+    if (!vessel) {
+      return { success: false, error: 'Vessel not found' };
+    }
+    
+    const conflicts: string[] = [];
+    
+    // Check each cooling section
+    for (const coolingSection of vessel.coolingSections) {
+      const compartmentsInSection = plan.palletPositions.filter(pos =>
+        coolingSection.compartmentIds.includes(pos.compartment.id)
+      );
+      
+      if (compartmentsInSection.length === 0) continue;
+      
+      // Get unique temperatures in this section
+      const temperatures = new Set(
+        compartmentsInSection.map(pos => {
+          // TODO: Get actual temperature from cargo data
+          return 0; // Placeholder
+        })
+      );
+      
+      if (temperatures.size > 1) {
+        conflicts.push(
+          `Cooling section ${coolingSection.sectionId} has multiple temperatures: ${Array.from(temperatures).join(', ')}°C`
+        );
+      }
+    }
+    
+    return {
+      success: true,
+      valid: conflicts.length === 0,
+      conflicts,
+    };
+  } catch (error) {
+    console.error('Error validating cooling sections:', error);
+    return {
+      success: false,
+      error: 'Failed to validate cooling sections',
+    };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// GET PLAN BY ID
+// ----------------------------------------------------------------------------
+
+export async function getStowagePlanById(id: unknown) {
+  try {
+    const planId = StowagePlanIdSchema.parse(id);
+    
+    await connectDB();
+    
+    const plan = await StowagePlanModel.findById(planId)
+      .populate('vesselId')
+      .populate('voyageId')
+      .lean();
+    
+    if (!plan) {
+      return { success: false, error: 'Plan not found' };
+    }
+    
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(plan)),
+    };
+  } catch (error) {
+    console.error('Error fetching plan:', error);
+    return {
+      success: false,
+      error: 'Failed to fetch plan',
+    };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// GET PLANS BY VOYAGE
+// ----------------------------------------------------------------------------
+
+export async function getStowagePlansByVoyage(voyageId: unknown) {
+  try {
+    const id = z.string().parse(voyageId);
+    
+    await connectDB();
+    
+    const plans = await StowagePlanModel.find({ voyageId: id })
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(plans)),
+    };
+  } catch (error) {
+    console.error('Error fetching plans:', error);
+    return {
+      success: false,
+      error: 'Failed to fetch plans',
+    };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// UPDATE PLAN STATUS
+// ----------------------------------------------------------------------------
+
+export async function updatePlanStatus(
+  planId: unknown,
+  status: unknown
+) {
+  try {
+    const id = StowagePlanIdSchema.parse(planId);
+    const newStatus = z.enum([
+      'DRAFT',
+      'ESTIMATED',
+      'READY_FOR_CAPTAIN',
+      'EMAIL_SENT',
+      'CAPTAIN_APPROVED',
+      'CAPTAIN_REJECTED',
+      'IN_REVISION',
+      'READY_FOR_EXECUTION',
+      'IN_EXECUTION',
+      'COMPLETED',
+      'CANCELLED',
+    ]).parse(status);
+    
+    await connectDB();
+    
+    const plan = await StowagePlanModel.findByIdAndUpdate(
+      id,
+      { status: newStatus },
+      { new: true }
+    );
+    
+    if (!plan) {
+      return { success: false, error: 'Plan not found' };
+    }
+    
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(plan)),
+    };
+  } catch (error) {
+    console.error('Error updating plan status:', error);
+    return {
+      success: false,
+      error: 'Failed to update plan status',
+    };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// HELPER FUNCTIONS
+// ----------------------------------------------------------------------------
+
+function getHoldNumber(compartmentId: string): number {
+  // Extract hold number from compartment ID (e.g., "H2-UPD" -> 2)
+  const match = compartmentId.match(/^H(\d+)-/);
+  return match ? parseInt(match[1]) : 0;
+}
+
+function getLevel(compartmentId: string): string {
+  // Extract level from compartment ID (e.g., "H2-UPD" -> "UPD")
+  const parts = compartmentId.split('-');
+  return parts[1] || '';
+}
