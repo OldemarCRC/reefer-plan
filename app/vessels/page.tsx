@@ -1,6 +1,7 @@
 import AppShell from '@/components/layout/AppShell';
 import { mockVessels } from '@/lib/mock-data';
 import styles from './page.module.css';
+import Link from 'next/link';
 
 export default function VesselsPage() {
   return (
@@ -95,7 +96,9 @@ export default function VesselsPage() {
               {/* Footer */}
               <div className={styles.cardFooter}>
                 <span className={styles.flag}>{v.flag}</span>
-                <button className={styles.btnGhost}>View Profile →</button>
+                <Link href={`/vessels/vs1`} className={styles.btnGhost}>
+                  View Profile →
+                </Link>
               </div>
             </div>
           ))}

@@ -1,0 +1,200 @@
+/* ============================================================================
+   VESSEL PROFILE - Longitudinal Cross Section SVG
+   ============================================================================ */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* --- Header --- */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.subtitle {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+}
+
+/* --- Legend --- */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.legendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.legendLabel {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+
+.legendTemp {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  font-weight: var(--weight-medium);
+}
+
+/* --- SVG wrapper --- */
+
+.svgWrap {
+  position: relative;
+  background: var(--color-surface);
+  border: var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  overflow: hidden;
+}
+
+.svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* --- SVG text styles --- */
+
+.holdLabel {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--color-text-secondary);
+  letter-spacing: 0.03em;
+}
+
+.compLabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  fill: var(--color-text-primary);
+  pointer-events: none;
+}
+
+.compCount {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  fill: var(--color-text-secondary);
+  pointer-events: none;
+}
+
+.levelLabel {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  fill: var(--color-text-muted);
+}
+
+.dirLabel {
+  font-family: var(--font-heading);
+  font-size: 10px;
+  fill: var(--color-text-muted);
+  letter-spacing: 0.08em;
+}
+
+/* --- Detail panel (overlay) --- */
+
+.detailPanel {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 220px;
+  background: rgba(10, 22, 40, 0.95);
+  backdrop-filter: blur(8px);
+  border: var(--border-subtle);
+  border-left-width: 3px;
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  z-index: 10;
+  animation: fadeIn 150ms ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.detailHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.detailId {
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-primary);
+}
+
+.detailZone {
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.detailItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detailLabel {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.detailValue {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+}
+
+.detailShipments {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  padding-top: var(--space-2);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
