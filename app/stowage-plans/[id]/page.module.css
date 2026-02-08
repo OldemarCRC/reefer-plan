@@ -483,6 +483,14 @@
   margin-bottom: 0.75rem;
 }
 
+.conflictCardWarning {
+  background: rgba(234, 179, 8, 0.05);
+  border: 1px solid rgba(234, 179, 8, 0.2);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+}
+
 .conflictHeader {
   display: flex;
   align-items: center;
@@ -732,6 +740,63 @@
   font-weight: 600;
   font-size: 0.875rem;
   color: var(--text-primary);
+}
+
+.conflictWarning {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0 1.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(234, 179, 8, 0.08);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  border-radius: 6px;
+  color: var(--warning);
+  font-size: 0.8rem;
+}
+
+.conflictWarning svg {
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.conflictWarning strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.conflictWarning p {
+  margin: 0 0 0.25rem 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.btnWarning {
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: rgba(234, 179, 8, 0.15);
+  color: var(--warning);
+  border: 1px solid rgba(234, 179, 8, 0.4);
+  transition: all 0.2s;
+}
+
+.btnWarning:hover {
+  background: rgba(234, 179, 8, 0.25);
+}
+
+.confirmedBadge {
+  font-size: 0.65rem;
+  padding: 0.125rem 0.4rem;
+  background: rgba(234, 179, 8, 0.1);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  border-radius: 4px;
+  color: var(--warning);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 .modalActions {

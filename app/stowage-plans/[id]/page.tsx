@@ -1,7 +1,7 @@
 // app/stowage-plans/[id]/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import VesselProfile from '@/components/vessel/VesselProfile';
@@ -25,6 +25,8 @@ export default function StowagePlanDetailPage() {
   const [activeTab, setActiveTab] = useState<'cargo' | 'stability' | 'validation'>('cargo');
   const [assigningShipment, setAssigningShipment] = useState<CargoInPlan | null>(null);
   const [selectedCompartment, setSelectedCompartment] = useState<string>('');
+  const [showConflictWarning, setShowConflictWarning] = useState(false);
+  const [confirmedConflicts, setConfirmedConflicts] = useState<Set<string>>(new Set());
 
   // Mock data - replace with actual data fetching
   const plan = {
@@ -102,19 +104,79 @@ export default function StowagePlanDetailPage() {
     { sectionId: '4CD', zoneId: 'ZONE_4CD', temp: 6, compartments: ['H4-C', 'H4-D'] },
   ];
 
-  const validation = {
-    overstowViolations: [],
-    temperatureConflicts: [
-      {
-        compartmentId: 'H3-D',
-        description: 'Grapes require 0°C but section is at +13°C',
-        affectedShipments: ['SHP-003'],
-      },
-    ],
-    weightDistributionWarnings: [
-      'Port list of 0.8° detected - consider redistributing cargo',
-    ],
+  // Required temperature range per cargo type (shared by validation + auto-stow)
+  const cargoTempRequirements: Record<string, { min: number; max: number }> = {
+    BANANAS:       { min: 12, max: 14 },
+    TABLE_GRAPES:  { min: -1, max:  1 },
+    AVOCADOS:      { min:  5, max:  8 },
+    CITRUS:        { min:  4, max:  8 },
+    BERRIES:       { min:  0, max:  2 },
+    PINEAPPLES:    { min: 10, max: 13 },
+    KIWIS:         { min:  0, max:  2 },
+    FROZEN_FISH:   { min: -25, max: -18 },
+    OTHER_FROZEN:  { min: -25, max: -15 },
+    OTHER_CHILLED: { min:  0, max: 10 },
   };
+
+  // Build compartment → section lookup once
+  const compartmentToSection = useMemo(() => {
+    const map: Record<string, { sectionId: string; temp: number }> = {};
+    for (const zone of tempZoneConfig) {
+      for (const compId of zone.compartments) {
+        map[compId] = { sectionId: zone.sectionId, temp: zone.temp };
+      }
+    }
+    return map;
+  }, []);
+
+  // Compute validation dynamically from current assignments
+  const validation = useMemo(() => {
+    const temperatureConflicts: { compartmentId: string; coolingSectionId: string; description: string; affectedShipments: string[]; userConfirmed: boolean }[] = [];
+    const overstowViolations: { compartmentId: string; description: string; affectedShipments: string[] }[] = [];
+
+    // Group stowed shipments by compartment
+    const byCompartment: Record<string, CargoInPlan[]> = {};
+    for (const s of shipments) {
+      if (!s.compartmentId) continue;
+      if (!byCompartment[s.compartmentId]) byCompartment[s.compartmentId] = [];
+      byCompartment[s.compartmentId].push(s);
+    }
+
+    for (const [compId, comShipments] of Object.entries(byCompartment)) {
+      const section = compartmentToSection[compId];
+      if (!section) continue;
+
+      // Temperature conflict check
+      for (const s of comShipments) {
+        const req = cargoTempRequirements[s.cargoType];
+        if (req && (section.temp < req.min || section.temp > req.max)) {
+          const userConfirmed = confirmedConflicts.has(`${s.shipmentId}-${compId}`);
+          temperatureConflicts.push({
+            compartmentId: compId,
+            coolingSectionId: section.sectionId,
+            description: `${s.cargoType.replace('_', ' ')} requires ${req.min}–${req.max}°C but ${section.sectionId} is set to ${section.temp > 0 ? '+' : ''}${section.temp}°C`,
+            affectedShipments: [s.shipmentNumber],
+            userConfirmed,
+          });
+        }
+      }
+
+      // Overstow: more than one shipment per compartment
+      if (comShipments.length > 1) {
+        overstowViolations.push({
+          compartmentId: compId,
+          description: `${comShipments.length} shipments assigned to same compartment`,
+          affectedShipments: comShipments.map(s => s.shipmentNumber),
+        });
+      }
+    }
+
+    return {
+      temperatureConflicts,
+      overstowViolations,
+      weightDistributionWarnings: ['Port list of 0.8° detected - consider redistributing cargo'],
+    };
+  }, [shipments, compartmentToSection, confirmedConflicts]);
 
   const stability = {
     displacement: 8450,
@@ -151,6 +213,20 @@ export default function StowagePlanDetailPage() {
 
   const handleConfirmAssign = () => {
     if (!assigningShipment || !selectedCompartment) return;
+
+    const section = compartmentToSection[selectedCompartment];
+    const req = cargoTempRequirements[assigningShipment.cargoType];
+    const hasConflict = req && section && (section.temp < req.min || section.temp > req.max);
+
+    if (hasConflict && !showConflictWarning) {
+      setShowConflictWarning(true);
+      return;
+    }
+
+    if (hasConflict) {
+      setConfirmedConflicts(prev => new Set([...prev, `${assigningShipment.shipmentId}-${selectedCompartment}`]));
+    }
+
     setShipments(prev => prev.map(s =>
       s.shipmentId === assigningShipment.shipmentId
         ? { ...s, compartmentId: selectedCompartment }
@@ -158,26 +234,19 @@ export default function StowagePlanDetailPage() {
     ));
     setAssigningShipment(null);
     setSelectedCompartment('');
+    setShowConflictWarning(false);
+  };
+
+  const handleCancelAssign = () => {
+    setAssigningShipment(null);
+    setSelectedCompartment('');
+    setShowConflictWarning(false);
   };
 
   const handleRemoveAssignment = (shipmentId: string) => {
     setShipments(prev => prev.map(s =>
       s.shipmentId === shipmentId ? { ...s, compartmentId: null } : s
     ));
-  };
-
-  // Required temperature range per cargo type
-  const cargoTempRequirements: Record<string, { min: number; max: number }> = {
-    BANANAS:      { min: 12, max: 14 },
-    TABLE_GRAPES: { min: -1, max:  1 },
-    AVOCADOS:     { min:  5, max:  8 },
-    CITRUS:       { min:  4, max:  8 },
-    BERRIES:      { min:  0, max:  2 },
-    PINEAPPLES:   { min: 10, max: 13 },
-    KIWIS:        { min:  0, max:  2 },
-    FROZEN_FISH:  { min: -25, max: -18 },
-    OTHER_FROZEN: { min: -25, max: -15 },
-    OTHER_CHILLED: { min: 0, max: 10 },
   };
 
   const handleAutoStow = () => {
@@ -314,8 +383,10 @@ export default function StowagePlanDetailPage() {
               onClick={() => setActiveTab('validation')}
             >
               Validation
-              {validation.temperatureConflicts.length > 0 && (
-                <span className={styles.badge}>{validation.temperatureConflicts.length}</span>
+              {(validation.temperatureConflicts.length + validation.overstowViolations.length) > 0 && (
+                <span className={styles.badge}>
+                  {validation.temperatureConflicts.length + validation.overstowViolations.length}
+                </span>
               )}
             </button>
           </div>
@@ -473,17 +544,47 @@ export default function StowagePlanDetailPage() {
                   <div className={styles.validationSection}>
                     <h4>Temperature Conflicts ({validation.temperatureConflicts.length})</h4>
                     {validation.temperatureConflicts.map((conflict, idx) => (
+                      <div key={idx} className={conflict.userConfirmed ? styles.conflictCardWarning : styles.conflictCard}>
+                        <div className={styles.conflictHeader}>
+                          {conflict.userConfirmed ? (
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                              <path d="M10 2l8 16H2l8-16z" stroke="#eab308" strokeWidth="1.5"/>
+                              <path d="M10 8v4m0 3h.01" stroke="#eab308" strokeWidth="2"/>
+                            </svg>
+                          ) : (
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                              <circle cx="10" cy="10" r="8" stroke="#ef4444" strokeWidth="2"/>
+                              <path d="M10 6v4m0 4h.01" stroke="#ef4444" strokeWidth="2"/>
+                            </svg>
+                          )}
+                          <span>{conflict.compartmentId}</span>
+                          {conflict.userConfirmed && <span className={styles.confirmedBadge}>user accepted</span>}
+                        </div>
+                        <p>{conflict.description}</p>
+                        <div className={styles.affectedShipments}>
+                          Affected: {conflict.affectedShipments.join(', ')}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Overstow Violations */}
+                {validation.overstowViolations.length > 0 && (
+                  <div className={styles.validationSection}>
+                    <h4>Overstow Violations ({validation.overstowViolations.length})</h4>
+                    {validation.overstowViolations.map((v, idx) => (
                       <div key={idx} className={styles.conflictCard}>
                         <div className={styles.conflictHeader}>
                           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                             <circle cx="10" cy="10" r="8" stroke="#ef4444" strokeWidth="2"/>
                             <path d="M10 6v4m0 4h.01" stroke="#ef4444" strokeWidth="2"/>
                           </svg>
-                          <span>{conflict.compartmentId}</span>
+                          <span>{v.compartmentId}</span>
                         </div>
-                        <p>{conflict.description}</p>
+                        <p>{v.description}</p>
                         <div className={styles.affectedShipments}>
-                          Affected: {conflict.affectedShipments.join(', ')}
+                          Affected: {v.affectedShipments.join(', ')}
                         </div>
                       </div>
                     ))}
@@ -553,11 +654,11 @@ export default function StowagePlanDetailPage() {
 
       {/* Assign to Compartment Modal */}
       {assigningShipment && (
-        <div className={styles.modalOverlay} onClick={() => setAssigningShipment(null)}>
+        <div className={styles.modalOverlay} onClick={handleCancelAssign}>
           <div className={styles.modal} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h3>Assign {assigningShipment.shipmentNumber}</h3>
-              <button className={styles.modalClose} onClick={() => setAssigningShipment(null)}>✕</button>
+              <button className={styles.modalClose} onClick={handleCancelAssign}>✕</button>
             </div>
 
             <div className={styles.modalMeta}>
@@ -588,7 +689,7 @@ export default function StowagePlanDetailPage() {
                         name="compartment"
                         value={compId}
                         checked={selectedCompartment === compId}
-                        onChange={() => setSelectedCompartment(compId)}
+                        onChange={() => { setSelectedCompartment(compId); setShowConflictWarning(false); }}
                       />
                       <span className={styles.compartmentId}>{compId}</span>
                     </label>
@@ -597,16 +698,37 @@ export default function StowagePlanDetailPage() {
               ))}
             </div>
 
+            {showConflictWarning && selectedCompartment && (() => {
+              const section = compartmentToSection[selectedCompartment];
+              const req = cargoTempRequirements[assigningShipment.cargoType];
+              return (
+                <div className={styles.conflictWarning}>
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <path d="M10 2l8 16H2l8-16z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                    <path d="M10 8v4m0 3h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  <div>
+                    <strong>Temperature Conflict</strong>
+                    <p>
+                      {assigningShipment.cargoType.replace('_', ' ')} requires {req?.min}–{req?.max}°C<br />
+                      {selectedCompartment} (section {section?.sectionId}) is set to {section?.temp > 0 ? '+' : ''}{section?.temp}°C
+                    </p>
+                    <p>Assigning here may damage the product.</p>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className={styles.modalActions}>
-              <button className={styles.btnSecondary} onClick={() => setAssigningShipment(null)}>
+              <button className={styles.btnSecondary} onClick={handleCancelAssign}>
                 Cancel
               </button>
               <button
-                className={styles.btnPrimary}
+                className={showConflictWarning ? styles.btnWarning : styles.btnPrimary}
                 disabled={!selectedCompartment}
                 onClick={handleConfirmAssign}
               >
-                Assign
+                {showConflictWarning ? 'Assign Anyway' : 'Assign'}
               </button>
             </div>
           </div>
