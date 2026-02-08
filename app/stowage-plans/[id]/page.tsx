@@ -166,9 +166,48 @@ export default function StowagePlanDetailPage() {
     ));
   };
 
+  // Required temperature range per cargo type
+  const cargoTempRequirements: Record<string, { min: number; max: number }> = {
+    BANANAS:      { min: 12, max: 14 },
+    TABLE_GRAPES: { min: -1, max:  1 },
+    AVOCADOS:     { min:  5, max:  8 },
+    CITRUS:       { min:  4, max:  8 },
+    BERRIES:      { min:  0, max:  2 },
+    PINEAPPLES:   { min: 10, max: 13 },
+    KIWIS:        { min:  0, max:  2 },
+    FROZEN_FISH:  { min: -25, max: -18 },
+    OTHER_FROZEN: { min: -25, max: -15 },
+    OTHER_CHILLED: { min: 0, max: 10 },
+  };
+
   const handleAutoStow = () => {
-    // TODO: Implement auto-stow algorithm
-    console.log('Running auto-stow algorithm...');
+    setShipments(prev => {
+      const updated = [...prev];
+      // Track which compartments are occupied after each assignment
+      const occupied = new Set(updated.filter(s => s.compartmentId).map(s => s.compartmentId!));
+
+      for (const shipment of updated) {
+        if (shipment.compartmentId) continue; // already placed
+
+        const req = cargoTempRequirements[shipment.cargoType];
+        if (!req) continue;
+
+        // Find a compatible section (section temp within cargo's required range)
+        for (const zone of tempZoneConfig) {
+          if (zone.temp < req.min || zone.temp > req.max) continue;
+
+          // Find an unoccupied compartment in this section
+          const freeCompartment = zone.compartments.find(c => !occupied.has(c));
+          if (!freeCompartment) continue;
+
+          shipment.compartmentId = freeCompartment;
+          occupied.add(freeCompartment);
+          break;
+        }
+      }
+
+      return updated;
+    });
   };
 
   const handleSavePlan = () => {
