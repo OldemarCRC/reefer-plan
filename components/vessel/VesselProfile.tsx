@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import styles from './VesselProfile.module.css';
 import {
-  voyageTempAssignments,
+  voyageTempAssignments as defaultAssignments,
   type VoyageTempAssignment,
 } from '@/lib/vessel-profile-data';
 
@@ -80,9 +80,9 @@ interface CompartmentRect {
   assignment?: VoyageTempAssignment;
 }
 
-function buildCompartmentRects(): CompartmentRect[] {
+function buildCompartmentRects(assignments: VoyageTempAssignment[]): CompartmentRect[] {
   const rects: CompartmentRect[] = [];
-  const assignMap = new Map(voyageTempAssignments.map((a) => [a.compartmentId, a]));
+  const assignMap = new Map(assignments.map((a) => [a.compartmentId, a]));
 
   for (const hold of HOLD_POSITIONS) {
     // Determine which levels this hold has
@@ -129,16 +129,18 @@ interface VesselProfileProps {
   vesselName?: string;
   voyageNumber?: string;
   onCompartmentClick?: (compartmentId: string) => void;
+  tempAssignments?: VoyageTempAssignment[];
 }
 
 export default function VesselProfile({
   vesselName = 'ACONCAGUA BAY',
   voyageNumber = 'ACON-062026',
   onCompartmentClick,
+  tempAssignments = defaultAssignments,
 }: VesselProfileProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const compartments = buildCompartmentRects();
+  const compartments = buildCompartmentRects(tempAssignments);
 
   const hovered = hoveredId
     ? compartments.find((c) => c.id === hoveredId)
@@ -163,7 +165,7 @@ export default function VesselProfile({
           </span>
         </div>
         <div className={styles.legend}>
-          {getUniqueZones().map((z) => (
+          {getUniqueZones(tempAssignments).map((z) => (
             <div key={z.zoneId} className={styles.legendItem}>
               <span
                 className={styles.legendDot}
@@ -487,9 +489,9 @@ export default function VesselProfile({
 // HELPERS
 // ============================================================================
 
-function getUniqueZones() {
+function getUniqueZones(assignments: VoyageTempAssignment[]) {
   const seen = new Set<string>();
-  return voyageTempAssignments.filter((a) => {
+  return assignments.filter((a) => {
     if (seen.has(a.zoneId)) return false;
     seen.add(a.zoneId);
     return true;

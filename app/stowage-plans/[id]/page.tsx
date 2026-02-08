@@ -5,6 +5,7 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import VesselProfile from '@/components/vessel/VesselProfile';
+import type { VoyageTempAssignment } from '@/lib/vessel-profile-data';
 import styles from './page.module.css';
 
 interface CargoAssignment {
@@ -184,6 +185,60 @@ export default function StowagePlanDetailPage() {
       weightDistributionWarnings: ['Port list of 0.8° detected - consider redistributing cargo'],
     };
   }, [shipments, compartmentToSection, confirmedConflicts]);
+
+  // Compartment capacities (pallets) — from vessel spec
+  const compartmentCapacities: Record<string, number> = {
+    'H1-A': 480, 'H1-B': 278, 'H1-C': 191, 'H1-D': 186,
+    'H2-UPD': 143, 'H2-A': 565, 'H2-B': 499, 'H2-C': 485, 'H2-D': 375,
+    'H3-UPD': 136, 'H3-A': 604, 'H3-B': 577, 'H3-C': 608, 'H3-D': 543,
+    'H4-UPD': 136, 'H4-A': 583, 'H4-B': 544, 'H4-C': 502, 'H4-D': 336,
+  };
+
+  // Zone colors (hue-based on temperature, matching wizard)
+  const tempToColor = (temp: number) => {
+    const hue = Math.round(240 - ((temp + 25) / 40) * 240);
+    return `hsl(${hue}, 70%, 50%)`;
+  };
+
+  // Transform plan data to VesselProfile format
+  const vesselProfileData = useMemo(() => {
+    const result: VoyageTempAssignment[] = [];
+
+    // Build assignment lookup
+    const byCompartment: Record<string, { shipment: CargoInPlan; quantity: number }[]> = {};
+    for (const s of shipments) {
+      for (const a of s.assignments) {
+        if (!byCompartment[a.compartmentId]) byCompartment[a.compartmentId] = [];
+        byCompartment[a.compartmentId].push({ shipment: s, quantity: a.quantity });
+      }
+    }
+
+    for (const zone of tempZoneConfig) {
+      const zoneColor = tempToColor(zone.temp);
+      for (const compId of zone.compartments) {
+        const entries = byCompartment[compId] || [];
+        const palletsLoaded = entries.reduce((sum, e) => sum + e.quantity, 0);
+        const capacity = compartmentCapacities[compId] || 0;
+
+        // Determine cargo type: use first shipment's type if any, otherwise empty
+        const cargoType = entries.length > 0 ? entries[0].shipment.cargoType : '';
+
+        result.push({
+          compartmentId: compId,
+          zoneId: zone.zoneId,
+          zoneName: zone.sectionId,
+          zoneColor,
+          setTemperature: zone.temp,
+          cargoType,
+          palletsLoaded,
+          palletsCapacity: capacity,
+          shipments: entries.map(e => e.shipment.shipmentNumber),
+        });
+      }
+    }
+
+    return result;
+  }, [shipments, tempZoneConfig]);
 
   const stability = {
     displacement: 8450,
@@ -657,7 +712,11 @@ export default function StowagePlanDetailPage() {
           <div className={styles.panelHeader}>
             <h2>Vessel Profile</h2>
           </div>
-          <VesselProfile />
+          <VesselProfile
+            vesselName={plan.vesselName}
+            voyageNumber={plan.voyageNumber}
+            tempAssignments={vesselProfileData}
+          />
 
           {/* Temperature Zone Legend */}
           <div className={styles.tempZoneLegend}>
