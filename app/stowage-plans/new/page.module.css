@@ -313,47 +313,84 @@
 
 .tempSummary {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 1rem;
 }
 
-.summaryCard {
-  background: var(--surface-base);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 1rem;
+.holdColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
-.summaryHeader {
+.holdLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  text-align: center;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Zone card — thick colored border */
+.zoneCard {
+  border: 3px solid;
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: var(--surface-base);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.zoneHeader {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
+  align-items: baseline;
+}
+
+.zoneName {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.zoneTemp {
+  font-family: 'Space Grotesk', monospace;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.tempBar {
+  height: 3px;
+  border-radius: 2px;
+  width: 100%;
+}
+
+/* Section card — thin border inside zone */
+.sectionCard {
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0.5rem 0.625rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
 }
 
 .sectionName {
   font-family: 'Space Grotesk', monospace;
   font-weight: 700;
   color: var(--accent-primary);
-  font-size: 1rem;
+  font-size: 0.8rem;
 }
-
-.temp {
-  font-family: 'Space Grotesk', monospace;
-  font-weight: 700;
-  font-size: 1.125rem;
-  color: var(--text-primary);
-}
-
-.summaryDetails {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
 
 .compartments {
-  font-size: 0.875rem;
+  font-size: 0.7rem;
   color: var(--text-secondary);
 }
 

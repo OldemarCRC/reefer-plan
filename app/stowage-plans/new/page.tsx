@@ -54,6 +54,24 @@ export default function NewStowagePlanPage() {
     { sectionId: '4CD', compartmentIds: ['H4-C', 'H4-D'] },
   ];
 
+  // Temperature zones are fixed per vessel — each zone controls 1+ cooling sections
+  const temperatureZones = [
+    { zoneId: 'ZONE_1AB', sectionId: '1AB', hold: 1 },
+    { zoneId: 'ZONE_1CD', sectionId: '1CD', hold: 1 },
+    { zoneId: 'ZONE_2UPDAB', sectionId: '2UPDAB', hold: 2 },
+    { zoneId: 'ZONE_2CD', sectionId: '2CD', hold: 2 },
+    { zoneId: 'ZONE_3UPDAB', sectionId: '3UPDAB', hold: 3 },
+    { zoneId: 'ZONE_3CD', sectionId: '3CD', hold: 3 },
+    { zoneId: 'ZONE_4UPDAB', sectionId: '4UPDAB', hold: 4 },
+    { zoneId: 'ZONE_4CD', sectionId: '4CD', hold: 4 },
+  ];
+
+  const tempToColor = (temp: number) => {
+    // -25°C → blue (hue 240), +15°C → red (hue 0)
+    const hue = Math.round(240 - ((temp + 25) / 40) * 240);
+    return `hsl(${hue}, 70%, 50%)`;
+  };
+
   const handleVoyageSelect = (voyageId: string) => {
     setSelectedVoyageId(voyageId);
     const defaults = coolingSections.map(section => ({
@@ -257,22 +275,34 @@ export default function NewStowagePlanPage() {
             )}
 
             <div className={styles.reviewSection}>
-              <h3>Temperature Configuration ({tempAssignments.length} Cooling Sections)</h3>
+              <h3>Temperature Configuration</h3>
               <div className={styles.tempSummary}>
-                {tempAssignments.map(assignment => {
-                  const section = coolingSections.find(s => s.sectionId === assignment.coolingSectionId);
-                  return (
-                    <div key={assignment.coolingSectionId} className={styles.summaryCard}>
-                      <div className={styles.summaryHeader}>
-                        <span className={styles.sectionName}>{assignment.coolingSectionId}</span>
-                        <span className={styles.temp}>{assignment.targetTemp > 0 ? '+' : ''}{assignment.targetTemp}°C</span>
-                      </div>
-                      <div className={styles.summaryDetails}>
-                        <span className={styles.compartments}>{section?.compartmentIds.join(', ')}</span>
-                      </div>
-                    </div>
-                  );
-                })}
+                {[1, 2, 3, 4].map(holdNum => (
+                  <div key={holdNum} className={styles.holdColumn}>
+                    <div className={styles.holdLabel}>Hold {holdNum}</div>
+                    {temperatureZones
+                      .filter(z => z.hold === holdNum)
+                      .map(zone => {
+                        const assignment = tempAssignments.find(a => a.coolingSectionId === zone.sectionId);
+                        const temp = assignment?.targetTemp ?? 13;
+                        const color = tempToColor(temp);
+                        const section = coolingSections.find(s => s.sectionId === zone.sectionId);
+                        return (
+                          <div key={zone.zoneId} className={styles.zoneCard} style={{ borderColor: color }}>
+                            <div className={styles.zoneHeader}>
+                              <span className={styles.zoneName}>{zone.zoneId}</span>
+                              <span className={styles.zoneTemp}>{temp > 0 ? '+' : ''}{temp}°C</span>
+                            </div>
+                            <div className={styles.tempBar} style={{ backgroundColor: color }}></div>
+                            <div className={styles.sectionCard}>
+                              <span className={styles.sectionName}>{zone.sectionId}</span>
+                              <span className={styles.compartments}>{section?.compartmentIds.join(', ')}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                ))}
               </div>
             </div>
 
