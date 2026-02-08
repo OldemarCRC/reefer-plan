@@ -108,7 +108,8 @@ export default function NewStowagePlanPage() {
       });
 
       if (result.success && result.planId) {
-        router.push(`/stowage-plans/${result.planId}`);
+        // TODO: Use real planId when DB is connected
+        router.push('/stowage-plans/test-123');
       } else {
         setSubmitError(result.error ?? 'Failed to create plan');
       }

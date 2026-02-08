@@ -152,6 +152,20 @@
   background: var(--color-bg-hover);
 }
 
+.clickableRow {
+  cursor: pointer;
+}
+
+.tableLink {
+  color: var(--color-text-primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.tableLink:hover {
+  color: var(--color-cyan);
+}
+
 .table tbody td {
   font-size: var(--text-sm);
   color: var(--color-text-primary);

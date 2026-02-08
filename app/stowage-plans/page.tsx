@@ -93,7 +93,9 @@ export default function StowagePlansPage() {
                   </div>
                 </div>
                 <div className={styles.planFooter}>
-                  <button className={styles.btnGhost}>Open Plan →</button>
+                  <Link href={`/stowage-plans/${p._id}`} className={styles.btnGhost}>
+                    Open Plan →
+                  </Link>
                 </div>
               </div>
             );

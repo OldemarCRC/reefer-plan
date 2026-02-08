@@ -7,6 +7,7 @@ import {
 } from '@/lib/mock-data';
 import styles from './page.module.css';
 import type { CargoType } from '@/types/models';
+import Link from 'next/link';
 
 // --- Status styling map ---
 
@@ -139,8 +140,12 @@ export default function DashboardPage() {
                 </thead>
                 <tbody>
                   {recentPlans.map((p) => (
-                    <tr key={p._id}>
-                      <td className={styles.cellMono}>{p.planNumber}</td>
+                    <tr key={p._id} className={styles.clickableRow}>
+                      <td className={styles.cellMono}>
+                        <Link href={`/stowage-plans/${p._id}`} className={styles.tableLink}>
+                          {p.planNumber}
+                        </Link>
+                      </td>
                       <td className={styles.cellMuted}>{p.voyageNumber}</td>
                       <td>
                         <UtilizationBar used={p.palletsAssigned} total={p.palletsTotal} />

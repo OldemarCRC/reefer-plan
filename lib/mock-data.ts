@@ -274,7 +274,7 @@ export interface MockStowagePlan {
 
 export const mockStowagePlans: MockStowagePlan[] = [
   {
-    _id: 'sp1',
+    _id: 'test-123',
     planNumber: 'SP-ACON-062026',
     voyageNumber: 'ACON-062026',
     vesselName: 'ACONCAGUA BAY',
