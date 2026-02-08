@@ -48,7 +48,7 @@ export default function StowagePlanDetailPage() {
     ],
   };
 
-  const availableShipments: CargoInPlan[] = [
+  const [shipments, setShipments] = useState<CargoInPlan[]>([
     {
       shipmentId: '1',
       shipmentNumber: 'SHP-001',
@@ -89,7 +89,7 @@ export default function StowagePlanDetailPage() {
       compartmentId: null,
       consignee: 'FYFFES',
     },
-  ];
+  ]);
 
   const tempZoneConfig = [
     { sectionId: '1AB', zoneId: 'ZONE_1AB', temp: 13, compartments: ['H1-A', 'H1-B'] },
@@ -132,9 +132,9 @@ export default function StowagePlanDetailPage() {
     },
   };
 
-  const stowedShipments = availableShipments.filter(s => s.compartmentId);
-  const unstowedShipments = availableShipments.filter(s => !s.compartmentId);
-  const totalPallets = availableShipments.reduce((sum, s) => sum + s.quantity, 0);
+  const stowedShipments = shipments.filter(s => s.compartmentId);
+  const unstowedShipments = shipments.filter(s => !s.compartmentId);
+  const totalPallets = shipments.reduce((sum, s) => sum + s.quantity, 0);
   const stowedPallets = stowedShipments.reduce((sum, s) => sum + s.quantity, 0);
 
   const getCargoTypeColor = (cargoType: string) => {
@@ -147,6 +147,23 @@ export default function StowagePlanDetailPage() {
       FROZEN_FISH: '#06b6d4',
     };
     return colors[cargoType] || '#64748b';
+  };
+
+  const handleConfirmAssign = () => {
+    if (!assigningShipment || !selectedCompartment) return;
+    setShipments(prev => prev.map(s =>
+      s.shipmentId === assigningShipment.shipmentId
+        ? { ...s, compartmentId: selectedCompartment }
+        : s
+    ));
+    setAssigningShipment(null);
+    setSelectedCompartment('');
+  };
+
+  const handleRemoveAssignment = (shipmentId: string) => {
+    setShipments(prev => prev.map(s =>
+      s.shipmentId === shipmentId ? { ...s, compartmentId: null } : s
+    ));
   };
 
   const handleAutoStow = () => {
@@ -245,7 +262,7 @@ export default function StowagePlanDetailPage() {
               className={`${styles.tab} ${activeTab === 'cargo' ? styles.active : ''}`}
               onClick={() => setActiveTab('cargo')}
             >
-              Cargo List ({availableShipments.length})
+              Cargo List ({shipments.length})
             </button>
             <button
               className={`${styles.tab} ${activeTab === 'stability' ? styles.active : ''}`}
@@ -298,7 +315,15 @@ export default function StowagePlanDetailPage() {
                             <span className={styles.value}>{shipment.consignee}</span>
                           </div>
                         </div>
-                        <button className={styles.btnAssign}>Assign to Compartment</button>
+                        <button
+                          className={styles.btnAssign}
+                          onClick={() => {
+                            setAssigningShipment(shipment);
+                            setSelectedCompartment('');
+                          }}
+                        >
+                          Assign to Compartment
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -334,7 +359,12 @@ export default function StowagePlanDetailPage() {
                             <span className={styles.value}>{shipment.consignee}</span>
                           </div>
                         </div>
-                        <button className={styles.btnRemove}>Remove</button>
+                        <button
+                          className={styles.btnRemove}
+                          onClick={() => handleRemoveAssignment(shipment.shipmentId)}
+                        >
+                          Remove
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -481,6 +511,68 @@ export default function StowagePlanDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Assign to Compartment Modal */}
+      {assigningShipment && (
+        <div className={styles.modalOverlay} onClick={() => setAssigningShipment(null)}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>Assign {assigningShipment.shipmentNumber}</h3>
+              <button className={styles.modalClose} onClick={() => setAssigningShipment(null)}>✕</button>
+            </div>
+
+            <div className={styles.modalMeta}>
+              <span
+                className={styles.cargoDot}
+                style={{ backgroundColor: getCargoTypeColor(assigningShipment.cargoType) }}
+              />
+              <span>{assigningShipment.cargoType.replace('_', ' ')}</span>
+              <span className={styles.separator}>·</span>
+              <span>{assigningShipment.quantity} pallets</span>
+              <span className={styles.separator}>·</span>
+              <span>{assigningShipment.consignee}</span>
+            </div>
+
+            <div className={styles.compartmentList}>
+              {tempZoneConfig.map(zone => (
+                <div key={zone.sectionId} className={styles.zoneGroup}>
+                  <div className={styles.zoneGroupLabel}>
+                    {zone.sectionId}
+                    <span className={styles.zoneGroupTemp}>
+                      {zone.temp > 0 ? '+' : ''}{zone.temp}°C
+                    </span>
+                  </div>
+                  {zone.compartments.map(compId => (
+                    <label key={compId} className={`${styles.compartmentOption} ${selectedCompartment === compId ? styles.selected : ''}`}>
+                      <input
+                        type="radio"
+                        name="compartment"
+                        value={compId}
+                        checked={selectedCompartment === compId}
+                        onChange={() => setSelectedCompartment(compId)}
+                      />
+                      <span className={styles.compartmentId}>{compId}</span>
+                    </label>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            <div className={styles.modalActions}>
+              <button className={styles.btnSecondary} onClick={() => setAssigningShipment(null)}>
+                Cancel
+              </button>
+              <button
+                className={styles.btnPrimary}
+                disabled={!selectedCompartment}
+                onClick={handleConfirmAssign}
+              >
+                Assign
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
