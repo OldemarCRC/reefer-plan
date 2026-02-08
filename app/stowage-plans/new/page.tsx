@@ -7,16 +7,15 @@ import styles from './page.module.css';
 
 type WizardStep = 'voyage' | 'temperature' | 'review';
 
-interface TempZoneAssignment {
+interface TempAssignment {
   coolingSectionId: string;
-  temperatureZoneId: string;
   targetTemp: number;
 }
 
 export default function NewStowagePlanPage() {
   const [currentStep, setCurrentStep] = useState<WizardStep>('voyage');
   const [selectedVoyageId, setSelectedVoyageId] = useState<string>('');
-  const [tempAssignments, setTempAssignments] = useState<TempZoneAssignment[]>([]);
+  const [tempAssignments, setTempAssignments] = useState<TempAssignment[]>([]);
 
   // Mock data - replace with actual data fetching
   const voyages = [
@@ -55,39 +54,21 @@ export default function NewStowagePlanPage() {
     { sectionId: '4CD', compartmentIds: ['H4-C', 'H4-D'] },
   ];
 
-  const temperatureZones = [
-    { zoneId: 'ZONE_1AB', name: 'Zone 1AB', color: '#ef4444', minTemp: -25, maxTemp: 15 },
-    { zoneId: 'ZONE_1CD', name: 'Zone 1CD', color: '#f97316', minTemp: -25, maxTemp: 15 },
-    { zoneId: 'ZONE_2UPDAB', name: 'Zone 2 UPD-AB', color: '#eab308', minTemp: -25, maxTemp: 15 },
-    { zoneId: 'ZONE_2CD', name: 'Zone 2CD', color: '#84cc16', minTemp: -25, maxTemp: 15 },
-    { zoneId: 'ZONE_3UPDAB', name: 'Zone 3 UPD-AB', color: '#22c55e', minTemp: -25, maxTemp: 15 },
-    { zoneId: 'ZONE_3CD', name: 'Zone 3CD', color: '#14b8a6', minTemp: -25, maxTemp: 15 },
-    { zoneId: 'ZONE_4UPDAB', name: 'Zone 4 UPD-AB', color: '#06b6d4', minTemp: -25, maxTemp: 15 },
-    { zoneId: 'ZONE_4CD', name: 'Zone 4CD', color: '#3b82f6', minTemp: -25, maxTemp: 15 },
-  ];
-
   const handleVoyageSelect = (voyageId: string) => {
     setSelectedVoyageId(voyageId);
-    // Initialize temp assignments with defaults
-    const defaults = coolingSections.map((section, idx) => ({
+    const defaults = coolingSections.map(section => ({
       coolingSectionId: section.sectionId,
-      temperatureZoneId: temperatureZones[idx]?.zoneId || '',
       targetTemp: 13, // Default banana temp
     }));
     setTempAssignments(defaults);
   };
 
-  const handleTempChange = (sectionId: string, field: 'zoneId' | 'temp', value: string | number) => {
-    setTempAssignments(prev => prev.map(assignment => {
-      if (assignment.coolingSectionId === sectionId) {
-        if (field === 'zoneId') {
-          return { ...assignment, temperatureZoneId: value as string };
-        } else {
-          return { ...assignment, targetTemp: value as number };
-        }
-      }
-      return assignment;
-    }));
+  const handleTempChange = (sectionId: string, value: number) => {
+    setTempAssignments(prev => prev.map(assignment =>
+      assignment.coolingSectionId === sectionId
+        ? { ...assignment, targetTemp: value }
+        : assignment
+    ));
   };
 
   const handleCreatePlan = async () => {
@@ -197,14 +178,11 @@ export default function NewStowagePlanPage() {
               <div className={styles.tableHeader}>
                 <div className={styles.colSection}>Cooling Section</div>
                 <div className={styles.colCompartments}>Compartments</div>
-                <div className={styles.colZone}>Temperature Zone</div>
                 <div className={styles.colTemp}>Target Temp (°C)</div>
               </div>
 
               {tempAssignments.map(assignment => {
                 const section = coolingSections.find(s => s.sectionId === assignment.coolingSectionId);
-                const zone = temperatureZones.find(z => z.zoneId === assignment.temperatureZoneId);
-                
                 return (
                   <div key={assignment.coolingSectionId} className={styles.tableRow}>
                     <div className={styles.colSection}>
@@ -213,30 +191,11 @@ export default function NewStowagePlanPage() {
                     <div className={styles.colCompartments}>
                       {section?.compartmentIds.join(', ')}
                     </div>
-                    <div className={styles.colZone}>
-                      <select
-                        value={assignment.temperatureZoneId}
-                        onChange={(e) => handleTempChange(assignment.coolingSectionId, 'zoneId', e.target.value)}
-                        className={styles.select}
-                      >
-                        {temperatureZones.map(tz => (
-                          <option key={tz.zoneId} value={tz.zoneId}>
-                            {tz.name}
-                          </option>
-                        ))}
-                      </select>
-                      {zone && (
-                        <div 
-                          className={styles.zoneColorIndicator}
-                          style={{ backgroundColor: zone.color }}
-                        ></div>
-                      )}
-                    </div>
                     <div className={styles.colTemp}>
                       <input
                         type="number"
                         value={assignment.targetTemp}
-                        onChange={(e) => handleTempChange(assignment.coolingSectionId, 'temp', parseFloat(e.target.value))}
+                        onChange={(e) => handleTempChange(assignment.coolingSectionId, parseFloat(e.target.value))}
                         min={-25}
                         max={15}
                         step={0.5}
@@ -302,7 +261,6 @@ export default function NewStowagePlanPage() {
               <div className={styles.tempSummary}>
                 {tempAssignments.map(assignment => {
                   const section = coolingSections.find(s => s.sectionId === assignment.coolingSectionId);
-                  const zone = temperatureZones.find(z => z.zoneId === assignment.temperatureZoneId);
                   return (
                     <div key={assignment.coolingSectionId} className={styles.summaryCard}>
                       <div className={styles.summaryHeader}>
@@ -310,10 +268,6 @@ export default function NewStowagePlanPage() {
                         <span className={styles.temp}>{assignment.targetTemp > 0 ? '+' : ''}{assignment.targetTemp}°C</span>
                       </div>
                       <div className={styles.summaryDetails}>
-                        <div 
-                          className={styles.zoneBar}
-                          style={{ backgroundColor: zone?.color }}
-                        ></div>
                         <span className={styles.compartments}>{section?.compartmentIds.join(', ')}</span>
                       </div>
                     </div>
