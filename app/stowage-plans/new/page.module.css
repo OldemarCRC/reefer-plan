@@ -1,0 +1,464 @@
+/* app/stowage-plans/new/page.module.css */
+
+.container {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 3rem;
+}
+
+.titleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.titleRow h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.cancelBtn {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.cancelBtn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+/* Progress Steps */
+.steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+}
+
+.stepNumber {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface-elevated);
+  border: 2px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: all 0.3s;
+}
+
+.step.active .stepNumber {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: white;
+}
+
+.step.completed .stepNumber {
+  background: var(--success);
+  border-color: var(--success);
+  color: white;
+}
+
+.stepLabel {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.step.active .stepLabel {
+  color: var(--text-primary);
+}
+
+.stepConnector {
+  width: 120px;
+  height: 2px;
+  background: var(--border-color);
+  margin: 0 1rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Content */
+.content {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 2.5rem;
+  min-height: 500px;
+}
+
+.stepContent h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+}
+
+.stepDescription {
+  color: var(--text-secondary);
+  margin: 0 0 2rem 0;
+  line-height: 1.6;
+}
+
+/* Step 1: Voyage Selection */
+.voyageGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.voyageCard {
+  background: var(--surface-base);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.voyageCard:hover {
+  border-color: var(--accent-secondary);
+  transform: translateY(-2px);
+}
+
+.voyageCard.selected {
+  border-color: var(--accent-primary);
+  background: rgba(14, 165, 233, 0.05);
+}
+
+.voyageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.voyageHeader h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.statusBadge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.statusBadge.confirmed {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--success);
+}
+
+.statusBadge.planned {
+  background: rgba(234, 179, 8, 0.1);
+  color: var(--warning);
+}
+
+.voyageDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.detail {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.detail .label {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  min-width: 90px;
+}
+
+.detail .value {
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* Step 2: Temperature Table */
+.tempTable {
+  background: var(--surface-base);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 2rem;
+}
+
+.tableHeader {
+  display: grid;
+  grid-template-columns: 140px 1fr 200px 140px;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: var(--surface-elevated);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.tableRow {
+  display: grid;
+  grid-template-columns: 140px 1fr 200px 140px;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  align-items: center;
+}
+
+.tableRow:last-child {
+  border-bottom: none;
+}
+
+.tableRow:hover {
+  background: var(--surface-hover);
+}
+
+.colSection strong {
+  color: var(--accent-primary);
+  font-family: 'Space Grotesk', monospace;
+}
+
+.colCompartments {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.colZone {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.select {
+  flex: 1;
+  padding: 0.5rem;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.zoneColorIndicator {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tempInput {
+  width: 100%;
+  padding: 0.5rem;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  text-align: center;
+  font-family: 'Space Grotesk', monospace;
+  font-weight: 600;
+}
+
+.tempInput:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+/* Step 3: Review */
+.reviewSection {
+  margin-bottom: 2rem;
+}
+
+.reviewSection h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 1rem 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.reviewGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.reviewItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.reviewItem .label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.reviewItem .value {
+  font-size: 1rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.tempSummary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.summaryCard {
+  background: var(--surface-base);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.summaryHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.sectionName {
+  font-family: 'Space Grotesk', monospace;
+  font-weight: 700;
+  color: var(--accent-primary);
+  font-size: 1rem;
+}
+
+.temp {
+  font-family: 'Space Grotesk', monospace;
+  font-weight: 700;
+  font-size: 1.125rem;
+  color: var(--text-primary);
+}
+
+.summaryDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.zoneBar {
+  height: 4px;
+  border-radius: 2px;
+  width: 100%;
+}
+
+.compartments {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.infoBox {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(14, 165, 233, 0.05);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  border-radius: 8px;
+  margin-top: 2rem;
+}
+
+.infoBox svg {
+  flex-shrink: 0;
+  color: var(--accent-primary);
+  margin-top: 0.125rem;
+}
+
+.infoBox p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.btnSecondary,
+.btnPrimary {
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.btnSecondary {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.btnSecondary:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.btnPrimary {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.btnPrimary:hover {
+  background: var(--accent-secondary);
+  transform: translateY(-1px);
+}
+
+.btnPrimary:disabled {
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  transform: none;
+  border: 1px solid var(--border-color);
+}

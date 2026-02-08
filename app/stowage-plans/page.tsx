@@ -1,6 +1,7 @@
 import AppShell from '@/components/layout/AppShell';
 import { mockStowagePlans } from '@/lib/mock-data';
 import styles from './page.module.css';
+import Link from 'next/link';
 
 const statusStyles: Record<string, { bg: string; color: string }> = {
   ESTIMATED: { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)' },
@@ -34,7 +35,9 @@ export default function StowagePlansPage() {
             <h1 className={styles.pageTitle}>Stowage Plans</h1>
             <p className={styles.pageSubtitle}>{mockStowagePlans.length} plans</p>
           </div>
-          <button className={styles.btnPrimary}>+ New Plan</button>
+          <Link href={`/stowage-plans/new/`} className={styles.btnGhost}>
+            + New Plan
+          </Link>
         </div>
 
         <div className={styles.planList}>
