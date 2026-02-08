@@ -7,15 +7,20 @@ import { useParams } from 'next/navigation';
 import VesselProfile from '@/components/vessel/VesselProfile';
 import styles from './page.module.css';
 
+interface CargoAssignment {
+  compartmentId: string;
+  quantity: number;
+}
+
 interface CargoInPlan {
   shipmentId: string;
   shipmentNumber: string;
   cargoType: string;
-  quantity: number;
+  totalQuantity: number;
   pol: string;
   pod: string;
-  compartmentId: string | null;
   consignee: string;
+  assignments: CargoAssignment[];
 }
 
 export default function StowagePlanDetailPage() {
@@ -25,6 +30,7 @@ export default function StowagePlanDetailPage() {
   const [activeTab, setActiveTab] = useState<'cargo' | 'stability' | 'validation'>('cargo');
   const [assigningShipment, setAssigningShipment] = useState<CargoInPlan | null>(null);
   const [selectedCompartment, setSelectedCompartment] = useState<string>('');
+  const [assignQuantity, setAssignQuantity] = useState<number>(0);
   const [showConflictWarning, setShowConflictWarning] = useState(false);
   const [confirmedConflicts, setConfirmedConflicts] = useState<Set<string>>(new Set());
 
@@ -55,41 +61,41 @@ export default function StowagePlanDetailPage() {
       shipmentId: '1',
       shipmentNumber: 'SHP-001',
       cargoType: 'BANANAS',
-      quantity: 900,
+      totalQuantity: 900,
       pol: 'CLVAP',
       pod: 'NLRTM',
-      compartmentId: 'H2-A',
       consignee: 'FYFFES',
+      assignments: [{ compartmentId: 'H2-A', quantity: 500 }],
     },
     {
       shipmentId: '2',
       shipmentNumber: 'SHP-002',
       cargoType: 'BANANAS',
-      quantity: 750,
+      totalQuantity: 750,
       pol: 'CLVAP',
       pod: 'NLRTM',
-      compartmentId: 'H3-B',
       consignee: 'COBANA',
+      assignments: [{ compartmentId: 'H3-B', quantity: 750 }],
     },
     {
       shipmentId: '3',
       shipmentNumber: 'SHP-003',
       cargoType: 'TABLE_GRAPES',
-      quantity: 600,
+      totalQuantity: 600,
       pol: 'CLVAP',
       pod: 'NLRTM',
-      compartmentId: null,
       consignee: 'Del Monte',
+      assignments: [],
     },
     {
       shipmentId: '4',
       shipmentNumber: 'SHP-004',
       cargoType: 'AVOCADOS',
-      quantity: 400,
+      totalQuantity: 400,
       pol: 'COSMA',
       pod: 'NLRTM',
-      compartmentId: null,
       consignee: 'FYFFES',
+      assignments: [],
     },
   ]);
 
@@ -134,39 +140,40 @@ export default function StowagePlanDetailPage() {
     const temperatureConflicts: { compartmentId: string; coolingSectionId: string; description: string; affectedShipments: string[]; userConfirmed: boolean }[] = [];
     const overstowViolations: { compartmentId: string; description: string; affectedShipments: string[] }[] = [];
 
-    // Group stowed shipments by compartment
-    const byCompartment: Record<string, CargoInPlan[]> = {};
+    // Group assignments by compartment
+    const byCompartment: Record<string, { shipment: CargoInPlan; quantity: number }[]> = {};
     for (const s of shipments) {
-      if (!s.compartmentId) continue;
-      if (!byCompartment[s.compartmentId]) byCompartment[s.compartmentId] = [];
-      byCompartment[s.compartmentId].push(s);
+      for (const a of s.assignments) {
+        if (!byCompartment[a.compartmentId]) byCompartment[a.compartmentId] = [];
+        byCompartment[a.compartmentId].push({ shipment: s, quantity: a.quantity });
+      }
     }
 
-    for (const [compId, comShipments] of Object.entries(byCompartment)) {
+    for (const [compId, entries] of Object.entries(byCompartment)) {
       const section = compartmentToSection[compId];
       if (!section) continue;
 
       // Temperature conflict check
-      for (const s of comShipments) {
-        const req = cargoTempRequirements[s.cargoType];
+      for (const { shipment, quantity } of entries) {
+        const req = cargoTempRequirements[shipment.cargoType];
         if (req && (section.temp < req.min || section.temp > req.max)) {
-          const userConfirmed = confirmedConflicts.has(`${s.shipmentId}-${compId}`);
+          const userConfirmed = confirmedConflicts.has(`${shipment.shipmentId}-${compId}`);
           temperatureConflicts.push({
             compartmentId: compId,
             coolingSectionId: section.sectionId,
-            description: `${s.cargoType.replace('_', ' ')} requires ${req.min}–${req.max}°C but ${section.sectionId} is set to ${section.temp > 0 ? '+' : ''}${section.temp}°C`,
-            affectedShipments: [s.shipmentNumber],
+            description: `${shipment.cargoType.replace('_', ' ')} (${quantity} pallets) requires ${req.min}–${req.max}°C but ${section.sectionId} is set to ${section.temp > 0 ? '+' : ''}${section.temp}°C`,
+            affectedShipments: [shipment.shipmentNumber],
             userConfirmed,
           });
         }
       }
 
       // Overstow: more than one shipment per compartment
-      if (comShipments.length > 1) {
+      if (entries.length > 1) {
         overstowViolations.push({
           compartmentId: compId,
-          description: `${comShipments.length} shipments assigned to same compartment`,
-          affectedShipments: comShipments.map(s => s.shipmentNumber),
+          description: `${entries.length} shipments share this compartment`,
+          affectedShipments: entries.map(e => e.shipment.shipmentNumber),
         });
       }
     }
@@ -194,10 +201,13 @@ export default function StowagePlanDetailPage() {
     },
   };
 
-  const stowedShipments = shipments.filter(s => s.compartmentId);
-  const unstowedShipments = shipments.filter(s => !s.compartmentId);
-  const totalPallets = shipments.reduce((sum, s) => sum + s.quantity, 0);
-  const stowedPallets = stowedShipments.reduce((sum, s) => sum + s.quantity, 0);
+  const assignedQty = (s: CargoInPlan) => s.assignments.reduce((sum, a) => sum + a.quantity, 0);
+  const remainingQty = (s: CargoInPlan) => s.totalQuantity - assignedQty(s);
+
+  const unstowedShipments = shipments.filter(s => remainingQty(s) > 0);
+  const stowedShipments = shipments.filter(s => assignedQty(s) > 0);
+  const totalPallets = shipments.reduce((sum, s) => sum + s.totalQuantity, 0);
+  const stowedPallets = shipments.reduce((sum, s) => sum + assignedQty(s), 0);
 
   const getCargoTypeColor = (cargoType: string) => {
     const colors: Record<string, string> = {
@@ -212,7 +222,7 @@ export default function StowagePlanDetailPage() {
   };
 
   const handleConfirmAssign = () => {
-    if (!assigningShipment || !selectedCompartment) return;
+    if (!assigningShipment || !selectedCompartment || assignQuantity <= 0) return;
 
     const section = compartmentToSection[selectedCompartment];
     const req = cargoTempRequirements[assigningShipment.cargoType];
@@ -227,50 +237,58 @@ export default function StowagePlanDetailPage() {
       setConfirmedConflicts(prev => new Set([...prev, `${assigningShipment.shipmentId}-${selectedCompartment}`]));
     }
 
-    setShipments(prev => prev.map(s =>
-      s.shipmentId === assigningShipment.shipmentId
-        ? { ...s, compartmentId: selectedCompartment }
-        : s
-    ));
+    setShipments(prev => prev.map(s => {
+      if (s.shipmentId !== assigningShipment.shipmentId) return s;
+      const existing = s.assignments.find(a => a.compartmentId === selectedCompartment);
+      const updatedAssignments = existing
+        ? s.assignments.map(a => a.compartmentId === selectedCompartment
+            ? { ...a, quantity: a.quantity + assignQuantity }
+            : a)
+        : [...s.assignments, { compartmentId: selectedCompartment, quantity: assignQuantity }];
+      return { ...s, assignments: updatedAssignments };
+    }));
     setAssigningShipment(null);
     setSelectedCompartment('');
+    setAssignQuantity(0);
     setShowConflictWarning(false);
   };
 
   const handleCancelAssign = () => {
     setAssigningShipment(null);
     setSelectedCompartment('');
+    setAssignQuantity(0);
     setShowConflictWarning(false);
   };
 
-  const handleRemoveAssignment = (shipmentId: string) => {
+  const handleRemoveAssignment = (shipmentId: string, compartmentId: string) => {
     setShipments(prev => prev.map(s =>
-      s.shipmentId === shipmentId ? { ...s, compartmentId: null } : s
+      s.shipmentId === shipmentId
+        ? { ...s, assignments: s.assignments.filter(a => a.compartmentId !== compartmentId) }
+        : s
     ));
   };
 
   const handleAutoStow = () => {
     setShipments(prev => {
-      const updated = [...prev];
-      // Track which compartments are occupied after each assignment
-      const occupied = new Set(updated.filter(s => s.compartmentId).map(s => s.compartmentId!));
+      const updated = prev.map(s => ({ ...s, assignments: [...s.assignments] }));
+      // Track pallet counts per compartment to avoid over-filling
+      const usedCompartments = new Set(updated.flatMap(s => s.assignments.map(a => a.compartmentId)));
 
       for (const shipment of updated) {
-        if (shipment.compartmentId) continue; // already placed
+        const rem = remainingQty(shipment);
+        if (rem <= 0) continue;
 
         const req = cargoTempRequirements[shipment.cargoType];
         if (!req) continue;
 
-        // Find a compatible section (section temp within cargo's required range)
         for (const zone of tempZoneConfig) {
           if (zone.temp < req.min || zone.temp > req.max) continue;
 
-          // Find an unoccupied compartment in this section
-          const freeCompartment = zone.compartments.find(c => !occupied.has(c));
+          const freeCompartment = zone.compartments.find(c => !usedCompartments.has(c));
           if (!freeCompartment) continue;
 
-          shipment.compartmentId = freeCompartment;
-          occupied.add(freeCompartment);
+          shipment.assignments.push({ compartmentId: freeCompartment, quantity: rem });
+          usedCompartments.add(freeCompartment);
           break;
         }
       }
@@ -413,8 +431,10 @@ export default function StowagePlanDetailPage() {
                         </div>
                         <div className={styles.cargoDetails}>
                           <div className={styles.cargoInfo}>
-                            <span className={styles.label}>Quantity:</span>
-                            <span className={styles.value}>{shipment.quantity} pallets</span>
+                            <span className={styles.label}>Assigned:</span>
+                            <span className={styles.value}>
+                              {assignedQty(shipment)}/{shipment.totalQuantity} pallets
+                            </span>
                           </div>
                           <div className={styles.cargoInfo}>
                             <span className={styles.label}>Route:</span>
@@ -430,6 +450,7 @@ export default function StowagePlanDetailPage() {
                           onClick={() => {
                             setAssigningShipment(shipment);
                             setSelectedCompartment('');
+                            setAssignQuantity(remainingQty(shipment));
                           }}
                         >
                           Assign to Compartment
@@ -444,7 +465,7 @@ export default function StowagePlanDetailPage() {
                   <div className={styles.cargoSection}>
                     <h3>Stowed Cargo ({stowedShipments.length})</h3>
                     {stowedShipments.map(shipment => (
-                      <div key={shipment.shipmentId} className={`${styles.cargoCard} ${styles.stowed}`}>
+                      <div key={shipment.shipmentId} className={`${styles.cargoCard} ${remainingQty(shipment) === 0 ? styles.stowed : styles.partial}`}>
                         <div className={styles.cargoHeader}>
                           <div
                             className={styles.cargoDot}
@@ -457,23 +478,31 @@ export default function StowagePlanDetailPage() {
                         </div>
                         <div className={styles.cargoDetails}>
                           <div className={styles.cargoInfo}>
-                            <span className={styles.label}>Location:</span>
-                            <span className={styles.value}>{shipment.compartmentId}</span>
+                            <span className={styles.label}>Assigned:</span>
+                            <span className={styles.value}>
+                              {assignedQty(shipment)}/{shipment.totalQuantity} pallets
+                            </span>
                           </div>
-                          <div className={styles.cargoInfo}>
-                            <span className={styles.label}>Quantity:</span>
-                            <span className={styles.value}>{shipment.quantity} pallets</span>
-                          </div>
-                          <div className={styles.cargoInfo}>
-                            <span className={styles.label}>Consignee:</span>
-                            <span className={styles.value}>{shipment.consignee}</span>
-                          </div>
+                          {shipment.assignments.map(a => (
+                            <div key={a.compartmentId} className={styles.assignmentRow}>
+                              <span className={styles.compartmentTag}>{a.compartmentId}</span>
+                              <span className={styles.assignmentQty}>{a.quantity} pal.</span>
+                              <button
+                                className={styles.btnRemoveSmall}
+                                onClick={() => handleRemoveAssignment(shipment.shipmentId, a.compartmentId)}
+                              >✕</button>
+                            </div>
+                          ))}
                         </div>
                         <button
-                          className={styles.btnRemove}
-                          onClick={() => handleRemoveAssignment(shipment.shipmentId)}
+                          className={styles.btnAssign}
+                          onClick={() => {
+                            setAssigningShipment(shipment);
+                            setSelectedCompartment('');
+                            setAssignQuantity(remainingQty(shipment) || 1);
+                          }}
                         >
-                          Remove
+                          + Add Compartment
                         </button>
                       </div>
                     ))}
@@ -668,7 +697,7 @@ export default function StowagePlanDetailPage() {
               />
               <span>{assigningShipment.cargoType.replace('_', ' ')}</span>
               <span className={styles.separator}>·</span>
-              <span>{assigningShipment.quantity} pallets</span>
+              <span>{assignedQty(assigningShipment)}/{assigningShipment.totalQuantity} pallets assigned</span>
               <span className={styles.separator}>·</span>
               <span>{assigningShipment.consignee}</span>
             </div>
@@ -698,6 +727,21 @@ export default function StowagePlanDetailPage() {
               ))}
             </div>
 
+            <div className={styles.quantityRow}>
+              <label className={styles.quantityLabel}>
+                Pallets to assign:
+              </label>
+              <input
+                type="number"
+                className={styles.quantityInput}
+                value={assignQuantity}
+                min={1}
+                max={remainingQty(assigningShipment)}
+                onChange={e => { setAssignQuantity(parseInt(e.target.value) || 0); setShowConflictWarning(false); }}
+              />
+              <span className={styles.quantityMax}>/ {remainingQty(assigningShipment)} remaining</span>
+            </div>
+
             {showConflictWarning && selectedCompartment && (() => {
               const section = compartmentToSection[selectedCompartment];
               const req = cargoTempRequirements[assigningShipment.cargoType];
@@ -725,7 +769,7 @@ export default function StowagePlanDetailPage() {
               </button>
               <button
                 className={showConflictWarning ? styles.btnWarning : styles.btnPrimary}
-                disabled={!selectedCompartment}
+                disabled={!selectedCompartment || assignQuantity <= 0}
                 onClick={handleConfirmAssign}
               >
                 {showConflictWarning ? 'Assign Anyway' : 'Assign'}
