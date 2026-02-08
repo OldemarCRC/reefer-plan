@@ -98,18 +98,23 @@ export default function NewStowagePlanPage() {
     setIsSubmitting(true);
     setSubmitError(null);
 
-    const result = await createStowagePlanFromWizard({
-      voyageId: selectedVoyageId,
-      coolingSectionTemps: tempAssignments.map(a => ({
-        coolingSectionId: a.coolingSectionId,
-        targetTemp: a.targetTemp,
-      })),
-    });
+    try {
+      const result = await createStowagePlanFromWizard({
+        voyageId: selectedVoyageId,
+        coolingSectionTemps: tempAssignments.map(a => ({
+          coolingSectionId: a.coolingSectionId,
+          targetTemp: a.targetTemp,
+        })),
+      });
 
-    if (result.success && result.planId) {
-      router.push(`/stowage-plans/${result.planId}`);
-    } else {
-      setSubmitError(result.error ?? 'Failed to create plan');
+      if (result.success && result.planId) {
+        router.push(`/stowage-plans/${result.planId}`);
+      } else {
+        setSubmitError(result.error ?? 'Failed to create plan');
+      }
+    } catch {
+      setSubmitError('Server error — check database connection');
+    } finally {
       setIsSubmitting(false);
     }
   };

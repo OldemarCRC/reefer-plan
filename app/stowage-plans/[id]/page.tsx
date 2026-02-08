@@ -23,6 +23,8 @@ export default function StowagePlanDetailPage() {
   const planId = params.id as string;
 
   const [activeTab, setActiveTab] = useState<'cargo' | 'stability' | 'validation'>('cargo');
+  const [assigningShipment, setAssigningShipment] = useState<CargoInPlan | null>(null);
+  const [selectedCompartment, setSelectedCompartment] = useState<string>('');
 
   // Mock data - replace with actual data fetching
   const plan = {
