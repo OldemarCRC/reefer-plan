@@ -2,8 +2,10 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import styles from './page.module.css';
+import { createStowagePlanFromWizard } from '@/app/actions/stowage-plan';
 
 type WizardStep = 'voyage' | 'temperature' | 'review';
 
@@ -13,9 +15,12 @@ interface TempAssignment {
 }
 
 export default function NewStowagePlanPage() {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState<WizardStep>('voyage');
   const [selectedVoyageId, setSelectedVoyageId] = useState<string>('');
   const [tempAssignments, setTempAssignments] = useState<TempAssignment[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Mock data - replace with actual data fetching
   const voyages = [
@@ -90,13 +95,23 @@ export default function NewStowagePlanPage() {
   };
 
   const handleCreatePlan = async () => {
-    // TODO: Call Server Action to create stowage plan
-    console.log('Creating plan:', {
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    const result = await createStowagePlanFromWizard({
       voyageId: selectedVoyageId,
-      tempAssignments,
+      coolingSectionTemps: tempAssignments.map(a => ({
+        coolingSectionId: a.coolingSectionId,
+        targetTemp: a.targetTemp,
+      })),
     });
-    // Navigate to the created plan
-    // router.push(`/stowage-plans/${newPlanId}`);
+
+    if (result.success && result.planId) {
+      router.push(`/stowage-plans/${result.planId}`);
+    } else {
+      setSubmitError(result.error ?? 'Failed to create plan');
+      setIsSubmitting(false);
+    }
   };
 
   const selectedVoyage = voyages.find(v => v._id === selectedVoyageId);
@@ -317,18 +332,24 @@ export default function NewStowagePlanPage() {
               </p>
             </div>
 
+            {submitError && (
+              <div className={styles.errorBox}>{submitError}</div>
+            )}
+
             <div className={styles.actions}>
               <button
                 className={styles.btnSecondary}
                 onClick={() => setCurrentStep('temperature')}
+                disabled={isSubmitting}
               >
                 Back
               </button>
               <button
                 className={styles.btnPrimary}
                 onClick={handleCreatePlan}
+                disabled={isSubmitting}
               >
-                Create Stowage Plan
+                {isSubmitting ? 'Creating…' : 'Create Stowage Plan'}
               </button>
             </div>
           </div>

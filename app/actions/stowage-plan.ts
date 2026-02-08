@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { StowagePlanModel, VesselModel } from '@/lib/db/schemas';
+import { StowagePlanModel, VesselModel, VoyageModel } from '@/lib/db/schemas';
 import type { StowagePlan, StowagePlanStatus } from '@/types/models';
 
 // ----------------------------------------------------------------------------
@@ -25,6 +25,14 @@ const CreateStowagePlanSchema = z.object({
   voyageId: z.string().min(1),
   createdBy: z.string().min(1), // User ID
   estimatedDepartureDate: z.date().optional(),
+});
+
+const CreatePlanFromWizardSchema = z.object({
+  voyageId: z.string().min(1, 'Voyage ID is required'),
+  coolingSectionTemps: z.array(z.object({
+    coolingSectionId: z.string().min(1),
+    targetTemp: z.number().min(-25).max(15),
+  })).min(1, 'At least one cooling section temperature is required'),
 });
 
 const AssignCargoSchema = z.object({
@@ -110,6 +118,82 @@ export async function createStowagePlan(data: unknown) {
       };
     }
     console.error('Error creating stowage plan:', error);
+    return {
+      success: false,
+      error: 'Failed to create stowage plan',
+    };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// CREATE STOWAGE PLAN FROM WIZARD
+// Called by the new plan wizard — derives vesselId from voyage,
+// stores cooling section temperature assignments, returns planId for redirect
+// ----------------------------------------------------------------------------
+
+export async function createStowagePlanFromWizard(data: unknown) {
+  try {
+    const validated = CreatePlanFromWizardSchema.parse(data);
+
+    await connectDB();
+
+    // Resolve voyage to get vessel info and voyage number
+    const voyage = await VoyageModel.findById(validated.voyageId).lean();
+    if (!voyage) {
+      return { success: false, error: 'Voyage not found' };
+    }
+
+    const vessel = await VesselModel.findById(voyage.vesselId).lean();
+    if (!vessel) {
+      return { success: false, error: 'Vessel not found' };
+    }
+
+    // Generate plan number
+    const year = new Date().getFullYear();
+    const count = await StowagePlanModel.countDocuments();
+    const planNumber = `SP-${year}-${String(count + 1).padStart(4, '0')}`;
+
+    // Build cooling section status with user-assigned temperatures
+    const coolingSectionStatus = vessel.coolingSections.map(cs => {
+      const tempInput = validated.coolingSectionTemps.find(
+        t => t.coolingSectionId === cs.sectionId
+      );
+      return {
+        sectionId: cs.sectionId,
+        compartmentIds: cs.compartmentIds,
+        assignedTemperature: tempInput?.targetTemp,
+        locked: false,
+      };
+    });
+
+    const plan = await StowagePlanModel.create({
+      planNumber,
+      voyageId: voyage._id,
+      voyageNumber: voyage.voyageNumber,
+      vesselId: vessel._id,
+      vesselName: vessel.name,
+      status: 'DRAFT',
+      cargoPositions: [],
+      coolingSectionStatus,
+      overstowViolations: [],
+      temperatureConflicts: [],
+      weightDistributionWarnings: [],
+      createdBy: 'SYSTEM', // TODO: replace with session user when auth is added
+    });
+
+    return {
+      success: true,
+      planId: plan._id.toString(),
+      message: `Stowage plan ${planNumber} created for voyage ${voyage.voyageNumber}`,
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: `Validation error: ${error.errors[0].message}`,
+      };
+    }
+    console.error('Error creating stowage plan from wizard:', error);
     return {
       success: false,
       error: 'Failed to create stowage plan',
