@@ -1,16 +1,10 @@
-'use client';
-
 import AppShell from '@/components/layout/AppShell';
-import {
-  dashboardStats,
-  mockVoyages,
-  mockStowagePlans,
-  mockBookings,
-} from '@/lib/mock-data';
+import { getVoyages } from '@/app/actions/voyage';
+import { getStowagePlans } from '@/app/actions/stowage-plan';
+import { getBookings } from '@/app/actions/booking';
+import { ClickablePlanRow } from '@/components/dashboard/ClickablePlanRow';
 import styles from './page.module.css';
 import type { CargoType } from '@/types/models';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 
 // --- Status styling map ---
 
@@ -64,13 +58,74 @@ function UtilizationBar({ used, total }: { used: number; total: number }) {
 
 // --- Page ---
 
-export default function DashboardPage() {
-  const router = useRouter();
-  const recentVoyages = mockVoyages.slice(0, 5);
-  const recentPlans = mockStowagePlans;
-  const pendingBookings = mockBookings.filter(
-    (b) => b.status === 'PENDING' || b.status === 'STANDBY' || b.status === 'PARTIAL'
-  );
+export default async function DashboardPage() {
+  // Fetch data from database
+  const voyagesResult = await getVoyages();
+  const plansResult = await getStowagePlans();
+  const bookingsResult = await getBookings();
+
+  const voyages = voyagesResult.success ? voyagesResult.data : [];
+  const plans = plansResult.success ? plansResult.data : [];
+  const bookings = bookingsResult.success ? bookingsResult.data : [];
+
+  // Calculate dashboard stats
+  const activeVoyages = voyages.filter((v: any) =>
+    v.status === 'IN_PROGRESS' || v.status === 'PLANNED' || v.status === 'CONFIRMED'
+  ).length;
+
+  const pendingBookingsCount = bookings.filter((b: any) =>
+    b.status === 'PENDING' || b.status === 'STANDBY' || b.status === 'PARTIAL'
+  ).length;
+
+  const plansInDraft = plans.filter((p: any) => p.status === 'DRAFT').length;
+
+  const awaitingCaptain = plans.filter((p: any) =>
+    p.status === 'READY_FOR_CAPTAIN' || p.status === 'EMAIL_SENT'
+  ).length;
+
+  // Transform data for display
+  const recentVoyages = voyages.slice(0, 5).map((v: any) => ({
+    _id: v._id,
+    voyageNumber: v.voyageNumber,
+    status: v.status || 'PLANNED',
+    vesselName: v.vesselName,
+    serviceCode: v.serviceId?.serviceCode || 'N/A',
+    palletsBooked: 0, // TODO: calculate from bookings
+    palletsCapacity: 1800, // TODO: fetch from vessel
+  }));
+
+  const recentPlans = plans.slice(0, 5).map((p: any) => ({
+    _id: p._id,
+    planNumber: p.planNumber || `PLAN-${p._id.toString().slice(-6)}`,
+    voyageNumber: p.voyageId?.voyageNumber || 'N/A',
+    status: p.status || 'DRAFT',
+    palletsAssigned: p.cargoPositions?.length || 0,
+    palletsTotal: 1800, // TODO: fetch from vessel capacity
+    overstowViolations: p.validation?.overstowViolations?.length || 0,
+    temperatureConflicts: p.validation?.temperatureConflicts?.length || 0,
+  }));
+
+  const pendingBookings = bookings
+    .filter((b: any) => b.status === 'PENDING' || b.status === 'STANDBY' || b.status === 'PARTIAL')
+    .slice(0, 10)
+    .map((b: any) => ({
+      _id: b._id,
+      bookingNumber: b.bookingNumber,
+      voyageNumber: b.voyageId?.voyageNumber || 'N/A',
+      clientName: b.clientName || 'Unknown',
+      cargoType: b.cargoType || 'OTHER_CHILLED',
+      requestedQuantity: b.requestedQuantity || 0,
+      polCode: b.origin || 'N/A',
+      podCode: b.destination || 'N/A',
+      status: b.status,
+    }));
+
+  const dashboardStats = {
+    activeVoyages,
+    pendingBookings: pendingBookingsCount,
+    plansInDraft,
+    awaitingCaptain,
+  };
 
   return (
     <AppShell activeVessel="ACONCAGUA BAY" activeVoyage="ACON-062026">
@@ -95,7 +150,7 @@ export default function DashboardPage() {
           <div className={styles.card}>
             <div className={styles.cardHeader}>
               <h2 className={styles.cardTitle}>Recent Voyages</h2>
-              <span className={styles.cardCount}>{mockVoyages.length}</span>
+              <span className={styles.cardCount}>{voyages.length}</span>
             </div>
             <div className={styles.tableWrap}>
               <table className={styles.table}>
@@ -129,7 +184,7 @@ export default function DashboardPage() {
           <div className={styles.card}>
             <div className={styles.cardHeader}>
               <h2 className={styles.cardTitle}>Stowage Plans</h2>
-              <span className={styles.cardCount}>{mockStowagePlans.length}</span>
+              <span className={styles.cardCount}>{plans.length}</span>
             </div>
             <div className={styles.tableWrap}>
               <table className={styles.table}>
@@ -144,11 +199,7 @@ export default function DashboardPage() {
                 </thead>
                 <tbody>
                   {recentPlans.map((p) => (
-                    <tr
-                      key={p._id}
-                      className={styles.clickableRow}
-                      onClick={() => router.push(`/stowage-plans/${p._id}`)}
-                    >
+                    <ClickablePlanRow key={p._id} planId={p._id}>
                       <td className={styles.cellMono}>{p.planNumber}</td>
                       <td className={styles.cellMuted}>{p.voyageNumber}</td>
                       <td>
@@ -161,7 +212,7 @@ export default function DashboardPage() {
                         />
                       </td>
                       <td><StatusBadge status={p.status} /></td>
-                    </tr>
+                    </ClickablePlanRow>
                   ))}
                 </tbody>
               </table>

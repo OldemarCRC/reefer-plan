@@ -286,6 +286,33 @@ export async function getBookingsByVoyage(voyageId: unknown) {
 }
 
 // ----------------------------------------------------------------------------
+// GET ALL BOOKINGS
+// ----------------------------------------------------------------------------
+
+export async function getBookings() {
+  try {
+    await connectDB();
+
+    const bookings = await BookingModel.find({})
+      .populate('voyageId')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(bookings)),
+    };
+  } catch (error) {
+    console.error('Error fetching bookings:', error);
+    return {
+      success: false,
+      error: 'Failed to fetch bookings',
+      data: [],
+    };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // GET PENDING BOOKINGS
 // ----------------------------------------------------------------------------
 

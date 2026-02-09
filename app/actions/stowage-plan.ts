@@ -494,6 +494,34 @@ export async function getStowagePlansByVoyage(voyageId: unknown) {
 }
 
 // ----------------------------------------------------------------------------
+// GET ALL STOWAGE PLANS
+// ----------------------------------------------------------------------------
+
+export async function getStowagePlans() {
+  try {
+    await connectDB();
+
+    const plans = await StowagePlanModel.find({})
+      .populate('voyageId')
+      .populate('vesselId')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(plans)),
+    };
+  } catch (error) {
+    console.error('Error fetching plans:', error);
+    return {
+      success: false,
+      error: 'Failed to fetch plans',
+      data: [],
+    };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // UPDATE PLAN STATUS
 // ----------------------------------------------------------------------------
 
