@@ -1,5 +1,5 @@
 import AppShell from '@/components/layout/AppShell';
-import { mockVoyages } from '@/lib/mock-data';
+import { getVoyages } from '@/app/actions/voyage';
 import styles from './page.module.css';
 
 const statusStyles: Record<string, { bg: string; color: string }> = {
@@ -34,7 +34,30 @@ function UtilizationBar({ used, total }: { used: number; total: number }) {
   );
 }
 
-export default function VoyagesPage() {
+export default async function VoyagesPage() {
+  // Fetch voyages from database
+  const result = await getVoyages();
+  const voyages = result.success ? result.data : [];
+
+  // Transform database data to match component expectations
+  const displayVoyages = voyages.map((v: any) => ({
+    _id: v._id,
+    voyageNumber: v.voyageNumber,
+    status: v.status || 'PLANNED',
+    vesselName: v.vesselName,
+    serviceCode: v.serviceId?.serviceCode || 'N/A',
+    startDate: v.departureDate ? new Date(v.departureDate).toLocaleDateString() : 'TBD',
+    portCalls: (v.portCalls || []).map((pc: any) => ({
+      portCode: pc.portCode,
+      portName: pc.portName,
+      operations: pc.operations || [],
+      locked: false, // TODO: implement port locking logic
+    })),
+    bookingsCount: 0, // TODO: fetch booking count from database
+    palletsBooked: 0, // TODO: calculate from bookings
+    palletsCapacity: 1800, // TODO: fetch from vessel capacity
+  }));
+
   return (
     <AppShell>
       <div className={styles.page}>
@@ -42,7 +65,7 @@ export default function VoyagesPage() {
         <div className={styles.pageHeader}>
           <div>
             <h1 className={styles.pageTitle}>Voyages</h1>
-            <p className={styles.pageSubtitle}>{mockVoyages.length} voyages</p>
+            <p className={styles.pageSubtitle}>{displayVoyages.length} voyages</p>
           </div>
           <button className={styles.btnPrimary}>+ New Voyage</button>
         </div>
@@ -65,7 +88,7 @@ export default function VoyagesPage() {
 
         {/* Voyage cards */}
         <div className={styles.voyageList}>
-          {mockVoyages.map((v) => (
+          {displayVoyages.map((v) => (
             <div key={v._id} className={styles.voyageCard}>
               {/* Card header */}
               <div className={styles.voyageHeader}>
