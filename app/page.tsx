@@ -1,3 +1,5 @@
+'use client';
+
 import AppShell from '@/components/layout/AppShell';
 import {
   dashboardStats,
@@ -8,6 +10,7 @@ import {
 import styles from './page.module.css';
 import type { CargoType } from '@/types/models';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 // --- Status styling map ---
 
@@ -62,6 +65,7 @@ function UtilizationBar({ used, total }: { used: number; total: number }) {
 // --- Page ---
 
 export default function DashboardPage() {
+  const router = useRouter();
   const recentVoyages = mockVoyages.slice(0, 5);
   const recentPlans = mockStowagePlans;
   const pendingBookings = mockBookings.filter(
@@ -140,12 +144,12 @@ export default function DashboardPage() {
                 </thead>
                 <tbody>
                   {recentPlans.map((p) => (
-                    <tr key={p._id} className={styles.clickableRow}>
-                      <td className={styles.cellMono}>
-                        <Link href={`/stowage-plans/${p._id}`} className={styles.tableLink}>
-                          {p.planNumber}
-                        </Link>
-                      </td>
+                    <tr
+                      key={p._id}
+                      className={styles.clickableRow}
+                      onClick={() => router.push(`/stowage-plans/${p._id}`)}
+                    >
+                      <td className={styles.cellMono}>{p.planNumber}</td>
                       <td className={styles.cellMuted}>{p.voyageNumber}</td>
                       <td>
                         <UtilizationBar used={p.palletsAssigned} total={p.palletsTotal} />

@@ -2,6 +2,7 @@ import AppShell from '@/components/layout/AppShell';
 import VesselProfile from '@/components/vessel/VesselProfile';
 import { mockVessels } from '@/lib/mock-data';
 import { voyageTempAssignments } from '@/lib/vessel-profile-data';
+import Link from 'next/link';
 import styles from './page.module.css';
 
 export default function VesselDetailPage() {
@@ -28,7 +29,9 @@ export default function VesselDetailPage() {
           </div>
           <div className={styles.headerActions}>
             <button className={styles.btnSecondary}>Edit Vessel</button>
-            <button className={styles.btnPrimary}>Open Stowage Plan</button>
+            <Link href="/stowage-plans/test-123">
+              <button className={styles.btnPrimary}>Open Stowage Plan</button>
+            </Link>
           </div>
         </div>
 

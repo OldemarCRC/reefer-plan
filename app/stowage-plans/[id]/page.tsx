@@ -4,6 +4,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import AppShell from '@/components/layout/AppShell';
 import VesselProfile from '@/components/vessel/VesselProfile';
 import type { VoyageTempAssignment } from '@/lib/vessel-profile-data';
 import styles from './page.module.css';
@@ -363,9 +364,10 @@ export default function StowagePlanDetailPage() {
   };
 
   return (
-    <div className={styles.container}>
-      {/* Header */}
-      <div className={styles.header}>
+    <AppShell activeVessel={plan.vesselName} activeVoyage={plan.voyageNumber}>
+      <div className={styles.container}>
+        {/* Header */}
+        <div className={styles.header}>
         <div className={styles.titleRow}>
           <div>
             <div className={styles.breadcrumb}>
@@ -837,6 +839,7 @@ export default function StowagePlanDetailPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </AppShell>
   );
 }
