@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:seed": "tsx scripts/seed-database.ts",
+    "db:seed:minimal": "tsx scripts/seed-minimal.ts",
+    "db:test": "tsx scripts/test-connection.ts"
   },
   "dependencies": {
     "dotenv": "^17.2.3",
@@ -26,6 +29,7 @@
     "eslint-config-next": "16.1.6",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }
