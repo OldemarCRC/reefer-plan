@@ -49,26 +49,14 @@ export default function NewStowagePlanPage() {
   ];
 
   const coolingSections = [
-    { sectionId: '1AB', compartmentIds: ['H1-A', 'H1-B'] },
-    { sectionId: '1CD', compartmentIds: ['H1-C', 'H1-D'] },
-    { sectionId: '2UPDAB', compartmentIds: ['H2-UPD', 'H2-A', 'H2-B'] },
-    { sectionId: '2CD', compartmentIds: ['H2-C', 'H2-D'] },
-    { sectionId: '3UPDAB', compartmentIds: ['H3-UPD', 'H3-A', 'H3-B'] },
-    { sectionId: '3CD', compartmentIds: ['H3-C', 'H3-D'] },
-    { sectionId: '4UPDAB', compartmentIds: ['H4-UPD', 'H4-A', 'H4-B'] },
-    { sectionId: '4CD', compartmentIds: ['H4-C', 'H4-D'] },
-  ];
-
-  // Temperature zones are fixed per vessel — each zone controls 1+ cooling sections
-  const temperatureZones = [
-    { zoneId: 'ZONE_1AB', sectionId: '1AB', hold: 1 },
-    { zoneId: 'ZONE_1CD', sectionId: '1CD', hold: 1 },
-    { zoneId: 'ZONE_2UPDAB', sectionId: '2UPDAB', hold: 2 },
-    { zoneId: 'ZONE_2CD', sectionId: '2CD', hold: 2 },
-    { zoneId: 'ZONE_3UPDAB', sectionId: '3UPDAB', hold: 3 },
-    { zoneId: 'ZONE_3CD', sectionId: '3CD', hold: 3 },
-    { zoneId: 'ZONE_4UPDAB', sectionId: '4UPDAB', hold: 4 },
-    { zoneId: 'ZONE_4CD', sectionId: '4CD', hold: 4 },
+    { sectionId: '1AB', compartmentIds: ['H1-A', 'H1-B'], hold: 1 },
+    { sectionId: '1CD', compartmentIds: ['H1-C', 'H1-D'], hold: 1 },
+    { sectionId: '2UPDAB', compartmentIds: ['H2-UPD', 'H2-A', 'H2-B'], hold: 2 },
+    { sectionId: '2CD', compartmentIds: ['H2-C', 'H2-D'], hold: 2 },
+    { sectionId: '3UPDAB', compartmentIds: ['H3-UPD', 'H3-A', 'H3-B'], hold: 3 },
+    { sectionId: '3CD', compartmentIds: ['H3-C', 'H3-D'], hold: 3 },
+    { sectionId: '4UPDAB', compartmentIds: ['H4-UPD', 'H4-A', 'H4-B'], hold: 4 },
+    { sectionId: '4CD', compartmentIds: ['H4-C', 'H4-D'], hold: 4 },
   ];
 
   const tempToColor = (temp: number) => {
@@ -301,23 +289,21 @@ export default function NewStowagePlanPage() {
                 {[1, 2, 3, 4].map(holdNum => (
                   <div key={holdNum} className={styles.holdColumn}>
                     <div className={styles.holdLabel}>Hold {holdNum}</div>
-                    {temperatureZones
-                      .filter(z => z.hold === holdNum)
-                      .map(zone => {
-                        const assignment = tempAssignments.find(a => a.coolingSectionId === zone.sectionId);
+                    {coolingSections
+                      .filter(section => section.hold === holdNum)
+                      .map(section => {
+                        const assignment = tempAssignments.find(a => a.coolingSectionId === section.sectionId);
                         const temp = assignment?.targetTemp ?? 13;
                         const color = tempToColor(temp);
-                        const section = coolingSections.find(s => s.sectionId === zone.sectionId);
                         return (
-                          <div key={zone.zoneId} className={styles.zoneCard} style={{ borderColor: color }}>
-                            <div className={styles.zoneHeader}>
-                              <span className={styles.zoneName}>{zone.zoneId}</span>
-                              <span className={styles.zoneTemp}>{temp > 0 ? '+' : ''}{temp}°C</span>
+                          <div key={section.sectionId} className={styles.sectionCard} style={{ borderColor: color }}>
+                            <div className={styles.sectionHeader}>
+                              <span className={styles.sectionName}>{section.sectionId}</span>
+                              <span className={styles.sectionTemp}>{temp > 0 ? '+' : ''}{temp}°C</span>
                             </div>
                             <div className={styles.tempBar} style={{ backgroundColor: color }}></div>
-                            <div className={styles.sectionCard}>
-                              <span className={styles.sectionName}>{zone.sectionId}</span>
-                              <span className={styles.compartments}>{section?.compartmentIds.join(', ')}</span>
+                            <div className={styles.compartments}>
+                              {section.compartmentIds.join(', ')}
                             </div>
                           </div>
                         );
