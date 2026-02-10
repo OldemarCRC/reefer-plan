@@ -1,0 +1,318 @@
+/* ============================================================================
+   VOYAGE DETAIL PAGE
+   ============================================================================ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* --- Page header --- */
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.backLink {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  transition: color var(--transition-fast);
+}
+
+.backLink:hover {
+  color: var(--color-blue-light);
+}
+
+.separator {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.pageTitle {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  font-family: var(--font-mono);
+  color: var(--color-cyan-light);
+}
+
+.pageSubtitle {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  margin-top: var(--space-1);
+}
+
+.headerActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* --- Buttons --- */
+
+.btnPrimary {
+  background: var(--color-blue);
+  color: white;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  transition: all var(--transition-fast);
+  display: inline-block;
+}
+
+.btnPrimary:hover {
+  background: var(--color-blue-dark);
+}
+
+.btnSecondary {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  border: var(--border-default);
+  transition: all var(--transition-fast);
+  display: inline-block;
+}
+
+.btnSecondary:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.btnGhost {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  display: inline-block;
+}
+
+.btnGhost:hover {
+  color: var(--color-blue-light);
+  background: var(--color-blue-muted);
+}
+
+/* --- Badge --- */
+
+.badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* --- Card --- */
+
+.card {
+  background: var(--color-surface);
+  border: var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cardTitle {
+  font-family: var(--font-heading);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.cardCount {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* --- Table --- */
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead th {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--border-subtle);
+  white-space: nowrap;
+}
+
+.table tbody tr {
+  transition: background var(--transition-fast);
+}
+
+.table tbody tr:hover {
+  background: var(--color-bg-hover);
+}
+
+.table tbody td {
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  white-space: nowrap;
+}
+
+.cellMono {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.cellTemp {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-medium);
+  color: var(--color-cyan-light);
+}
+
+.cellRight {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.cellMuted {
+  color: var(--color-text-muted);
+}
+
+/* --- Port cell --- */
+
+.portCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.countryCode {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+}
+
+/* --- Operation tags --- */
+
+.opTags {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.opTag {
+  font-size: 10px;
+  font-weight: var(--weight-medium);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+}
+
+.opTag[data-op='LOAD'] {
+  color: var(--color-cyan);
+  background: var(--color-blue-muted);
+}
+
+.opTag[data-op='DISCHARGE'] {
+  color: var(--color-warning);
+  background: var(--color-warning-muted);
+}
+
+/* --- Locked badge --- */
+
+.lockedBadge {
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--color-warning-muted);
+  color: var(--color-warning);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* --- Plan list --- */
+
+.planList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.planRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3);
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+}
+
+.planRow:hover {
+  background: var(--color-bg-hover);
+}
+
+.planInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.planName {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.planMeta {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* --- Responsive --- */
+
+@media (max-width: 768px) {
+  .headerActions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .titleRow {
+    flex-wrap: wrap;
+  }
+}

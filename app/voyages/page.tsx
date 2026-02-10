@@ -1,13 +1,43 @@
 import AppShell from '@/components/layout/AppShell';
 import { getVoyages } from '@/app/actions/voyage';
+import { getPortWeather } from '@/app/actions/weather';
 import VoyagesClient from './VoyagesClient';
 import type { DisplayVoyage } from './VoyagesClient';
 import styles from './page.module.css';
 import Link from 'next/link';
 
+function formatShortDate(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  try {
+    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch {
+    return null;
+  }
+}
+
 export default async function VoyagesPage() {
   const result = await getVoyages();
   const voyages = result.success ? result.data : [];
+
+  // Collect unique (portName, country) pairs for weather lookup
+  const portKeys = new Map<string, { portName: string; country: string }>();
+  for (const v of voyages) {
+    for (const pc of v.portCalls || []) {
+      const key = `${pc.portName},${pc.country || ''}`.toLowerCase();
+      if (!portKeys.has(key)) {
+        portKeys.set(key, { portName: pc.portName, country: pc.country || '' });
+      }
+    }
+  }
+
+  // Fetch weather for all unique ports in parallel
+  const weatherEntries = await Promise.all(
+    Array.from(portKeys.values()).map(async ({ portName, country }) => {
+      const temp = await getPortWeather(portName, country);
+      return [`${portName},${country}`.toLowerCase(), temp] as const;
+    })
+  );
+  const weatherByPort = Object.fromEntries(weatherEntries);
 
   const displayVoyages: DisplayVoyage[] = voyages.map((v: any) => ({
     _id: v._id,
@@ -19,8 +49,13 @@ export default async function VoyagesPage() {
     portCalls: (v.portCalls || []).map((pc: any) => ({
       portCode: pc.portCode,
       portName: pc.portName,
+      country: pc.country || '',
+      sequence: pc.sequence ?? 0,
+      eta: formatShortDate(pc.eta),
+      etd: formatShortDate(pc.etd),
       operations: pc.operations || [],
-      locked: false,
+      locked: pc.locked ?? false,
+      weather: weatherByPort[`${pc.portName},${pc.country || ''}`.toLowerCase()] ?? null,
     })),
     bookingsCount: 0,
     palletsBooked: 0,

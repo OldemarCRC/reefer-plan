@@ -251,6 +251,17 @@
   color: var(--color-text-muted);
 }
 
+.portDate {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+
+.portTemp {
+  font-size: 10px;
+  color: var(--color-cyan-light);
+  font-weight: var(--weight-medium);
+}
+
 /* --- Card footer --- */
 
 .voyageFooter {

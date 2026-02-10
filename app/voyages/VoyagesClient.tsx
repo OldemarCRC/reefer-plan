@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import styles from './page.module.css';
 
 const statusStyles: Record<string, { bg: string; color: string }> = {
@@ -35,6 +36,18 @@ function UtilizationBar({ used, total }: { used: number; total: number }) {
   );
 }
 
+export interface DisplayPortCall {
+  portCode: string;
+  portName: string;
+  country: string;
+  sequence: number;
+  eta: string | null;
+  etd: string | null;
+  operations: string[];
+  locked: boolean;
+  weather: number | null;
+}
+
 export interface DisplayVoyage {
   _id: string;
   voyageNumber: string;
@@ -42,12 +55,7 @@ export interface DisplayVoyage {
   vesselName: string;
   serviceCode: string;
   startDate: string;
-  portCalls: {
-    portCode: string;
-    portName: string;
-    operations: string[];
-    locked: boolean;
-  }[];
+  portCalls: DisplayPortCall[];
   bookingsCount: number;
   palletsBooked: number;
   palletsCapacity: number;
@@ -159,7 +167,7 @@ export default function VoyagesClient({ voyages }: VoyagesClientProps) {
 
               {/* Port call timeline */}
               <div className={styles.timeline}>
-                {v.portCalls.map((pc, i) => {
+                {[...v.portCalls].sort((a, b) => a.sequence - b.sequence).map((pc, i, sorted) => {
                   const isLoad = pc.operations.includes('LOAD');
                   return (
                     <div key={i} className={styles.timelineStop}>
@@ -170,10 +178,16 @@ export default function VoyagesClient({ voyages }: VoyagesClientProps) {
                           </svg>
                         )}
                       </div>
-                      {i < v.portCalls.length - 1 && <div className={styles.timelineLine} />}
+                      {i < sorted.length - 1 && <div className={styles.timelineLine} />}
                       <div className={styles.timelineInfo}>
-                        <span className={styles.portCode}>{pc.portCode}</span>
+                        <span className={styles.portCode}>
+                          {pc.portCode}
+                          {pc.weather !== null && (
+                            <span className={styles.portTemp}> {pc.weather}°C</span>
+                          )}
+                        </span>
                         <span className={styles.portName}>{pc.portName}</span>
+                        {pc.eta && <span className={styles.portDate}>{pc.eta}</span>}
                         <span className={styles.portOp}>
                           {isLoad ? '▲ Load' : '▼ Discharge'}
                         </span>
@@ -193,7 +207,7 @@ export default function VoyagesClient({ voyages }: VoyagesClientProps) {
                   <span className={styles.voyageStatLabel}>Utilization</span>
                   <UtilizationBar used={v.palletsBooked} total={v.palletsCapacity} />
                 </div>
-                <button className={styles.btnGhost}>View Details →</button>
+                <Link href={`/voyages/${v._id}`} className={styles.btnGhost}>View Details →</Link>
               </div>
             </div>
           ))
