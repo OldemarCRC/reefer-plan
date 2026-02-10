@@ -94,7 +94,7 @@ function buildCompartmentRects(assignments: VoyageTempAssignment[]): Compartment
 
     for (const level of holdLevels) {
       const h = LEVEL_H[level as keyof typeof LEVEL_H];
-      const id = `H${hold.holdNumber}-${level}`;
+      const id = `${hold.holdNumber}${level}`;
       
       // Width narrows for lower decks (realistic hull shape)
       let wFactor = 1.0;

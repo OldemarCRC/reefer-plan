@@ -575,13 +575,13 @@ export async function updatePlanStatus(
 // ----------------------------------------------------------------------------
 
 function getHoldNumber(compartmentId: string): number {
-  // Extract hold number from compartment ID (e.g., "H2-UPD" -> 2)
-  const match = compartmentId.match(/^H(\d+)-/);
+  // Extract hold number from compartment ID (e.g., "2UPD" -> 2, "1A" -> 1)
+  const match = compartmentId.match(/^(\d+)/);
   return match ? parseInt(match[1]) : 0;
 }
 
 function getLevel(compartmentId: string): string {
-  // Extract level from compartment ID (e.g., "H2-UPD" -> "UPD")
-  const parts = compartmentId.split('-');
-  return parts[1] || '';
+  // Extract level from compartment ID (e.g., "2UPD" -> "UPD", "1A" -> "A")
+  const match = compartmentId.match(/^\d+(.*)/);
+  return match ? match[1] : '';
 }

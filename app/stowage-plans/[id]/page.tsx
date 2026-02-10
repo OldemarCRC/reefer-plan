@@ -70,7 +70,7 @@ export default function StowagePlanDetailPage() {
       pol: 'CLVAP',
       pod: 'NLRTM',
       consignee: 'FYFFES',
-      assignments: [{ compartmentId: 'H2-A', quantity: 500 }],
+      assignments: [{ compartmentId: '2A', quantity: 500 }],
     },
     {
       shipmentId: '2',
@@ -80,7 +80,7 @@ export default function StowagePlanDetailPage() {
       pol: 'CLVAP',
       pod: 'NLRTM',
       consignee: 'COBANA',
-      assignments: [{ compartmentId: 'H3-B', quantity: 750 }],
+      assignments: [{ compartmentId: '3B', quantity: 750 }],
     },
     {
       shipmentId: '3',
@@ -105,14 +105,14 @@ export default function StowagePlanDetailPage() {
   ]);
 
   const tempZoneConfig = [
-    { sectionId: '1AB', zoneId: 'ZONE_1AB', temp: 13, compartments: ['H1-A', 'H1-B'] },
-    { sectionId: '1CD', zoneId: 'ZONE_1CD', temp: 13, compartments: ['H1-C', 'H1-D'] },
-    { sectionId: '2UPDAB', zoneId: 'ZONE_2UPDAB', temp: 13, compartments: ['H2-UPD', 'H2-A', 'H2-B'] },
-    { sectionId: '2CD', zoneId: 'ZONE_2CD', temp: 13, compartments: ['H2-C', 'H2-D'] },
-    { sectionId: '3UPDAB', zoneId: 'ZONE_3UPDAB', temp: 13, compartments: ['H3-UPD', 'H3-A', 'H3-B'] },
-    { sectionId: '3CD', zoneId: 'ZONE_3CD', temp: 0, compartments: ['H3-C', 'H3-D'] },
-    { sectionId: '4UPDAB', zoneId: 'ZONE_4UPDAB', temp: 6, compartments: ['H4-UPD', 'H4-A', 'H4-B'] },
-    { sectionId: '4CD', zoneId: 'ZONE_4CD', temp: 6, compartments: ['H4-C', 'H4-D'] },
+    { sectionId: '1AB', zoneId: 'ZONE_1AB', temp: 13, compartments: ['1A', '1B'] },
+    { sectionId: '1CD', zoneId: 'ZONE_1CD', temp: 13, compartments: ['1C', '1D'] },
+    { sectionId: '2UPDAB', zoneId: 'ZONE_2UPDAB', temp: 13, compartments: ['2UPD', '2A', '2B'] },
+    { sectionId: '2CD', zoneId: 'ZONE_2CD', temp: 13, compartments: ['2C', '2D'] },
+    { sectionId: '3UPDAB', zoneId: 'ZONE_3UPDAB', temp: 13, compartments: ['3UPD', '3A', '3B'] },
+    { sectionId: '3CD', zoneId: 'ZONE_3CD', temp: 0, compartments: ['3C', '3D'] },
+    { sectionId: '4UPDAB', zoneId: 'ZONE_4UPDAB', temp: 6, compartments: ['4UPD', '4A', '4B'] },
+    { sectionId: '4CD', zoneId: 'ZONE_4CD', temp: 6, compartments: ['4C', '4D'] },
   ];
 
   // Required temperature range per cargo type (shared by validation + auto-stow)
@@ -192,10 +192,10 @@ export default function StowagePlanDetailPage() {
 
   // Compartment capacities (pallets) — from vessel spec
   const compartmentCapacities: Record<string, number> = {
-    'H1-A': 480, 'H1-B': 278, 'H1-C': 191, 'H1-D': 186,
-    'H2-UPD': 143, 'H2-A': 565, 'H2-B': 499, 'H2-C': 485, 'H2-D': 375,
-    'H3-UPD': 136, 'H3-A': 604, 'H3-B': 577, 'H3-C': 608, 'H3-D': 543,
-    'H4-UPD': 136, 'H4-A': 583, 'H4-B': 544, 'H4-C': 502, 'H4-D': 336,
+    '1A': 480, '1B': 278, '1C': 191, '1D': 186,
+    '2UPD': 143, '2A': 565, '2B': 499, '2C': 485, '2D': 375,
+    '3UPD': 136, '3A': 604, '3B': 577, '3C': 608, '3D': 543,
+    '4UPD': 136, '4A': 583, '4B': 544, '4C': 502, '4D': 336,
   };
 
   // Zone colors (hue-based on temperature, matching wizard)

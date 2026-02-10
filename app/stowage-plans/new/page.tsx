@@ -49,14 +49,14 @@ export default function NewStowagePlanPage() {
   ];
 
   const coolingSections = [
-    { sectionId: '1AB', compartmentIds: ['H1-A', 'H1-B'], hold: 1 },
-    { sectionId: '1CD', compartmentIds: ['H1-C', 'H1-D'], hold: 1 },
-    { sectionId: '2UPDAB', compartmentIds: ['H2-UPD', 'H2-A', 'H2-B'], hold: 2 },
-    { sectionId: '2CD', compartmentIds: ['H2-C', 'H2-D'], hold: 2 },
-    { sectionId: '3UPDAB', compartmentIds: ['H3-UPD', 'H3-A', 'H3-B'], hold: 3 },
-    { sectionId: '3CD', compartmentIds: ['H3-C', 'H3-D'], hold: 3 },
-    { sectionId: '4UPDAB', compartmentIds: ['H4-UPD', 'H4-A', 'H4-B'], hold: 4 },
-    { sectionId: '4CD', compartmentIds: ['H4-C', 'H4-D'], hold: 4 },
+    { sectionId: '1AB', compartmentIds: ['1A', '1B'], hold: 1 },
+    { sectionId: '1CD', compartmentIds: ['1C', '1D'], hold: 1 },
+    { sectionId: '2UPDAB', compartmentIds: ['2UPD', '2A', '2B'], hold: 2 },
+    { sectionId: '2CD', compartmentIds: ['2C', '2D'], hold: 2 },
+    { sectionId: '3UPDAB', compartmentIds: ['3UPD', '3A', '3B'], hold: 3 },
+    { sectionId: '3CD', compartmentIds: ['3C', '3D'], hold: 3 },
+    { sectionId: '4UPDAB', compartmentIds: ['4UPD', '4A', '4B'], hold: 4 },
+    { sectionId: '4CD', compartmentIds: ['4C', '4D'], hold: 4 },
   ];
 
   const tempToColor = (temp: number) => {
