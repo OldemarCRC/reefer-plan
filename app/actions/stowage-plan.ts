@@ -153,15 +153,37 @@ export async function createStowagePlanFromWizard(data: unknown) {
     const count = await StowagePlanModel.countDocuments();
     const planNumber = `SP-${year}-${String(count + 1).padStart(4, '0')}`;
 
-    // Build cooling section status with user-assigned temperatures
-    const coolingSectionStatus = vessel.coolingSections.map(cs => {
+    // Compartment map is fixed per vessel type.
+    // vessel.coolingSections is not reliably seeded, so we build directly
+    // from the wizard input using the known ACONCAGUA BAY zone layout.
+    const SECTION_COMPARTMENTS: Record<string, string[]> = {
+      '1AB':    ['1A', '1B'],
+      '1CD':    ['1C', '1D'],
+      '2UPDAB': ['2UPD', '2A', '2B'],
+      '2CD':    ['2C', '2D'],
+      '3UPDAB': ['3UPD', '3A', '3B'],
+      '3CD':    ['3C', '3D'],
+      '4UPDAB': ['4UPD', '4A', '4B'],
+      '4CD':    ['4C', '4D'],
+    };
+
+    // Fall back to vessel.coolingSections if available (future vessels),
+    // otherwise use wizard input directly with the hardcoded compartment map.
+    const vesselSections = vessel.coolingSections && vessel.coolingSections.length > 0
+      ? vessel.coolingSections
+      : validated.coolingSectionTemps.map(t => ({
+          sectionId: t.coolingSectionId,
+          compartmentIds: SECTION_COMPARTMENTS[t.coolingSectionId] ?? [],
+        }));
+
+    const coolingSectionStatus = vesselSections.map((cs: any) => {
       const tempInput = validated.coolingSectionTemps.find(
         t => t.coolingSectionId === cs.sectionId
       );
       return {
         sectionId: cs.sectionId,
         compartmentIds: cs.compartmentIds,
-        assignedTemperature: tempInput?.targetTemp,
+        assignedTemperature: tempInput?.targetTemp ?? 13,
         locked: false,
       };
     });
@@ -193,10 +215,11 @@ export async function createStowagePlanFromWizard(data: unknown) {
         error: `Validation error: ${error.errors[0].message}`,
       };
     }
-    console.error('Error creating stowage plan from wizard:', error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Error creating stowage plan from wizard:', msg);
     return {
       success: false,
-      error: 'Failed to create stowage plan',
+      error: `Failed to create stowage plan: ${msg}`,
     };
   }
 }

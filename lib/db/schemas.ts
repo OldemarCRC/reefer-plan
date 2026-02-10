@@ -452,7 +452,7 @@ const StowagePlanSchema = new Schema<StowagePlan>({
   vesselId: { type: Schema.Types.ObjectId, ref: 'Vessel', required: true },
   vesselName: { type: String, required: true },
   cargoPositions: [CargoPositionSchema],
-  preliminaryStability: PreliminaryStabilitySchema,
+  preliminaryStability: { type: PreliminaryStabilitySchema, default: undefined },
   status: {
     type: String,
     required: true,
@@ -589,9 +589,9 @@ export const VesselModel =
   (mongoose.models.Vessel as Model<Vessel>) || 
   mongoose.model<Vessel>('Vessel', VesselSchema);
 
-export const StowagePlanModel = 
-  (mongoose.models.StowagePlan as Model<StowagePlan>) || 
-  mongoose.model<StowagePlan>('StowagePlan', StowagePlanSchema);
+// Delete cached model so schema changes take effect without server restart
+delete mongoose.models.StowagePlan;
+export const StowagePlanModel = mongoose.model<StowagePlan>('StowagePlan', StowagePlanSchema);
 
 export const CaptainContactModel = 
   (mongoose.models.CaptainContact as Model<CaptainContact>) || 

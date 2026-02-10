@@ -46,6 +46,19 @@ export default function StowagePlanDetailPage() {
     status: 'DRAFT',
   });
 
+  const defaultTempZoneConfig = [
+    { sectionId: '1AB',    zoneId: 'ZONE_1AB',    temp: 13, compartments: ['1A', '1B'] },
+    { sectionId: '1CD',    zoneId: 'ZONE_1CD',    temp: 13, compartments: ['1C', '1D'] },
+    { sectionId: '2UPDAB', zoneId: 'ZONE_2UPDAB', temp: 13, compartments: ['2UPD', '2A', '2B'] },
+    { sectionId: '2CD',    zoneId: 'ZONE_2CD',    temp: 13, compartments: ['2C', '2D'] },
+    { sectionId: '3UPDAB', zoneId: 'ZONE_3UPDAB', temp: 13, compartments: ['3UPD', '3A', '3B'] },
+    { sectionId: '3CD',    zoneId: 'ZONE_3CD',    temp: 13, compartments: ['3C', '3D'] },
+    { sectionId: '4UPDAB', zoneId: 'ZONE_4UPDAB', temp: 13, compartments: ['4UPD', '4A', '4B'] },
+    { sectionId: '4CD',    zoneId: 'ZONE_4CD',    temp: 13, compartments: ['4C', '4D'] },
+  ];
+
+  const [tempZoneConfig, setTempZoneConfig] = useState(defaultTempZoneConfig);
+
   useEffect(() => {
     getStowagePlanById(planId).then((result) => {
       if (result.success && result.data) {
@@ -57,6 +70,17 @@ export default function StowagePlanDetailPage() {
           vesselName: p.vesselId?.name || p.vesselName || 'Unknown Vessel',
           status: p.status || 'DRAFT',
         });
+        // Use real cooling section temperatures from the plan if available
+        if (Array.isArray(p.coolingSectionStatus) && p.coolingSectionStatus.length > 0) {
+          setTempZoneConfig(
+            p.coolingSectionStatus.map((cs: any) => ({
+              sectionId: cs.sectionId,
+              zoneId: `ZONE_${cs.sectionId}`,
+              temp: cs.assignedTemperature ?? 13,
+              compartments: cs.compartmentIds ?? [],
+            }))
+          );
+        }
       }
     });
   }, [planId]);
@@ -104,16 +128,6 @@ export default function StowagePlanDetailPage() {
     },
   ]);
 
-  const tempZoneConfig = [
-    { sectionId: '1AB', zoneId: 'ZONE_1AB', temp: 13, compartments: ['1A', '1B'] },
-    { sectionId: '1CD', zoneId: 'ZONE_1CD', temp: 13, compartments: ['1C', '1D'] },
-    { sectionId: '2UPDAB', zoneId: 'ZONE_2UPDAB', temp: 13, compartments: ['2UPD', '2A', '2B'] },
-    { sectionId: '2CD', zoneId: 'ZONE_2CD', temp: 13, compartments: ['2C', '2D'] },
-    { sectionId: '3UPDAB', zoneId: 'ZONE_3UPDAB', temp: 13, compartments: ['3UPD', '3A', '3B'] },
-    { sectionId: '3CD', zoneId: 'ZONE_3CD', temp: 0, compartments: ['3C', '3D'] },
-    { sectionId: '4UPDAB', zoneId: 'ZONE_4UPDAB', temp: 6, compartments: ['4UPD', '4A', '4B'] },
-    { sectionId: '4CD', zoneId: 'ZONE_4CD', temp: 6, compartments: ['4C', '4D'] },
-  ];
 
   // Required temperature range per cargo type (shared by validation + auto-stow)
   const cargoTempRequirements: Record<string, { min: number; max: number }> = {
@@ -138,7 +152,7 @@ export default function StowagePlanDetailPage() {
       }
     }
     return map;
-  }, []);
+  }, [tempZoneConfig]);
 
   // Compute validation dynamically from current assignments
   const validation = useMemo(() => {
@@ -723,25 +737,6 @@ export default function StowagePlanDetailPage() {
             tempAssignments={vesselProfileData}
           />
 
-          {/* Temperature Zone Legend */}
-          <div className={styles.tempZoneLegend}>
-            <h3>Temperature Configuration</h3>
-            <div className={styles.zoneList}>
-              {tempZoneConfig.map(zone => (
-                <div key={zone.sectionId} className={styles.zoneItem}>
-                  <div className={styles.zoneInfo}>
-                    <strong>{zone.sectionId}</strong>
-                    <span className={styles.temp}>
-                      {zone.temp > 0 ? '+' : ''}{zone.temp}°C
-                    </span>
-                  </div>
-                  <div className={styles.compartments}>
-                    {zone.compartments.join(', ')}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
 
