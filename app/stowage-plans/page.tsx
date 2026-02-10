@@ -1,5 +1,5 @@
 import AppShell from '@/components/layout/AppShell';
-import { mockStowagePlans } from '@/lib/mock-data';
+import { getStowagePlans } from '@/app/actions/stowage-plan';
 import styles from './page.module.css';
 import Link from 'next/link';
 
@@ -26,14 +26,32 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export default function StowagePlansPage() {
+export default async function StowagePlansPage() {
+  const result = await getStowagePlans();
+  const plans = result.success ? result.data : [];
+
+  const displayPlans = plans.map((p: any) => ({
+    _id: p._id,
+    planNumber: p.planNumber || `PLAN-${p._id.toString().slice(-6)}`,
+    status: p.status || 'DRAFT',
+    vesselName: p.vesselId?.name || p.vesselName || 'Unknown Vessel',
+    voyageNumber: p.voyageId?.voyageNumber || p.voyageNumber || 'N/A',
+    updatedAt: p.updatedAt
+      ? new Date(p.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+      : 'N/A',
+    palletsAssigned: p.cargoPositions?.length || 0,
+    palletsTotal: 4840, // TODO: fetch from vessel capacity
+    overstowViolations: p.validation?.overstowViolations?.length || 0,
+    temperatureConflicts: p.validation?.temperatureConflicts?.length || 0,
+  }));
+
   return (
     <AppShell>
       <div className={styles.page}>
         <div className={styles.pageHeader}>
           <div>
             <h1 className={styles.pageTitle}>Stowage Plans</h1>
-            <p className={styles.pageSubtitle}>{mockStowagePlans.length} plans</p>
+            <p className={styles.pageSubtitle}>{displayPlans.length} plans</p>
           </div>
           <Link href={`/stowage-plans/new/`} className={styles.btnGhost}>
             + New Plan
@@ -41,7 +59,7 @@ export default function StowagePlansPage() {
         </div>
 
         <div className={styles.planList}>
-          {mockStowagePlans.map((p) => {
+          {displayPlans.map((p) => {
             const pct = Math.round((p.palletsAssigned / p.palletsTotal) * 100);
             const hasIssues = p.overstowViolations > 0 || p.temperatureConflicts > 0;
             const barColor = pct >= 90 ? 'var(--color-danger)' : pct >= 70 ? 'var(--color-warning)' : 'var(--color-cyan)';

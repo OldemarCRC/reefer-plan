@@ -1,11 +1,12 @@
 // app/stowage-plans/[id]/page.tsx
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import AppShell from '@/components/layout/AppShell';
 import VesselProfile from '@/components/vessel/VesselProfile';
+import { getStowagePlanById } from '@/app/actions/stowage-plan';
 import type { VoyageTempAssignment } from '@/lib/vessel-profile-data';
 import styles from './page.module.css';
 
@@ -36,27 +37,29 @@ export default function StowagePlanDetailPage() {
   const [showConflictWarning, setShowConflictWarning] = useState(false);
   const [confirmedConflicts, setConfirmedConflicts] = useState<Set<string>>(new Set());
 
-  // Mock data - replace with actual data fetching
-  const plan = {
+  // Plan header info — populated from DB on mount
+  const [plan, setPlan] = useState({
     _id: planId,
-    planNumber: 'PLAN-2026-001',
-    voyageNumber: 'ACON-062026',
-    vesselName: 'ACONCAGUA BAY',
+    planNumber: '...',
+    voyageNumber: '...',
+    vesselName: '...',
     status: 'DRAFT',
-    createdAt: '2026-02-07T10:30:00Z',
-    cargoPositions: [
-      {
-        shipmentId: '1',
-        compartmentId: 'H2-A',
-        weight: 18000,
-      },
-      {
-        shipmentId: '2',
-        compartmentId: 'H3-B',
-        weight: 15000,
-      },
-    ],
-  };
+  });
+
+  useEffect(() => {
+    getStowagePlanById(planId).then((result) => {
+      if (result.success && result.data) {
+        const p = result.data;
+        setPlan({
+          _id: planId,
+          planNumber: p.planNumber || `PLAN-${planId.slice(-6)}`,
+          voyageNumber: p.voyageId?.voyageNumber || p.voyageNumber || 'N/A',
+          vesselName: p.vesselId?.name || p.vesselName || 'Unknown Vessel',
+          status: p.status || 'DRAFT',
+        });
+      }
+    });
+  }, [planId]);
 
   const [shipments, setShipments] = useState<CargoInPlan[]>([
     {
