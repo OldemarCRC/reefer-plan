@@ -129,11 +129,14 @@ export default async function VesselDetailPage({
   params,
   searchParams,
 }: {
-  params: { id: string };
-  searchParams: { voyageId?: string };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ voyageId?: string }>;
 }) {
+  const { id } = await params;
+  const { voyageId: selectedVoyageId } = await searchParams;
+
   // Fetch vessel
-  const vessel = await getVesselById(params.id).catch(() => null);
+  const vessel = await getVesselById(id).catch(() => null);
 
   if (!vessel) {
     return (
@@ -150,7 +153,6 @@ export default async function VesselDetailPage({
   const voyages = voyagesResult.success ? voyagesResult.data : [];
 
   // If a voyageId is selected, fetch its stowage plan
-  const selectedVoyageId = searchParams.voyageId;
   let assignments: VoyageTempAssignment[] = [];
   let selectedPlan: any = null;
 
@@ -192,7 +194,7 @@ export default async function VesselDetailPage({
           </div>
           <div className={styles.headerActions}>
             <VoyageSelector
-              vesselId={params.id}
+              vesselId={id}
               voyages={voyages.map((v: any) => ({
                 _id: v._id,
                 voyageNumber: v.voyageNumber,
