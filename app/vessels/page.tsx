@@ -1,9 +1,24 @@
 import AppShell from '@/components/layout/AppShell';
-import { mockVessels } from '@/lib/mock-data';
+import { getVessels } from '@/app/actions/vessel';
 import styles from './page.module.css';
 import Link from 'next/link';
 
-export default function VesselsPage() {
+export default async function VesselsPage() {
+  const vessels = await getVessels().catch(() => []);
+
+  const displayVessels = vessels.map((v: any) => ({
+    _id: v._id,
+    name: v.name,
+    imoNumber: v.imoNumber || '—',
+    flag: v.flag || '—',
+    // These detailed specs live in the vessel profile data; use defaults until full vessel schema is populated
+    totalPallets: v.totalPallets || 4840,
+    holds: v.holds || 4,
+    compartments: v.compartments || 19,
+    temperatureZones: v.temperatureZones || 8,
+    active: v.active !== false,
+  }));
+
   return (
     <AppShell>
       <div className={styles.page}>
@@ -11,14 +26,14 @@ export default function VesselsPage() {
         <div className={styles.pageHeader}>
           <div>
             <h1 className={styles.pageTitle}>Vessels</h1>
-            <p className={styles.pageSubtitle}>{mockVessels.length} vessels in fleet</p>
+            <p className={styles.pageSubtitle}>{displayVessels.length} vessels in fleet</p>
           </div>
           <button className={styles.btnPrimary}>+ Add Vessel</button>
         </div>
 
         {/* Vessel grid */}
         <div className={styles.vesselGrid}>
-          {mockVessels.map((v) => (
+          {displayVessels.map((v) => (
             <div key={v._id} className={styles.vesselCard}>
               {/* Ship icon header */}
               <div className={styles.cardTop}>
@@ -51,12 +66,6 @@ export default function VesselsPage() {
                 </div>
                 <div className={styles.vesselName}>{v.name}</div>
                 <div className={styles.vesselImo}>IMO {v.imoNumber}</div>
-                {v.currentVoyage && (
-                  <div className={styles.activeVoyage}>
-                    <span className={styles.activeDot} />
-                    {v.currentVoyage}
-                  </div>
-                )}
               </div>
 
               {/* Specs grid */}
@@ -96,7 +105,7 @@ export default function VesselsPage() {
               {/* Footer */}
               <div className={styles.cardFooter}>
                 <span className={styles.flag}>{v.flag}</span>
-                <Link href={`/vessels/vs1`} className={styles.btnGhost}>
+                <Link href={`/vessels/${v._id}`} className={styles.btnGhost}>
                   View Profile →
                 </Link>
               </div>
