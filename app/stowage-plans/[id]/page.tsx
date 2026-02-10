@@ -154,10 +154,19 @@ export default function StowagePlanDetailPage() {
     return map;
   }, [tempZoneConfig]);
 
+  // Compartment capacities (pallets) — from vessel spec
+  const compartmentCapacities: Record<string, number> = {
+    '1A': 480, '1B': 278, '1C': 191, '1D': 186,
+    '2UPD': 143, '2A': 565, '2B': 499, '2C': 485, '2D': 375,
+    '3UPD': 136, '3A': 604, '3B': 577, '3C': 608, '3D': 543,
+    '4UPD': 136, '4A': 583, '4B': 544, '4C': 502, '4D': 336,
+  };
+
   // Compute validation dynamically from current assignments
   const validation = useMemo(() => {
     const temperatureConflicts: { compartmentId: string; coolingSectionId: string; description: string; affectedShipments: string[]; userConfirmed: boolean }[] = [];
     const overstowViolations: { compartmentId: string; description: string; affectedShipments: string[] }[] = [];
+    const capacityViolations: { compartmentId: string; description: string; affectedShipments: string[]; overBy: number }[] = [];
 
     // Group assignments by compartment
     const byCompartment: Record<string, { shipment: CargoInPlan; quantity: number }[]> = {};
@@ -195,22 +204,27 @@ export default function StowagePlanDetailPage() {
           affectedShipments: entries.map(e => e.shipment.shipmentNumber),
         });
       }
+
+      // Capacity check
+      const cap = compartmentCapacities[compId];
+      const used = entries.reduce((sum, e) => sum + e.quantity, 0);
+      if (cap && used > cap) {
+        capacityViolations.push({
+          compartmentId: compId,
+          description: `${used} pallets assigned but capacity is ${cap} — over by ${used - cap}`,
+          affectedShipments: entries.map(e => e.shipment.shipmentNumber),
+          overBy: used - cap,
+        });
+      }
     }
 
     return {
       temperatureConflicts,
       overstowViolations,
+      capacityViolations,
       weightDistributionWarnings: ['Port list of 0.8° detected - consider redistributing cargo'],
     };
   }, [shipments, compartmentToSection, confirmedConflicts]);
-
-  // Compartment capacities (pallets) — from vessel spec
-  const compartmentCapacities: Record<string, number> = {
-    '1A': 480, '1B': 278, '1C': 191, '1D': 186,
-    '2UPD': 143, '2A': 565, '2B': 499, '2C': 485, '2D': 375,
-    '3UPD': 136, '3A': 604, '3B': 577, '3C': 608, '3D': 543,
-    '4UPD': 136, '4A': 583, '4B': 544, '4C': 502, '4D': 336,
-  };
 
   // Zone colors (hue-based on temperature, matching wizard)
   const tempToColor = (temp: number) => {
@@ -276,6 +290,17 @@ export default function StowagePlanDetailPage() {
 
   const assignedQty = (s: CargoInPlan) => s.assignments.reduce((sum, a) => sum + a.quantity, 0);
   const remainingQty = (s: CargoInPlan) => s.totalQuantity - assignedQty(s);
+
+  // Total pallets already assigned to a compartment across all shipments
+  const usedInCompartment = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const s of shipments) {
+      for (const a of s.assignments) {
+        map[a.compartmentId] = (map[a.compartmentId] ?? 0) + a.quantity;
+      }
+    }
+    return map;
+  }, [shipments]);
 
   const unstowedShipments = shipments.filter(s => remainingQty(s) > 0);
   const stowedShipments = shipments.filter(s => assignedQty(s) > 0);
@@ -475,9 +500,9 @@ export default function StowagePlanDetailPage() {
               onClick={() => setActiveTab('validation')}
             >
               Validation
-              {(validation.temperatureConflicts.length + validation.overstowViolations.length) > 0 && (
+              {(validation.temperatureConflicts.length + validation.overstowViolations.length + validation.capacityViolations.length) > 0 && (
                 <span className={styles.badge}>
-                  {validation.temperatureConflicts.length + validation.overstowViolations.length}
+                  {validation.temperatureConflicts.length + validation.overstowViolations.length + validation.capacityViolations.length}
                 </span>
               )}
             </button>
@@ -694,6 +719,29 @@ export default function StowagePlanDetailPage() {
                   </div>
                 )}
 
+                {/* Capacity Violations */}
+                {validation.capacityViolations.length > 0 && (
+                  <div className={styles.validationSection}>
+                    <h4>Capacity Exceeded ({validation.capacityViolations.length})</h4>
+                    {validation.capacityViolations.map((v, idx) => (
+                      <div key={idx} className={styles.conflictCard}>
+                        <div className={styles.conflictHeader}>
+                          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <circle cx="10" cy="10" r="8" stroke="#ef4444" strokeWidth="2"/>
+                            <path d="M10 6v4m0 4h.01" stroke="#ef4444" strokeWidth="2"/>
+                          </svg>
+                          <span>{v.compartmentId}</span>
+                          <span className={styles.overCapacityBadge}>+{v.overBy} over</span>
+                        </div>
+                        <p>{v.description}</p>
+                        <div className={styles.affectedShipments}>
+                          Affected: {v.affectedShipments.join(', ')}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Weight Distribution Warnings */}
                 {validation.weightDistributionWarnings.length > 0 && (
                   <div className={styles.validationSection}>
@@ -710,8 +758,9 @@ export default function StowagePlanDetailPage() {
                   </div>
                 )}
 
-                {validation.overstowViolations.length === 0 && 
-                 validation.temperatureConflicts.length === 0 && 
+                {validation.overstowViolations.length === 0 &&
+                 validation.temperatureConflicts.length === 0 &&
+                 validation.capacityViolations.length === 0 &&
                  validation.weightDistributionWarnings.length === 0 && (
                   <div className={styles.successBox}>
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -770,18 +819,32 @@ export default function StowagePlanDetailPage() {
                       {zone.temp > 0 ? '+' : ''}{zone.temp}°C
                     </span>
                   </div>
-                  {zone.compartments.map(compId => (
-                    <label key={compId} className={`${styles.compartmentOption} ${selectedCompartment === compId ? styles.selected : ''}`}>
-                      <input
-                        type="radio"
-                        name="compartment"
-                        value={compId}
-                        checked={selectedCompartment === compId}
-                        onChange={() => { setSelectedCompartment(compId); setShowConflictWarning(false); }}
-                      />
-                      <span className={styles.compartmentId}>{compId}</span>
-                    </label>
-                  ))}
+                  {zone.compartments.map(compId => {
+                    const cap = compartmentCapacities[compId] ?? 0;
+                    const used = usedInCompartment[compId] ?? 0;
+                    const free = cap - used;
+                    const isFull = cap > 0 && free <= 0;
+                    return (
+                      <label
+                        key={compId}
+                        className={`${styles.compartmentOption} ${selectedCompartment === compId ? styles.selected : ''} ${isFull ? styles.compartmentFull : ''}`}
+                      >
+                        <input
+                          type="radio"
+                          name="compartment"
+                          value={compId}
+                          checked={selectedCompartment === compId}
+                          onChange={() => { setSelectedCompartment(compId); setShowConflictWarning(false); }}
+                        />
+                        <span className={styles.compartmentId}>{compId}</span>
+                        {cap > 0 && (
+                          <span className={isFull ? styles.capacityFull : styles.capacityFree}>
+                            {isFull ? 'full' : `${free} free`}
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
                 </div>
               ))}
             </div>
@@ -817,6 +880,29 @@ export default function StowagePlanDetailPage() {
                       {selectedCompartment} (section {section?.sectionId}) is set to {section?.temp > 0 ? '+' : ''}{section?.temp}°C
                     </p>
                     <p>Assigning here may damage the product.</p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {selectedCompartment && assignQuantity > 0 && (() => {
+              const cap = compartmentCapacities[selectedCompartment];
+              const used = usedInCompartment[selectedCompartment] ?? 0;
+              if (!cap) return null;
+              const wouldUse = used + assignQuantity;
+              if (wouldUse <= cap) return null;
+              return (
+                <div className={styles.capacityWarning}>
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <path d="M10 2l8 16H2l8-16z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                    <path d="M10 8v4m0 3h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  <div>
+                    <strong>Capacity Warning</strong>
+                    <p>
+                      {selectedCompartment} holds {cap} pallets max. Already used: {used}.<br />
+                      Assigning {assignQuantity} would exceed capacity by <strong>{wouldUse - cap} pallets</strong>.
+                    </p>
                   </div>
                 </div>
               );

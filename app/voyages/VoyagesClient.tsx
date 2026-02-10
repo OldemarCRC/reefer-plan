@@ -167,7 +167,7 @@ export default function VoyagesClient({ voyages }: VoyagesClientProps) {
 
               {/* Port call timeline */}
               <div className={styles.timeline}>
-                {[...v.portCalls].sort((a, b) => a.sequence - b.sequence).map((pc, i, sorted) => {
+                {v.portCalls.map((pc, i, sorted) => {
                   const isLoad = pc.operations.includes('LOAD');
                   return (
                     <div key={i} className={styles.timelineStop}>

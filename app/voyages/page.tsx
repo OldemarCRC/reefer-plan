@@ -39,6 +39,7 @@ export default async function VoyagesPage() {
   );
   const weatherByPort = Object.fromEntries(weatherEntries);
 
+  console.log('[VoyagesPage] sorting portCalls by ETA for', voyages.length, 'voyages');
   const displayVoyages: DisplayVoyage[] = voyages.map((v: any) => ({
     _id: v._id,
     voyageNumber: v.voyageNumber,
@@ -46,17 +47,24 @@ export default async function VoyagesPage() {
     vesselName: v.vesselName,
     serviceCode: v.serviceId?.serviceCode || 'N/A',
     startDate: v.departureDate ? new Date(v.departureDate).toLocaleDateString() : 'TBD',
-    portCalls: (v.portCalls || []).map((pc: any) => ({
-      portCode: pc.portCode,
-      portName: pc.portName,
-      country: pc.country || '',
-      sequence: pc.sequence ?? 0,
-      eta: formatShortDate(pc.eta),
-      etd: formatShortDate(pc.etd),
-      operations: pc.operations || [],
-      locked: pc.locked ?? false,
-      weather: weatherByPort[`${pc.portName},${pc.country || ''}`.toLowerCase()] ?? null,
-    })),
+    portCalls: (v.portCalls || [])
+      .slice()
+      .sort((a: any, b: any) => {
+        const ta = a.eta ? new Date(a.eta).getTime() : (a.sequence ?? 0) * 1e10;
+        const tb = b.eta ? new Date(b.eta).getTime() : (b.sequence ?? 0) * 1e10;
+        return ta - tb;
+      })
+      .map((pc: any) => ({
+        portCode: pc.portCode,
+        portName: pc.portName,
+        country: pc.country || '',
+        sequence: pc.sequence ?? 0,
+        eta: formatShortDate(pc.eta),
+        etd: formatShortDate(pc.etd),
+        operations: pc.operations || [],
+        locked: pc.locked ?? false,
+        weather: weatherByPort[`${pc.portName},${pc.country || ''}`.toLowerCase()] ?? null,
+      })),
     bookingsCount: 0,
     palletsBooked: 0,
     palletsCapacity: 1800,

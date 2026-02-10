@@ -54,7 +54,12 @@ export default async function VoyageDetailPage({
   }
 
   const voyage = voyageResult.data;
-  const portCalls: any[] = (voyage.portCalls || []).slice().sort((a: any, b: any) => (a.sequence ?? 0) - (b.sequence ?? 0));
+  const portCalls: any[] = (voyage.portCalls || []).slice().sort((a: any, b: any) => {
+    const ta = a.eta ? new Date(a.eta).getTime() : (a.sequence ?? 0) * 1e10;
+    const tb = b.eta ? new Date(b.eta).getTime() : (b.sequence ?? 0) * 1e10;
+    return ta - tb;
+  });
+  console.log('[VoyageDetail] portCalls sorted order:', portCalls.map(pc => `${pc.portCode} ${pc.eta ?? 'no-eta'} seq=${pc.sequence}`));
 
   // Parallel fetches
   const [plansResult, bookingsResult, weatherResults] = await Promise.all([

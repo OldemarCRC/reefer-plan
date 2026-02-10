@@ -781,6 +781,53 @@
   font-weight: 600;
   font-size: 0.875rem;
   color: var(--text-primary);
+  flex: 1;
+}
+
+.capacityFree {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-family: 'Space Grotesk', monospace;
+  margin-left: auto;
+}
+
+.capacityFull {
+  font-size: 0.7rem;
+  color: var(--error);
+  font-family: 'Space Grotesk', monospace;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.compartmentFull {
+  opacity: 0.6;
+}
+
+.capacityWarning {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.875rem 1.5rem;
+  background: rgba(239, 68, 68, 0.05);
+  border-top: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--error);
+}
+
+.capacityWarning svg {
+  flex-shrink: 0;
+  color: var(--error);
+}
+
+.capacityWarning strong {
+  display: block;
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+}
+
+.capacityWarning p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 .quantityRow {
@@ -875,6 +922,17 @@
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.3px;
+}
+
+.overCapacityBadge {
+  font-size: 0.65rem;
+  padding: 0.125rem 0.4rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 4px;
+  color: var(--error);
+  font-weight: 600;
+  font-family: 'Space Grotesk', monospace;
 }
 
 .modalActions {
