@@ -1,6 +1,7 @@
 import AppShell from '@/components/layout/AppShell';
 import { getVoyages } from '@/app/actions/voyage';
 import styles from './page.module.css';
+import Link from 'next/link';
 
 const statusStyles: Record<string, { bg: string; color: string }> = {
   IN_PROGRESS: { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
@@ -67,7 +68,7 @@ export default async function VoyagesPage() {
             <h1 className={styles.pageTitle}>Voyages</h1>
             <p className={styles.pageSubtitle}>{displayVoyages.length} voyages</p>
           </div>
-          <button className={styles.btnPrimary}>+ New Voyage</button>
+          <Link href="/voyages/new" className={styles.btnPrimary}>+ New Voyage</Link>
         </div>
 
         {/* Filters */}

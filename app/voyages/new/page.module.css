@@ -1,0 +1,530 @@
+/* app/voyages/new/page.module.css */
+
+.container {
+  padding: 2rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* ---- Header ---- */
+.header {
+  margin-bottom: 2.5rem;
+}
+
+.titleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.titleRow h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.cancelBtn {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.cancelBtn:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+/* ---- Step indicator ---- */
+.steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+
+.stepGroup {
+  display: flex;
+  align-items: center;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.stepNumber {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--color-bg-tertiary);
+  border: 2px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  transition: all 0.3s;
+}
+
+.step.active .stepNumber {
+  background: var(--color-cyan);
+  border-color: var(--color-cyan);
+  color: var(--color-bg-primary);
+}
+
+.step.completed .stepNumber {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: white;
+}
+
+.stepLabel {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.step.active .stepLabel {
+  color: var(--color-text-primary);
+}
+
+.stepConnector {
+  width: 100px;
+  height: 2px;
+  background: var(--color-border);
+  margin: 0 0.5rem;
+  margin-bottom: 1.4rem;
+  flex-shrink: 0;
+}
+
+/* ---- Content ---- */
+.content {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 2.5rem;
+  min-height: 480px;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+.stepContent h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0 0 0.5rem 0;
+}
+
+.stepDescription {
+  color: var(--color-text-secondary);
+  margin: 0 0 2rem 0;
+  line-height: 1.6;
+  font-size: 0.9rem;
+}
+
+.stepDescription strong {
+  color: var(--color-text-primary);
+}
+
+/* ---- Service / Vessel card grid ---- */
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.selectCard {
+  background: var(--color-bg-tertiary);
+  border: 2px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.selectCard:hover {
+  border-color: var(--color-cyan-muted);
+  transform: translateY(-2px);
+}
+
+.selectCard.selected {
+  border-color: var(--color-cyan);
+  background: rgba(34, 211, 238, 0.05);
+}
+
+.cardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cardCode {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-cyan);
+}
+
+.cardBadge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 10px;
+  background: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cardName {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+}
+
+.portRoute {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.portRouteItem {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.routeArrow {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.routePort {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.cargoChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+}
+
+.cargoChip {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 8px;
+  background: var(--color-bg-primary);
+  color: var(--color-text-muted);
+  text-transform: capitalize;
+}
+
+.vesselSpec {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+/* ---- Step 3: Port Schedule ---- */
+.voyageNumberRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.fieldLabel {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  min-width: 140px;
+}
+
+.voyageNumberInput {
+  flex: 1;
+  max-width: 280px;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.voyageNumberInput:focus {
+  outline: none;
+  border-color: var(--color-cyan);
+}
+
+.portTable {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.portTableHeader {
+  display: grid;
+  grid-template-columns: 1fr 140px 150px 150px;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--color-bg-primary);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.portTableRow {
+  display: grid;
+  grid-template-columns: 1fr 140px 150px 150px;
+  gap: 1rem;
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+  align-items: center;
+}
+
+.portTableRow:last-child {
+  border-bottom: none;
+}
+
+.portTableRow:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.portCellInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.portCellCode {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-cyan);
+}
+
+.portCellName {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.portCellOps {
+  display: flex;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.opChip {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.opLoad {
+  background: var(--color-success-muted);
+  color: var(--color-success);
+}
+
+.opDischarge {
+  background: var(--color-warning-muted);
+  color: var(--color-warning);
+}
+
+.dateInput {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  font-size: 0.8rem;
+  font-family: inherit;
+}
+
+.dateInput:focus {
+  outline: none;
+  border-color: var(--color-cyan);
+}
+
+/* ---- Step 4: Review ---- */
+.reviewGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.reviewItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.reviewLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.reviewValue {
+  font-size: 0.925rem;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.reviewPortSection h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 1rem 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.reviewPortRow {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.reviewPortRow:last-child {
+  border-bottom: none;
+}
+
+.reviewSeq {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.reviewPortInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 140px;
+}
+
+.reviewPortDates {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.dateSep {
+  color: var(--color-text-muted);
+}
+
+/* ---- Error box ---- */
+.errorBox {
+  margin-top: 1.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-danger-muted);
+  border: 1px solid var(--color-danger);
+  border-radius: 6px;
+  color: var(--color-danger);
+  font-size: 0.875rem;
+}
+
+/* ---- Navigation actions ---- */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.btnSecondary,
+.btnPrimary {
+  padding: 0.7rem 1.5rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.btnSecondary {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.btnSecondary:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.btnPrimary {
+  background: var(--color-cyan);
+  color: var(--color-bg-primary);
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: var(--color-blue);
+  transform: translateY(-1px);
+}
+
+.btnPrimary:disabled {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+  border: 1px solid var(--color-border);
+}

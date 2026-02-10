@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { VoyageModel } from '@/lib/db/schemas';
+import { VoyageModel, VesselModel } from '@/lib/db/schemas';
 import type { Voyage, VoyagePortCall } from '@/types/models';
 
 // ----------------------------------------------------------------------------
@@ -44,6 +44,87 @@ const CreateVoyageSchema = z.object({
 });
 
 const UpdateVoyageSchema = CreateVoyageSchema.partial();
+
+// ----------------------------------------------------------------------------
+// CREATE VOYAGE FROM WIZARD
+// Accepts string dates from the UI wizard, converts and saves with correct field names
+// ----------------------------------------------------------------------------
+
+const WizardPortCallSchema = z.object({
+  portCode: z.string().min(4).max(6),
+  portName: z.string().min(1),
+  country: z.string().min(1),
+  sequence: z.number().int().positive(),
+  eta: z.string().optional(),
+  etd: z.string().optional(),
+  operations: z.array(z.enum(['LOAD', 'DISCHARGE'])).default(['LOAD']),
+});
+
+const CreateVoyageFromWizardSchema = z.object({
+  voyageNumber: z.string().regex(/^[A-Z0-9-]+$/, 'Voyage number must be uppercase alphanumeric with hyphens'),
+  serviceId: z.string().min(1),
+  vesselId: z.string().min(1),
+  vesselName: z.string().min(1),
+  departureDate: z.string().min(1),
+  portCalls: z.array(WizardPortCallSchema).min(2, 'Voyage must have at least 2 ports'),
+});
+
+export async function createVoyageFromWizard(data: unknown) {
+  try {
+    const validated = CreateVoyageFromWizardSchema.parse(data);
+
+    await connectDB();
+
+    // Check duplicate voyage number
+    const existing = await VoyageModel.findOne({ voyageNumber: validated.voyageNumber });
+    if (existing) {
+      return { success: false, error: `Voyage number ${validated.voyageNumber} already exists` };
+    }
+
+    // Build portCalls with Date objects
+    const portCalls = validated.portCalls.map(pc => ({
+      portCode: pc.portCode,
+      portName: pc.portName,
+      country: pc.country,
+      sequence: pc.sequence,
+      eta: pc.eta ? new Date(pc.eta) : undefined,
+      etd: pc.etd ? new Date(pc.etd) : undefined,
+      operations: pc.operations,
+      status: 'SCHEDULED',
+      locked: false,
+    }));
+
+    // Estimated arrival = last port's ETD or ETA
+    const lastPort = portCalls[portCalls.length - 1];
+    const estimatedArrivalDate = lastPort.etd || lastPort.eta || new Date(validated.departureDate);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const voyage: any = await VoyageModel.create({
+      voyageNumber: validated.voyageNumber,
+      serviceId: validated.serviceId,
+      vesselId: validated.vesselId,
+      vesselName: validated.vesselName,
+      departureDate: new Date(validated.departureDate),
+      estimatedArrivalDate,
+      status: 'PLANNED',
+      portCalls,
+    } as any);
+
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(voyage)),
+      voyageId: voyage._id.toString(),
+      message: `Voyage ${validated.voyageNumber} created successfully`,
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { success: false, error: `Validation error: ${(error as any).errors?.[0]?.message ?? error.message}` };
+    }
+    console.error('Error creating voyage from wizard:', error);
+    return { success: false, error: 'Failed to create voyage' };
+  }
+}
 
 // ----------------------------------------------------------------------------
 // CREATE VOYAGE
