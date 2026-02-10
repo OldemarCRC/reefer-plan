@@ -483,6 +483,12 @@ const StowagePlanSchema = new Schema<StowagePlan>({
     affectedShipments: [{ type: String }],
   }],
   weightDistributionWarnings: [{ type: String }],
+  coolingSectionStatus: [{
+    sectionId: { type: String, required: true },
+    compartmentIds: [{ type: String }],
+    assignedTemperature: { type: Number },
+    locked: { type: Boolean, default: false },
+  }],
   captainCommunication: {
     emailSentAt: { type: Date },
     captainName: { type: String },
@@ -499,7 +505,7 @@ const StowagePlanSchema = new Schema<StowagePlan>({
     cargoManifestPDF: { type: String },
     loadingSequencePDF: { type: String },
   },
-  createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  createdBy: { type: String, default: 'SYSTEM' },
 }, {
   timestamps: true,
 });

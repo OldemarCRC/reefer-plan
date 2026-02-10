@@ -516,7 +516,14 @@ export interface StowagePlan {
   }>;
   
   weightDistributionWarnings: string[];
-  
+
+  coolingSectionStatus?: Array<{
+    sectionId: string;
+    compartmentIds: string[];
+    assignedTemperature?: number;
+    locked: boolean;
+  }>;
+
   // Comunicación con capitán
   captainCommunication?: {
     emailSentAt: Date;
