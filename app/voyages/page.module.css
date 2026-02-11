@@ -262,6 +262,15 @@
   font-weight: var(--weight-medium);
 }
 
+.forecastBadge {
+  margin-left: 2px;
+  font-size: 8px;
+  font-weight: var(--weight-medium);
+  color: var(--color-text-muted);
+  opacity: 0.75;
+  letter-spacing: 0.02em;
+}
+
 /* --- Card footer --- */
 
 .voyageFooter {

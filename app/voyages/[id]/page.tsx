@@ -2,7 +2,7 @@ import AppShell from '@/components/layout/AppShell';
 import { getVoyageById } from '@/app/actions/voyage';
 import { getStowagePlansByVoyage } from '@/app/actions/stowage-plan';
 import { getBookingsByVoyage } from '@/app/actions/booking';
-import { getPortWeather } from '@/app/actions/weather';
+import { getPortWeatherForecast } from '@/app/actions/weather';
 import Link from 'next/link';
 import styles from './page.module.css';
 
@@ -66,15 +66,15 @@ export default async function VoyageDetailPage({
     getStowagePlansByVoyage(id),
     getBookingsByVoyage(id),
     Promise.all(
-      portCalls.map((pc: any) => getPortWeather(pc.portName, pc.country || ''))
+      portCalls.map((pc: any) => getPortWeatherForecast(pc.portName, pc.country || '', pc.eta || null))
     ),
   ]);
 
   const plans = plansResult.success ? plansResult.data : [];
   const bookings = bookingsResult.success ? bookingsResult.data : [];
 
-  // Build portWeather map: portCode → °C
-  const weatherMap: Record<string, number | null> = Object.fromEntries(
+  // Build portWeather map: portCode → { temp, isForecast }
+  const weatherMap: Record<string, { temp: number; isForecast: boolean } | null> = Object.fromEntries(
     portCalls.map((pc: any, i: number) => [pc.portCode, weatherResults[i]])
   );
 
@@ -130,7 +130,7 @@ export default async function VoyageDetailPage({
                     <th>ATA</th>
                     <th>ATD</th>
                     <th>Operations</th>
-                    <th>Weather</th>
+                    <th>Forecast</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -159,8 +159,15 @@ export default async function VoyageDetailPage({
                         </div>
                       </td>
                       <td className={styles.cellTemp}>
-                        {weatherMap[pc.portCode] !== null && weatherMap[pc.portCode] !== undefined
-                          ? `${weatherMap[pc.portCode]}°C`
+                        {weatherMap[pc.portCode] != null
+                          ? (
+                            <>
+                              {weatherMap[pc.portCode]!.temp}°C
+                              {!weatherMap[pc.portCode]!.isForecast && (
+                                <span className={styles.cellMuted}> now</span>
+                              )}
+                            </>
+                          )
                           : <span className={styles.cellMuted}>—</span>
                         }
                       </td>

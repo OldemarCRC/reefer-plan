@@ -1,6 +1,6 @@
 import AppShell from '@/components/layout/AppShell';
 import { getVoyages } from '@/app/actions/voyage';
-import { getPortWeather } from '@/app/actions/weather';
+import { getPortWeatherForecast } from '@/app/actions/weather';
 import VoyagesClient from './VoyagesClient';
 import type { DisplayVoyage } from './VoyagesClient';
 import styles from './page.module.css';
@@ -19,22 +19,23 @@ export default async function VoyagesPage() {
   const result = await getVoyages();
   const voyages = result.success ? result.data : [];
 
-  // Collect unique (portName, country) pairs for weather lookup
-  const portKeys = new Map<string, { portName: string; country: string }>();
+  // Collect unique (portName, country, etaDate) combos for forecast lookup
+  const portKeys = new Map<string, { portName: string; country: string; eta: string | null }>();
   for (const v of voyages) {
     for (const pc of v.portCalls || []) {
-      const key = `${pc.portName},${pc.country || ''}`.toLowerCase();
+      const etaDate = pc.eta ? new Date(pc.eta).toISOString().slice(0, 10) : null;
+      const key = `${pc.portName},${pc.country || ''},${etaDate || ''}`.toLowerCase();
       if (!portKeys.has(key)) {
-        portKeys.set(key, { portName: pc.portName, country: pc.country || '' });
+        portKeys.set(key, { portName: pc.portName, country: pc.country || '', eta: pc.eta || null });
       }
     }
   }
 
-  // Fetch weather for all unique ports in parallel
+  // Fetch forecast for all unique port+date combos in parallel
   const weatherEntries = await Promise.all(
-    Array.from(portKeys.values()).map(async ({ portName, country }) => {
-      const temp = await getPortWeather(portName, country);
-      return [`${portName},${country}`.toLowerCase(), temp] as const;
+    Array.from(portKeys.entries()).map(async ([key, { portName, country, eta }]) => {
+      const result = await getPortWeatherForecast(portName, country, eta);
+      return [key, result] as const;
     })
   );
   const weatherByPort = Object.fromEntries(weatherEntries);
@@ -54,17 +55,23 @@ export default async function VoyagesPage() {
         const tb = b.eta ? new Date(b.eta).getTime() : (b.sequence ?? 0) * 1e10;
         return ta - tb;
       })
-      .map((pc: any) => ({
-        portCode: pc.portCode,
-        portName: pc.portName,
-        country: pc.country || '',
-        sequence: pc.sequence ?? 0,
-        eta: formatShortDate(pc.eta),
-        etd: formatShortDate(pc.etd),
-        operations: pc.operations || [],
-        locked: pc.locked ?? false,
-        weather: weatherByPort[`${pc.portName},${pc.country || ''}`.toLowerCase()] ?? null,
-      })),
+      .map((pc: any) => {
+        const etaDate = pc.eta ? new Date(pc.eta).toISOString().slice(0, 10) : null;
+        const weatherKey = `${pc.portName},${pc.country || ''},${etaDate || ''}`.toLowerCase();
+        const weatherResult = weatherByPort[weatherKey] ?? null;
+        return {
+          portCode: pc.portCode,
+          portName: pc.portName,
+          country: pc.country || '',
+          sequence: pc.sequence ?? 0,
+          eta: formatShortDate(pc.eta),
+          etd: formatShortDate(pc.etd),
+          operations: pc.operations || [],
+          locked: pc.locked ?? false,
+          weather: weatherResult?.temp ?? null,
+          isForecastTemp: weatherResult?.isForecast ?? false,
+        };
+      }),
     bookingsCount: 0,
     palletsBooked: 0,
     palletsCapacity: 1800,

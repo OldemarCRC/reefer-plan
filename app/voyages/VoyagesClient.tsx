@@ -46,6 +46,7 @@ export interface DisplayPortCall {
   operations: string[];
   locked: boolean;
   weather: number | null;
+  isForecastTemp?: boolean;
 }
 
 export interface DisplayVoyage {
@@ -183,7 +184,12 @@ export default function VoyagesClient({ voyages }: VoyagesClientProps) {
                         <span className={styles.portCode}>
                           {pc.portCode}
                           {pc.weather !== null && (
-                            <span className={styles.portTemp}> {pc.weather}°C</span>
+                            <span className={styles.portTemp}>
+                              {' '}{pc.weather}°C
+                              {pc.isForecastTemp && (
+                                <span className={styles.forecastBadge}>fcst</span>
+                              )}
+                            </span>
                           )}
                         </span>
                         <span className={styles.portName}>{pc.portName}</span>
