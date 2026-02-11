@@ -448,8 +448,11 @@ export interface TemperatureChangelogEntry {
 }
 
 export interface CargoPosition {
-  shipmentId: string; // Cambio: Ya no bookingId, sino shipmentId
-  cargoUnitId: string;
+  shipmentId?: string;
+  bookingId?: string;
+  cargoUnitId?: string;
+  cargoType?: string;   // e.g. 'BANANAS', 'TABLE_GRAPES' — drives temp-conflict checks
+  quantity?: number;    // pallets in this position
   compartment: {
     id: string;
     holdNumber: number;
@@ -460,8 +463,8 @@ export interface CargoPosition {
     tier: number;
     bay: number;
   };
-  weight: number;
-  position: {
+  weight?: number;
+  position?: {
     lcg: number;
     tcg: number;
     vcg: number;

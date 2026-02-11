@@ -110,6 +110,10 @@ function getZoneStats(assignments: VoyageTempAssignment[]) {
       existing.loaded += a.palletsLoaded;
       existing.capacity += a.palletsCapacity;
       existing.compartments.push(a.compartmentId);
+      // Promote cargoType from the first compartment in this zone that has cargo
+      if (!existing.cargoType && a.cargoType) {
+        existing.cargoType = a.cargoType;
+      }
     } else {
       zoneMap.set(a.zoneId, {
         zoneId: a.zoneId,

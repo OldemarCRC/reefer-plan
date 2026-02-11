@@ -404,8 +404,11 @@ VesselSchema.index({ imoNumber: 1 });
 // ============================================================================
 
 const CargoPositionSchema = new Schema({
-  shipmentId: { type: Schema.Types.ObjectId, ref: 'Shipment', required: true },
-  cargoUnitId: { type: String, required: true },
+  shipmentId: { type: Schema.Types.ObjectId, ref: 'Shipment' }, // optional — not all positions come from formal shipments
+  bookingId: { type: String },          // booking reference (string for flexibility)
+  cargoUnitId: { type: String },
+  cargoType: { type: String },          // e.g. 'BANANAS', 'TABLE_GRAPES' — used for temp-conflict checks
+  quantity: { type: Number, default: 0 }, // pallets in this position
   compartment: {
     id: { type: String, required: true },
     holdNumber: { type: Number, required: true },
@@ -416,7 +419,7 @@ const CargoPositionSchema = new Schema({
     tier: { type: Number },
     bay: { type: Number },
   },
-  weight: { type: Number, required: true },
+  weight: { type: Number, default: 0 },
   position: PositionSchema,
 }, { _id: false });
 
