@@ -7,6 +7,7 @@ import { useParams } from 'next/navigation';
 import AppShell from '@/components/layout/AppShell';
 import VesselProfile from '@/components/vessel/VesselProfile';
 import { getStowagePlanById } from '@/app/actions/stowage-plan';
+import ConfigureZonesModal, { type ZoneConfig } from '@/components/vessel/ConfigureZonesModal';
 import type { VoyageTempAssignment } from '@/lib/vessel-profile-data';
 import styles from './page.module.css';
 
@@ -36,6 +37,7 @@ export default function StowagePlanDetailPage() {
   const [assignQuantity, setAssignQuantity] = useState<number>(0);
   const [showConflictWarning, setShowConflictWarning] = useState(false);
   const [confirmedConflicts, setConfirmedConflicts] = useState<Set<string>>(new Set());
+  const [showZoneModal, setShowZoneModal] = useState(false);
 
   // Plan header info — populated from DB on mount
   const [plan, setPlan] = useState({
@@ -429,6 +431,9 @@ export default function StowagePlanDetailPage() {
             </div>
           </div>
           <div className={styles.headerActions}>
+            <button className={styles.btnSecondary} onClick={() => setShowZoneModal(true)}>
+              Configure Zones
+            </button>
             <button className={styles.btnSecondary} onClick={handleSavePlan}>
               Save Draft
             </button>
@@ -923,6 +928,58 @@ export default function StowagePlanDetailPage() {
           </div>
         </div>
       )}
+      {/* Configure Zones Modal */}
+      {showZoneModal && (() => {
+        // Build cargo summary per zone from current shipment assignments
+        const cargoByZone: Record<string, { cargoType: string; palletsLoaded: number }> = {};
+        for (const zone of tempZoneConfig) {
+          let totalPalletsInZone = 0;
+          let dominantCargo = '';
+          for (const s of shipments) {
+            for (const a of s.assignments) {
+              if (zone.compartments.includes(a.compartmentId)) {
+                totalPalletsInZone += a.quantity;
+                if (!dominantCargo) dominantCargo = s.cargoType;
+              }
+            }
+          }
+          cargoByZone[zone.sectionId] = { cargoType: dominantCargo, palletsLoaded: totalPalletsInZone };
+        }
+
+        const zoneConfigs: ZoneConfig[] = tempZoneConfig.map((zone) => ({
+          sectionId: zone.sectionId,
+          zoneName: zone.sectionId.replace(/(\d+)(UPD)?([A-Z]+)/, (_, hold, upd, levels) =>
+            `Hold ${hold}${upd ? ' UPD|' : ' '}${levels.split('').join('|')}`
+          ),
+          compartmentIds: zone.compartments,
+          currentTemp: zone.temp,
+          assignedCargoType: cargoByZone[zone.sectionId]?.cargoType || undefined,
+          palletsLoaded: cargoByZone[zone.sectionId]?.palletsLoaded ?? 0,
+        }));
+
+        return (
+          <ConfigureZonesModal
+            planId={planId}
+            zones={zoneConfigs}
+            isOpen={showZoneModal}
+            onClose={() => setShowZoneModal(false)}
+            onSuccess={(updatedSections) => {
+              // Update tempZoneConfig directly from the server response
+              if (Array.isArray(updatedSections) && updatedSections.length > 0) {
+                setTempZoneConfig(
+                  updatedSections.map((cs: any) => ({
+                    sectionId: cs.sectionId,
+                    zoneId: `ZONE_${cs.sectionId}`,
+                    temp: cs.assignedTemperature ?? 13,
+                    compartments: cs.compartmentIds ?? [],
+                  }))
+                );
+              }
+              setShowZoneModal(false);
+            }}
+          />
+        );
+      })()}
       </div>
     </AppShell>
   );

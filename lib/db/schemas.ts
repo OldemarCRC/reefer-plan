@@ -489,6 +489,19 @@ const StowagePlanSchema = new Schema<StowagePlan>({
     assignedTemperature: { type: Number },
     locked: { type: Boolean, default: false },
   }],
+  temperatureChangelog: [{
+    changedAt: { type: Date, required: true },
+    changedBy: { type: String, required: true },
+    reason: { type: String },
+    changes: [{
+      sectionId: { type: String, required: true },
+      compartmentIds: [{ type: String }],
+      fromTemp: { type: Number, required: true },
+      toTemp: { type: Number, required: true },
+      _id: false,
+    }],
+    affectedBookings: [{ type: String }],
+  }],
   captainCommunication: {
     emailSentAt: { type: Date },
     captainName: { type: String },

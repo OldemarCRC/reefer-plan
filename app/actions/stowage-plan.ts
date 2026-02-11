@@ -594,6 +594,117 @@ export async function updatePlanStatus(
 }
 
 // ----------------------------------------------------------------------------
+// UPDATE ZONE TEMPERATURES
+// Reconfigures cooling section temperatures after initial plan creation.
+// Warns on cargo conflicts but never hard-blocks the change.
+// Appends an audit entry to temperatureChangelog.
+// ----------------------------------------------------------------------------
+
+const UpdateZoneTemperaturesSchema = z.object({
+  planId: z.string().min(1),
+  updates: z.array(z.object({
+    sectionId: z.string().min(1),
+    newTemp: z.number().min(-25).max(15),
+  })).min(1),
+  reason: z.string().optional(),
+});
+
+export async function updateZoneTemperatures(data: unknown) {
+  try {
+    const validated = UpdateZoneTemperaturesSchema.parse(data);
+
+    await connectDB();
+
+    const plan = await StowagePlanModel.findById(validated.planId);
+    if (!plan) {
+      return { success: false, error: 'Plan not found' };
+    }
+
+    if (!plan.coolingSectionStatus || plan.coolingSectionStatus.length === 0) {
+      return { success: false, error: 'Plan has no cooling section configuration' };
+    }
+
+    // Determine what actually changed
+    const changes: Array<{
+      sectionId: string;
+      compartmentIds: string[];
+      fromTemp: number;
+      toTemp: number;
+    }> = [];
+
+    for (const update of validated.updates) {
+      const section = plan.coolingSectionStatus.find(
+        (cs: any) => cs.sectionId === update.sectionId
+      );
+      if (!section) continue;
+
+      const fromTemp = section.assignedTemperature ?? 0;
+      if (fromTemp === update.newTemp) continue; // no change
+
+      changes.push({
+        sectionId: update.sectionId,
+        compartmentIds: Array.from(section.compartmentIds ?? []),
+        fromTemp,
+        toTemp: update.newTemp,
+      });
+
+      section.assignedTemperature = update.newTemp;
+    }
+
+    if (changes.length === 0) {
+      return {
+        success: true,
+        data: JSON.parse(JSON.stringify(plan)),
+        message: 'No changes made',
+      };
+    }
+
+    // Collect affected booking/shipment IDs from cargoPositions in changed compartments
+    const changedCompartments = new Set(changes.flatMap(c => c.compartmentIds));
+    const affectedBookings = new Set<string>();
+
+    for (const pos of plan.cargoPositions ?? []) {
+      if (changedCompartments.has(pos.compartment?.id)) {
+        if ((pos as any).bookingId) affectedBookings.add(String((pos as any).bookingId));
+        if (pos.shipmentId) affectedBookings.add(String(pos.shipmentId));
+      }
+    }
+
+    // Append audit entry
+    if (!plan.temperatureChangelog) {
+      plan.temperatureChangelog = [];
+    }
+    (plan.temperatureChangelog as any[]).push({
+      changedAt: new Date(),
+      changedBy: 'SYSTEM', // TODO: replace with session user when auth is added
+      reason: validated.reason ?? undefined,
+      changes,
+      affectedBookings: Array.from(affectedBookings),
+    });
+
+    plan.markModified('temperatureChangelog');
+    plan.markModified('coolingSectionStatus');
+    await plan.save();
+
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(plan)),
+      message: `${changes.length} zone(s) updated`,
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: `Validation error: ${error.errors[0].message}`,
+      };
+    }
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Error updating zone temperatures:', msg);
+    return { success: false, error: `Failed to update temperatures: ${msg}` };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // HELPER FUNCTIONS
 // ----------------------------------------------------------------------------
 

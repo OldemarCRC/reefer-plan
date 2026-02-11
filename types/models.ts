@@ -434,6 +434,19 @@ export interface Vessel {
 // STOWAGE PLAN
 // ----------------------------------------------------------------------------
 
+export interface TemperatureChangelogEntry {
+  changedAt: Date;
+  changedBy: string;
+  reason?: string;
+  changes: Array<{
+    sectionId: string;
+    compartmentIds: string[];
+    fromTemp: number;
+    toTemp: number;
+  }>;
+  affectedBookings: string[];
+}
+
 export interface CargoPosition {
   shipmentId: string; // Cambio: Ya no bookingId, sino shipmentId
   cargoUnitId: string;
@@ -523,6 +536,8 @@ export interface StowagePlan {
     assignedTemperature?: number;
     locked: boolean;
   }>;
+
+  temperatureChangelog?: TemperatureChangelogEntry[];
 
   // Comunicación con capitán
   captainCommunication?: {

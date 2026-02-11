@@ -70,9 +70,14 @@
   transition: all var(--transition-fast);
 }
 
-.btnSecondary:hover {
+.btnSecondary:hover:not(:disabled) {
   background: var(--color-bg-hover);
   color: var(--color-text-primary);
+}
+
+.btnSecondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* --- Stats row --- */

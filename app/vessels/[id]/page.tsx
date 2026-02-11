@@ -1,11 +1,13 @@
 import AppShell from '@/components/layout/AppShell';
 import VesselProfile from '@/components/vessel/VesselProfile';
 import VoyageSelector from './VoyageSelector';
+import ConfigureZonesButton from './ConfigureZonesButton';
 import { getVesselById } from '@/app/actions/vessel';
 import { getVoyagesByVessel } from '@/app/actions/voyage';
 import { getStowagePlansByVoyage } from '@/app/actions/stowage-plan';
 import type { VoyageTempAssignment } from '@/lib/vessel-profile-data';
 import { compartmentLayouts } from '@/lib/vessel-profile-data';
+import type { ZoneConfig } from '@/components/vessel/ConfigureZonesModal';
 import Link from 'next/link';
 import styles from './page.module.css';
 
@@ -172,6 +174,24 @@ export default async function VesselDetailPage({
   const totalCapacity = assignments.reduce((s, a) => s + a.palletsCapacity, 0);
   const zoneStats = getZoneStats(assignments);
 
+  // Build zone configs for the Configure Zones modal
+  // Aggregates cargo info per zone from assignments (cargoType + palletsLoaded)
+  const zoneConfigs: ZoneConfig[] = zoneStats.map((z) => {
+    // Find the matching cooling section entry from the plan for compartmentIds
+    const sectionId = z.zoneId.replace('ZONE_', ''); // 'ZONE_1AB' → '1AB'
+    const coolSection = selectedPlan?.coolingSectionStatus?.find(
+      (cs: any) => cs.sectionId === sectionId
+    );
+    return {
+      sectionId,
+      zoneName: z.name,
+      compartmentIds: coolSection?.compartmentIds ?? z.compartments,
+      currentTemp: z.temp,
+      assignedCargoType: z.cargoType || undefined,
+      palletsLoaded: z.loaded,
+    };
+  });
+
   // Selected voyage label for the table header
   const selectedVoyage = voyages.find((v: any) => v._id === selectedVoyageId);
   const voyageLabel = selectedVoyage?.voyageNumber || null;
@@ -202,7 +222,11 @@ export default async function VesselDetailPage({
               }))}
               currentVoyageId={selectedVoyageId}
             />
-            <button className={styles.btnSecondary}>Edit Vessel</button>
+            <ConfigureZonesButton
+              planId={selectedPlan?._id?.toString() ?? null}
+              hasVoyage={!!selectedVoyageId}
+              zones={zoneConfigs}
+            />
             {selectedPlan && (
               <Link href={`/stowage-plans/${selectedPlan._id}`}>
                 <button className={styles.btnPrimary}>Open Stowage Plan</button>
