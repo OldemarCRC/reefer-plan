@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { VoyageModel, VesselModel } from '@/lib/db/schemas';
+import { VoyageModel, VesselModel, StowagePlanModel } from '@/lib/db/schemas';
 import type { Voyage, VoyagePortCall } from '@/types/models';
 
 // ----------------------------------------------------------------------------
@@ -471,22 +471,29 @@ export async function updateVoyage(
 export async function deleteVoyage(voyageId: unknown) {
   try {
     const id = VoyageIdSchema.parse(voyageId);
-    
+
     await connectDB();
-    
-    // Check if voyage has bookings
-    // TODO: Add check when booking relationships are complete
-    
+
+    // Guard: cannot cancel a voyage that still has stowage plans
+    const planCount = await StowagePlanModel.countDocuments({ voyageId: id });
+    if (planCount > 0) {
+      return {
+        success: false,
+        error: `Cannot cancel voyage: ${planCount} stowage plan${planCount > 1 ? 's' : ''} must be deleted first`,
+        blockedBy: { plans: planCount },
+      };
+    }
+
     const voyage = await VoyageModel.findByIdAndUpdate(
       id,
       { status: 'CANCELLED' },
       { new: true }
     );
-    
+
     if (!voyage) {
       return { success: false, error: 'Voyage not found' };
     }
-    
+
     return {
       success: true,
       message: `Voyage ${voyage.voyageNumber} cancelled successfully`,

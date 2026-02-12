@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { VesselModel } from '@/lib/db/schemas';
+import { VesselModel, VoyageModel } from '@/lib/db/schemas';
 import type { Vessel } from '@/types/models';
 
 // ----------------------------------------------------------------------------
@@ -304,5 +304,46 @@ export async function validateCoolingSectionTemperature(
     }
     console.error('Error validating cooling section temperature:', error);
     throw error;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// DELETE VESSEL
+// Hard delete — blocked if any voyages reference this vessel.
+// Cascade order: delete StowagePlans → cancel Voyages → then call deleteVessel.
+// ----------------------------------------------------------------------------
+
+export async function deleteVessel(vesselId: unknown) {
+  try {
+    const id = VesselIdSchema.parse(vesselId);
+
+    await connectDB();
+
+    // Guard: cannot delete a vessel that still has voyages
+    const voyageCount = await VoyageModel.countDocuments({ vesselId: id });
+    if (voyageCount > 0) {
+      return {
+        success: false,
+        error: `Cannot delete vessel: ${voyageCount} voyage${voyageCount > 1 ? 's' : ''} must be removed first`,
+        blockedBy: { voyages: voyageCount },
+      };
+    }
+
+    const vessel = await VesselModel.findByIdAndDelete(id);
+
+    if (!vessel) {
+      return { success: false, error: 'Vessel not found' };
+    }
+
+    return {
+      success: true,
+      message: `Vessel ${vessel.name} deleted successfully`,
+    };
+  } catch (error) {
+    console.error('Error deleting vessel:', error);
+    return {
+      success: false,
+      error: 'Failed to delete vessel',
+    };
   }
 }

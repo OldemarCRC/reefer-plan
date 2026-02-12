@@ -10,7 +10,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { ServiceModel } from '@/lib/db/schemas';
+import { ServiceModel, VoyageModel } from '@/lib/db/schemas';
 import type { Service } from '@/types/models';
 
 // ----------------------------------------------------------------------------
@@ -183,12 +183,22 @@ export async function updateService(
 export async function deleteService(serviceId: unknown) {
   try {
     const id = ServiceIdSchema.parse(serviceId);
-    
+
     await connectDB();
-    
-    // Check if service has associated voyages
-    // TODO: Add check when voyage model is implemented
-    
+
+    // Guard: cannot deactivate a service that still has active voyages
+    const voyageCount = await VoyageModel.countDocuments({
+      serviceId: id,
+      status: { $in: ['PLANNED', 'ESTIMATED', 'CONFIRMED', 'IN_PROGRESS'] },
+    });
+    if (voyageCount > 0) {
+      return {
+        success: false,
+        error: `Cannot deactivate service: ${voyageCount} active voyage${voyageCount > 1 ? 's' : ''} must be resolved first`,
+        blockedBy: { voyages: voyageCount },
+      };
+    }
+
     const service = await ServiceModel.findByIdAndUpdate(
       id,
       { active: false },

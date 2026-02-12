@@ -705,6 +705,38 @@ export async function updateZoneTemperatures(data: unknown) {
 }
 
 // ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// DELETE STOWAGE PLAN
+// Hard delete — no dependency guards (plans are leaf nodes in the hierarchy).
+// Cascade order when cleaning up: delete Plans first, then Voyages, then Vessels.
+// ----------------------------------------------------------------------------
+
+export async function deleteStowagePlan(planId: unknown) {
+  try {
+    const id = StowagePlanIdSchema.parse(planId);
+
+    await connectDB();
+
+    const plan = await StowagePlanModel.findByIdAndDelete(id);
+
+    if (!plan) {
+      return { success: false, error: 'Stowage plan not found' };
+    }
+
+    return {
+      success: true,
+      message: `Stowage plan ${plan.planNumber} deleted successfully`,
+    };
+  } catch (error) {
+    console.error('Error deleting stowage plan:', error);
+    return {
+      success: false,
+      error: 'Failed to delete stowage plan',
+    };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // HELPER FUNCTIONS
 // ----------------------------------------------------------------------------
 

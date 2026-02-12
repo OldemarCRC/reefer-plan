@@ -9,6 +9,7 @@
     "lint": "eslint",
     "db:seed": "tsx scripts/seed-database.ts",
     "db:seed:minimal": "tsx scripts/seed-minimal.ts",
+    "db:seed:reset": "tsx scripts/seed-minimal.ts --force",
     "db:test": "tsx scripts/test-connection.ts"
   },
   "dependencies": {
