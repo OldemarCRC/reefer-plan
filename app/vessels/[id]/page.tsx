@@ -35,6 +35,29 @@ const COMPARTMENT_ZONE_MAP: Record<string, { zoneId: string; zoneName: string; z
   '4D':   { zoneId: 'ZONE_4CD',    zoneName: 'Hold 4 C|D',       zoneColor: '#EF4444' },
 };
 
+// Empty assignments for vessel structure display when no voyage/plan is selected.
+// Renders all compartments with correct layout but zero cargo and no temperature color.
+function buildEmptyAssignments(): VoyageTempAssignment[] {
+  return compartmentLayouts.map((layout) => {
+    const zone = COMPARTMENT_ZONE_MAP[layout.id] || {
+      zoneId: 'ZONE_UNKNOWN',
+      zoneName: 'Unknown',
+      zoneColor: '#6B7280',
+    };
+    return {
+      compartmentId: layout.id,
+      zoneId: zone.zoneId,
+      zoneName: zone.zoneName,
+      zoneColor: zone.zoneColor,
+      setTemperature: 0,
+      cargoType: '',
+      palletsLoaded: 0,
+      palletsCapacity: layout.pallets,
+      shipments: [],
+    };
+  });
+}
+
 // Map stowage plan cooling section temperatures + cargoPositions → VoyageTempAssignment[]
 function buildTempAssignments(plan: any): VoyageTempAssignment[] {
   // Build a map of compartmentId → temperature from cooling section status
@@ -167,19 +190,23 @@ export default async function VesselDetailPage({
     if (plansResult.success && plansResult.data.length > 0) {
       selectedPlan = plansResult.data[0]; // Use most recent plan
       assignments = buildTempAssignments(selectedPlan);
-    } else {
-      // Voyage selected but no plan yet — show empty vessel
-      assignments = [];
     }
+    // else: voyage selected but no plan — assignments stays []
   }
 
-  // Compute stats
-  const totalLoaded = assignments.reduce((s, a) => s + a.palletsLoaded, 0);
-  const totalCapacity = assignments.reduce((s, a) => s + a.palletsCapacity, 0);
-  const zoneStats = getZoneStats(assignments);
+  // When no plan data is available, show the vessel's own compartment structure
+  // (correct layout, zero cargo, no temperature colors) instead of falling back
+  // to the hardcoded ACON-062026 mock data inside VesselProfile.
+  const profileAssignments = assignments.length > 0 ? assignments : buildEmptyAssignments();
+
+  // Compute stats — use profileAssignments for capacity so the vessel's total
+  // capacity is always displayed, even when no voyage/plan is selected.
+  const totalLoaded = profileAssignments.reduce((s, a) => s + a.palletsLoaded, 0);
+  const totalCapacity = profileAssignments.reduce((s, a) => s + a.palletsCapacity, 0);
+  const zoneStats = getZoneStats(profileAssignments);
 
   // Build zone configs for the Configure Zones modal
-  // Aggregates cargo info per zone from assignments (cargoType + palletsLoaded)
+  // Aggregates cargo info per zone from profileAssignments (cargoType + palletsLoaded)
   const zoneConfigs: ZoneConfig[] = zoneStats.map((z) => {
     // Find the matching cooling section entry from the plan for compartmentIds
     const sectionId = z.zoneId.replace('ZONE_', ''); // 'ZONE_1AB' → '1AB'
@@ -240,9 +267,9 @@ export default async function VesselDetailPage({
         </div>
 
         {/* Vessel profile SVG */}
-        {/* No voyage selected → undefined falls back to mock demo data */}
-        {/* Voyage selected → pass real assignments (may be [] if no plan exists) */}
-        <VesselProfile tempAssignments={selectedVoyageId ? assignments : undefined} />
+        {/* Always pass explicit assignments so VesselProfile never falls back to ACON-062026 mock data.
+            profileAssignments is either real plan data or an empty-vessel layout for this vessel. */}
+        <VesselProfile vesselName={vessel.name} tempAssignments={profileAssignments} />
 
         {/* Stats row */}
         <div className={styles.statsRow}>
