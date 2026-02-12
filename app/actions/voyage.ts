@@ -724,3 +724,26 @@ export async function getVoyagePortSequence(voyageId: unknown) {
     };
   }
 }
+
+// ----------------------------------------------------------------------------
+// GET FLEET STATUS (for sidebar widget)
+// Returns vessel counts grouped by operational status
+// ----------------------------------------------------------------------------
+
+export async function getFleetStatus(): Promise<{
+  inTransit: number;
+  confirmed: number;
+  planned: number;
+}> {
+  try {
+    await connectDB();
+    const [inTransit, confirmed, planned] = await Promise.all([
+      VoyageModel.countDocuments({ status: 'IN_PROGRESS' }),
+      VoyageModel.countDocuments({ status: 'CONFIRMED' }),
+      VoyageModel.countDocuments({ status: 'PLANNED' }),
+    ]);
+    return { inTransit, confirmed, planned };
+  } catch {
+    return { inTransit: 0, confirmed: 0, planned: 0 };
+  }
+}

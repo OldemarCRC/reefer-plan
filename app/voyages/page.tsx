@@ -72,6 +72,7 @@ export default async function VoyagesPage() {
           isForecastTemp: weatherResult?.isForecast ?? false,
         };
       }),
+    vesselImoNumber: v.vesselId?.imoNumber ?? null,
     bookingsCount: 0,
     palletsBooked: 0,
     palletsCapacity: 1800,

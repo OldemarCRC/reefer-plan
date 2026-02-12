@@ -54,6 +54,7 @@ export interface DisplayVoyage {
   voyageNumber: string;
   status: string;
   vesselName: string;
+  vesselImoNumber: string | null;
   serviceCode: string;
   startDate: string;
   portCalls: DisplayPortCall[];
@@ -158,7 +159,25 @@ export default function VoyagesClient({ voyages }: VoyagesClientProps) {
                   <StatusBadge status={v.status} />
                 </div>
                 <div className={styles.voyageMeta}>
-                  <span>{v.vesselName}</span>
+                  <span className={styles.vesselNameWrap}>
+                    {v.vesselName}
+                    {v.vesselImoNumber && (
+                      <a
+                        href={`https://www.marinetraffic.com/en/ais/details/ships/imo:${v.vesselImoNumber}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.mtLink}
+                        title={`Track ${v.vesselName} on MarineTraffic (IMO ${v.vesselImoNumber})`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M7 1h4v4" />
+                          <path d="M11 1L5.5 6.5" />
+                          <path d="M5 2H2a1 1 0 00-1 1v7a1 1 0 001 1h7a1 1 0 001-1V8" />
+                        </svg>
+                      </a>
+                    )}
+                  </span>
                   <span className={styles.dot}>·</span>
                   <span className={styles.muted}>{v.serviceCode}</span>
                   <span className={styles.dot}>·</span>

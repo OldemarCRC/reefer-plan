@@ -147,6 +147,32 @@
   color: var(--color-text-muted);
 }
 
+/* Vessel name + MarineTraffic link */
+.vesselNameWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mtLink {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-muted);
+  opacity: 0.6;
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+  line-height: 1;
+}
+
+.mtLink:hover {
+  color: var(--color-cyan);
+  opacity: 1;
+}
+
+.mtLink svg {
+  width: 10px;
+  height: 10px;
+}
+
 .muted {
   color: var(--color-text-tertiary);
 }
