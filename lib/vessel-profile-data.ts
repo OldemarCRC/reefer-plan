@@ -53,6 +53,59 @@ export const voyageTempAssignments: VoyageTempAssignment[] = [
   { compartmentId: '4D', zoneId: 'ZONE_4CD', zoneName: 'Hold 4 C|D', zoneColor: '#EF4444', setTemperature: 5, cargoType: 'AVOCADOS', palletsLoaded: 0, palletsCapacity: 336, shipments: [] },
 ];
 
+// ============================================================================
+// VESSEL LAYOUT — data-driven SVG structure
+// Built from Vessel.temperatureZones[].coolingSections[] in the DB
+// ============================================================================
+
+export const LEVEL_DISPLAY_ORDER = ['UPD', 'FC', 'A', 'B', 'C', 'D', 'E'];
+
+export interface VesselHoldLevel {
+  sectionId: string;  // "1A", "2UPD", "1FC", "2E", etc.
+  sqm: number;
+}
+
+export interface VesselHold {
+  holdNumber: number;
+  levels: VesselHoldLevel[];  // sorted top-to-bottom by LEVEL_DISPLAY_ORDER
+}
+
+export interface VesselLayout {
+  holds: VesselHold[];
+}
+
+// Build a VesselLayout from Vessel.temperatureZones DB data
+export function buildVesselLayout(temperatureZones: any[]): VesselLayout {
+  const holdMap = new Map<number, VesselHoldLevel[]>();
+
+  for (const zone of temperatureZones) {
+    for (const section of zone.coolingSections) {
+      const holdNum = parseInt(section.sectionId[0], 10);
+      if (!holdMap.has(holdNum)) holdMap.set(holdNum, []);
+      holdMap.get(holdNum)!.push({ sectionId: section.sectionId, sqm: section.sqm });
+    }
+  }
+
+  const holds: VesselHold[] = [...holdMap.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([holdNumber, levels]) => ({
+      holdNumber,
+      levels: levels.sort((a, b) => {
+        const la = a.sectionId.slice(1);
+        const lb = b.sectionId.slice(1);
+        const ia = LEVEL_DISPLAY_ORDER.indexOf(la);
+        const ib = LEVEL_DISPLAY_ORDER.indexOf(lb);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+      }),
+    }));
+
+  return { holds };
+}
+
+// ============================================================================
+// COMPARTMENT LAYOUT (legacy — ACONCAGUA BAY hardcoded fallback)
+// ============================================================================
+
 // Compartment layout data for SVG rendering
 // Longitudinal cross-section: BOW (left) → STERN (right)
 // Vertical: DECK (top) → D (bottom)

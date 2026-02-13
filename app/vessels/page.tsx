@@ -13,9 +13,9 @@ export default async function VesselsPage() {
     flag: v.flag || '—',
     // These detailed specs live in the vessel profile data; use defaults until full vessel schema is populated
     totalPallets: v.totalPallets || 4840,
-    holds: v.holds || 4,
-    compartments: v.compartments || 19,
-    temperatureZones: v.temperatureZones || 8,
+    holds: v.holds?.length || 4,
+    compartments: v.temperatureZones?.reduce((n: number, z: any) => n + (z.coolingSections?.length ?? 0), 0) || 0,
+    temperatureZones: v.temperatureZones?.length || 0,
     active: v.active !== false,
   }));
 

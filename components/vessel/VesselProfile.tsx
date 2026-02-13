@@ -4,13 +4,16 @@ import { useState } from 'react';
 import styles from './VesselProfile.module.css';
 import {
   voyageTempAssignments as defaultAssignments,
+  compartmentLayouts,
+  LEVEL_DISPLAY_ORDER,
   type VoyageTempAssignment,
+  type VesselLayout,
 } from '@/lib/vessel-profile-data';
 
 // ============================================================================
 // LAYOUT CONSTANTS
 // Longitudinal cross-section: BOW (left) → STERN (right)
-// Levels: DECK/UPD (top) → D (bottom)
+// Levels: DECK/UPD (top) → D/E (bottom)
 // ============================================================================
 
 const SVG_W = 960;
@@ -24,51 +27,70 @@ const HULL_X_BOW = MARGIN.left + 20;
 const HULL_X_STERN = SVG_W - MARGIN.right;
 const HULL_BOW_TIP = MARGIN.left;        // Bow point
 
-// Hold positions (x-coordinates, proportional to LOA)
-// Hold 1 = forward (bow), Hold 4 = aft (stern)
+// Hold positions
 const HOLD_GAP = 8;           // Gap between holds (bulkheads)
 const CARGO_AREA_X = HULL_X_BOW + 25;  // Start of cargo area
 const CARGO_AREA_W = 680;     // Total width for cargo holds
 const SUPERSTRUCTURE_X = HULL_X_STERN - 110; // Bridge/superstructure
 
-// Level heights (from top)
-const LEVEL_H = {
-  UPD: 32,
-  A: 48,
-  B: 48,
-  C: 48,
-  D: 42,
-};
+// Height budget for all levels in a hold (px)
+const HOLD_HEIGHT_BUDGET = 218;
+const MIN_LEVEL_H = 22;  // minimum height per level for readability
 
 // Temperature zone double-line indicators
 const ZONE_LINE_THICKNESS = 3;
 
-// Hold widths (proportional to their actual length)
-// H1: 24m, H2: 26m, H3: 28m, H4: 26m → total ~104m
-const HOLD_WIDTHS_RAW = [24, 26, 28, 26];
-const TOTAL_RAW = HOLD_WIDTHS_RAW.reduce((s, w) => s + w, 0);
-const TOTAL_GAPS = (HOLD_WIDTHS_RAW.length - 1) * HOLD_GAP;
-const HOLD_WIDTHS = HOLD_WIDTHS_RAW.map(
-  (w) => ((w / TOTAL_RAW) * (CARGO_AREA_W - TOTAL_GAPS))
-);
+// ============================================================================
+// FALLBACK: build default VesselLayout from hardcoded ACONCAGUA BAY data
+// ============================================================================
 
-// Compute hold x-positions
-function getHoldPositions() {
+function buildDefaultLayout(): VesselLayout {
+  const holdMap = new Map<number, { sectionId: string; sqm: number }[]>();
+  for (const c of compartmentLayouts) {
+    if (!holdMap.has(c.holdNumber)) holdMap.set(c.holdNumber, []);
+    // Use pallets as a proxy for sqm when real sqm isn't embedded in CompartmentLayout
+    holdMap.get(c.holdNumber)!.push({ sectionId: c.id, sqm: c.pallets });
+  }
+  return {
+    holds: [...holdMap.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([holdNumber, levels]) => ({
+        holdNumber,
+        levels: levels.sort((a, b) => {
+          const la = a.sectionId.slice(1);
+          const lb = b.sectionId.slice(1);
+          const ia = LEVEL_DISPLAY_ORDER.indexOf(la);
+          const ib = LEVEL_DISPLAY_ORDER.indexOf(lb);
+          return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        }),
+      })),
+  };
+}
+
+// ============================================================================
+// DYNAMIC LAYOUT COMPUTATION
+// ============================================================================
+
+function computeHoldPositions(layout: VesselLayout): { x: number; w: number; holdNumber: number }[] {
+  const holdSqms = layout.holds.map(h => h.levels.reduce((s, l) => s + l.sqm, 0));
+  const totalSqm = holdSqms.reduce((s, v) => s + v, 0);
+  const totalGaps = (layout.holds.length - 1) * HOLD_GAP;
+  const availableW = CARGO_AREA_W - totalGaps;
+
   const positions: { x: number; w: number; holdNumber: number }[] = [];
   let x = CARGO_AREA_X;
-  for (let i = 0; i < 4; i++) {
-    positions.push({ x, w: HOLD_WIDTHS[i], holdNumber: i + 1 });
-    x += HOLD_WIDTHS[i] + HOLD_GAP;
+  for (let i = 0; i < layout.holds.length; i++) {
+    const w = totalSqm > 0 ? (holdSqms[i] / totalSqm) * availableW : availableW / layout.holds.length;
+    positions.push({ x, w, holdNumber: layout.holds[i].holdNumber });
+    x += w + HOLD_GAP;
   }
   return positions;
 }
 
-const HOLD_POSITIONS = getHoldPositions();
+// ============================================================================
+// COMPARTMENT RECTS
+// ============================================================================
 
-// Compartment level order (top to bottom)
-const LEVEL_ORDER = ['UPD', 'A', 'B', 'C', 'D'];
-
-// Build compartment rectangles
 interface CompartmentRect {
   id: string;
   holdNumber: number;
@@ -80,41 +102,55 @@ interface CompartmentRect {
   assignment?: VoyageTempAssignment;
 }
 
-function buildCompartmentRects(assignments: VoyageTempAssignment[]): CompartmentRect[] {
+function buildCompartmentRects(
+  layout: VesselLayout,
+  holdPositions: { x: number; w: number; holdNumber: number }[],
+  assignments: VoyageTempAssignment[],
+): CompartmentRect[] {
   const rects: CompartmentRect[] = [];
   const assignMap = new Map(assignments.map((a) => [a.compartmentId, a]));
 
-  for (const hold of HOLD_POSITIONS) {
-    // Determine which levels this hold has
-    const holdLevels = hold.holdNumber === 1
-      ? ['A', 'B', 'C', 'D']           // Hold 1: no UPD
-      : ['UPD', 'A', 'B', 'C', 'D'];   // Holds 2-4: with UPD
+  for (const hold of layout.holds) {
+    const pos = holdPositions.find(p => p.holdNumber === hold.holdNumber);
+    if (!pos) continue;
 
-    let y = HULL_Y_TOP + 4; // Start just below deck line
+    const levels = hold.levels;
+    const totalSqm = levels.reduce((s, l) => s + l.sqm, 0);
+    const gaps = (levels.length - 1) * 1;
+    const heightBudget = HOLD_HEIGHT_BUDGET - gaps;
 
-    for (const level of holdLevels) {
-      const h = LEVEL_H[level as keyof typeof LEVEL_H];
-      const id = `${hold.holdNumber}${level}`;
-      
-      // Width narrows for lower decks (realistic hull shape)
-      let wFactor = 1.0;
-      if (level === 'C') wFactor = 0.92;
-      if (level === 'D') wFactor = 0.82;
-      const w = hold.w * wFactor;
-      const x = hold.x + (hold.w - w) / 2;
+    // Proportional heights with minimum enforcement
+    const rawHeights = levels.map(l => totalSqm > 0 ? (l.sqm / totalSqm) * heightBudget : heightBudget / levels.length);
+    const minAdjusted = rawHeights.map(h => Math.max(MIN_LEVEL_H, h));
+    const totalAdjusted = minAdjusted.reduce((s, h) => s + h, 0);
+    const scaleFactor = totalAdjusted > heightBudget ? heightBudget / totalAdjusted : 1;
+    const finalHeights = minAdjusted.map(h => h * scaleFactor);
+
+    let y = HULL_Y_TOP + 4;
+
+    for (let li = 0; li < levels.length; li++) {
+      const section = levels[li];
+      const h = finalHeights[li];
+      const level = section.sectionId.slice(1); // "A", "B", "UPD", "FC", "E", etc.
+
+      // Width narrows for deeper sections (hull taper)
+      const relDepth = levels.length > 1 ? li / (levels.length - 1) : 0;
+      const wFactor = 1.0 - relDepth * 0.18;
+      const w = pos.w * wFactor;
+      const xOff = pos.x + (pos.w - w) / 2;
 
       rects.push({
-        id,
+        id: section.sectionId,
         holdNumber: hold.holdNumber,
         level,
-        x,
+        x: xOff,
         y,
         w,
         h,
-        assignment: assignMap.get(id),
+        assignment: assignMap.get(section.sectionId),
       });
 
-      y += h + 1; // 1px gap between levels
+      y += h + 1;
     }
   }
 
@@ -130,6 +166,7 @@ interface VesselProfileProps {
   voyageNumber?: string;
   onCompartmentClick?: (compartmentId: string) => void;
   tempAssignments?: VoyageTempAssignment[];
+  vesselLayout?: VesselLayout;
 }
 
 export default function VesselProfile({
@@ -137,22 +174,22 @@ export default function VesselProfile({
   voyageNumber = 'ACON-062026',
   onCompartmentClick,
   tempAssignments = defaultAssignments,
+  vesselLayout,
 }: VesselProfileProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const compartments = buildCompartmentRects(tempAssignments);
 
-  const hovered = hoveredId
-    ? compartments.find((c) => c.id === hoveredId)
-    : null;
-  const selected = selectedId
-    ? compartments.find((c) => c.id === selectedId)
-    : null;
+  const layout = vesselLayout ?? buildDefaultLayout();
+  const holdPositions = computeHoldPositions(layout);
+  const compartments = buildCompartmentRects(layout, holdPositions, tempAssignments);
 
+  const hovered = hoveredId ? compartments.find((c) => c.id === hoveredId) : null;
+  const selected = selectedId ? compartments.find((c) => c.id === selectedId) : null;
   const detail = selected || hovered;
-
-  // Highlight all compartments in same zone
   const highlightZone = detail?.assignment?.zoneId || null;
+
+  // Find hold with most levels to use as level-label reference
+  const refHoldNumber = [...layout.holds].sort((a, b) => b.levels.length - a.levels.length)[0]?.holdNumber ?? 1;
 
   return (
     <div className={styles.container}>
@@ -273,7 +310,7 @@ export default function VesselProfile({
           <line x1={CARGO_AREA_X + CARGO_AREA_W / 2} y1={HULL_Y_TOP - 25} x2={CARGO_AREA_X + CARGO_AREA_W / 2} y2={HULL_Y_TOP} stroke="#2A4060" strokeWidth="1.5" />
 
           {/* Hold labels */}
-          {HOLD_POSITIONS.map((h) => (
+          {holdPositions.map((h) => (
             <text
               key={`label-h${h.holdNumber}`}
               x={h.x + h.w / 2}
@@ -286,7 +323,7 @@ export default function VesselProfile({
           ))}
 
           {/* Bulkhead lines */}
-          {HOLD_POSITIONS.slice(0, -1).map((h, i) => (
+          {holdPositions.slice(0, -1).map((h, i) => (
             <line
               key={`bh${i}`}
               x1={h.x + h.w + HOLD_GAP / 2}
@@ -300,7 +337,7 @@ export default function VesselProfile({
           ))}
 
           {/* Temperature zone double lines */}
-          {getZoneBoundaries(compartments).map((boundary, i) => (
+          {getZoneBoundaries(compartments, holdPositions).map((boundary, i) => (
             <g key={`zb${i}`}>
               <line
                 x1={boundary.x}
@@ -396,11 +433,10 @@ export default function VesselProfile({
             );
           })}
 
-          {/* Level labels (left side) */}
-          {(() => {
-            // Use Hold 2 as reference (has all levels)
-            const h2 = compartments.filter((c) => c.holdNumber === 2);
-            return h2.map((c) => (
+          {/* Level labels (left side — use hold with most levels as reference) */}
+          {compartments
+            .filter((c) => c.holdNumber === refHoldNumber)
+            .map((c) => (
               <text
                 key={`ll-${c.level}`}
                 x={c.x - 8}
@@ -409,12 +445,11 @@ export default function VesselProfile({
                 dominantBaseline="middle"
                 className={styles.levelLabel}
               >
-                {c.level === 'UPD' ? 'UPD' : c.level}
+                {c.level}
               </text>
-            ));
-          })()}
+            ))}
 
-          {/* Bow label */}
+          {/* Bow / Stern labels */}
           <text x={HULL_BOW_TIP + 5} y={SVG_H - 20} className={styles.dirLabel}>
             BOW ◀
           </text>
@@ -498,11 +533,13 @@ function getUniqueZones(assignments: VoyageTempAssignment[]) {
   });
 }
 
-function getZoneBoundaries(compartments: CompartmentRect[]) {
-  // Draw zone boundary lines within each hold where temp zone changes
+function getZoneBoundaries(
+  compartments: CompartmentRect[],
+  holdPositions: { x: number; w: number; holdNumber: number }[],
+) {
   const boundaries: { x: number; y1: number; y2: number }[] = [];
 
-  for (const hold of HOLD_POSITIONS) {
+  for (const hold of holdPositions) {
     const holdComps = compartments
       .filter((c) => c.holdNumber === hold.holdNumber)
       .sort((a, b) => a.y - b.y);
@@ -517,7 +554,6 @@ function getZoneBoundaries(compartments: CompartmentRect[]) {
           y1: y - 1,
           y2: y + 1,
         });
-        // Draw a full-width double line
         boundaries.push({
           x: hold.x + 2,
           y1: y,

@@ -5,67 +5,74 @@ import ConfigureZonesButton from './ConfigureZonesButton';
 import { getVesselById } from '@/app/actions/vessel';
 import { getVoyagesByVessel } from '@/app/actions/voyage';
 import { getStowagePlansByVoyage } from '@/app/actions/stowage-plan';
-import type { VoyageTempAssignment } from '@/lib/vessel-profile-data';
-import { compartmentLayouts } from '@/lib/vessel-profile-data';
+import { buildVesselLayout, type VoyageTempAssignment, type VesselLayout } from '@/lib/vessel-profile-data';
 import type { ZoneConfig } from '@/components/vessel/ConfigureZonesModal';
 import Link from 'next/link';
 import styles from './page.module.css';
 
-// Static zone mapping derived from compartment ID prefix
-// Mirrors the cooling section groupings for ACONCAGUA BAY
-const COMPARTMENT_ZONE_MAP: Record<string, { zoneId: string; zoneName: string; zoneColor: string }> = {
-  '1A':   { zoneId: 'ZONE_1AB',    zoneName: 'Hold 1 A|B',       zoneColor: '#3B82F6' },
-  '1B':   { zoneId: 'ZONE_1AB',    zoneName: 'Hold 1 A|B',       zoneColor: '#3B82F6' },
-  '1C':   { zoneId: 'ZONE_1CD',    zoneName: 'Hold 1 C|D',       zoneColor: '#06B6D4' },
-  '1D':   { zoneId: 'ZONE_1CD',    zoneName: 'Hold 1 C|D',       zoneColor: '#06B6D4' },
-  '2UPD': { zoneId: 'ZONE_2UPDAB', zoneName: 'Hold 2 UPD|A|B',  zoneColor: '#8B5CF6' },
-  '2A':   { zoneId: 'ZONE_2UPDAB', zoneName: 'Hold 2 UPD|A|B',  zoneColor: '#8B5CF6' },
-  '2B':   { zoneId: 'ZONE_2UPDAB', zoneName: 'Hold 2 UPD|A|B',  zoneColor: '#8B5CF6' },
-  '2C':   { zoneId: 'ZONE_2CD',    zoneName: 'Hold 2 C|D',       zoneColor: '#EC4899' },
-  '2D':   { zoneId: 'ZONE_2CD',    zoneName: 'Hold 2 C|D',       zoneColor: '#EC4899' },
-  '3UPD': { zoneId: 'ZONE_3UPDAB', zoneName: 'Hold 3 UPD|A|B',  zoneColor: '#10B981' },
-  '3A':   { zoneId: 'ZONE_3UPDAB', zoneName: 'Hold 3 UPD|A|B',  zoneColor: '#10B981' },
-  '3B':   { zoneId: 'ZONE_3UPDAB', zoneName: 'Hold 3 UPD|A|B',  zoneColor: '#10B981' },
-  '3C':   { zoneId: 'ZONE_3CD',    zoneName: 'Hold 3 C|D',       zoneColor: '#14B8A6' },
-  '3D':   { zoneId: 'ZONE_3CD',    zoneName: 'Hold 3 C|D',       zoneColor: '#14B8A6' },
-  '4UPD': { zoneId: 'ZONE_4UPDAB', zoneName: 'Hold 4 UPD|A|B',  zoneColor: '#F59E0B' },
-  '4A':   { zoneId: 'ZONE_4UPDAB', zoneName: 'Hold 4 UPD|A|B',  zoneColor: '#F59E0B' },
-  '4B':   { zoneId: 'ZONE_4UPDAB', zoneName: 'Hold 4 UPD|A|B',  zoneColor: '#F59E0B' },
-  '4C':   { zoneId: 'ZONE_4CD',    zoneName: 'Hold 4 C|D',       zoneColor: '#EF4444' },
-  '4D':   { zoneId: 'ZONE_4CD',    zoneName: 'Hold 4 C|D',       zoneColor: '#EF4444' },
-};
+// Colors cycled across temperature zones (index = zone order in vessel.temperatureZones)
+const ZONE_COLORS = [
+  '#3B82F6', '#06B6D4', '#8B5CF6', '#EC4899',
+  '#10B981', '#14B8A6', '#F59E0B', '#EF4444',
+  '#6366F1', '#F97316', '#84CC16', '#A78BFA',
+];
+
+// Build a zone-lookup map from vessel.temperatureZones
+// Returns: sectionId → { zoneId, zoneName, zoneColor, palletsCapacity }
+function buildZoneMap(temperatureZones: any[]): Map<string, {
+  zoneId: string; zoneName: string; zoneColor: string; palletsCapacity: number;
+}> {
+  const map = new Map<string, { zoneId: string; zoneName: string; zoneColor: string; palletsCapacity: number }>();
+  temperatureZones.forEach((zone, zi) => {
+    const color = ZONE_COLORS[zi % ZONE_COLORS.length];
+    // Build a human-readable zone name from the coolingSectionIds
+    const levels = zone.coolingSections.map((s: any) => s.sectionId.slice(1)).join('|');
+    const holdNum = zone.coolingSections[0]?.sectionId[0] ?? '?';
+    const zoneName = `Hold ${holdNum} ${levels}`;
+    for (const section of zone.coolingSections) {
+      const pallets = Math.round(section.sqm * (section.designStowageFactor ?? 1.32));
+      map.set(section.sectionId, {
+        zoneId: zone.zoneId,
+        zoneName,
+        zoneColor: color,
+        palletsCapacity: pallets,
+      });
+    }
+  });
+  return map;
+}
 
 // Empty assignments for vessel structure display when no voyage/plan is selected.
 // Renders all compartments with correct layout but zero cargo and no temperature color.
-function buildEmptyAssignments(): VoyageTempAssignment[] {
-  return compartmentLayouts.map((layout) => {
-    const zone = COMPARTMENT_ZONE_MAP[layout.id] || {
-      zoneId: 'ZONE_UNKNOWN',
-      zoneName: 'Unknown',
-      zoneColor: '#6B7280',
-    };
-    return {
-      compartmentId: layout.id,
-      zoneId: zone.zoneId,
-      zoneName: zone.zoneName,
-      zoneColor: zone.zoneColor,
+function buildEmptyAssignments(temperatureZones: any[]): VoyageTempAssignment[] {
+  const zoneMap = buildZoneMap(temperatureZones);
+  const assignments: VoyageTempAssignment[] = [];
+  for (const [sectionId, info] of zoneMap) {
+    assignments.push({
+      compartmentId: sectionId,
+      zoneId: info.zoneId,
+      zoneName: info.zoneName,
+      zoneColor: info.zoneColor,
       setTemperature: 0,
       cargoType: '',
       palletsLoaded: 0,
-      palletsCapacity: layout.pallets,
+      palletsCapacity: info.palletsCapacity,
       shipments: [],
-    };
-  });
+    });
+  }
+  return assignments;
 }
 
 // Map stowage plan cooling section temperatures + cargoPositions → VoyageTempAssignment[]
-function buildTempAssignments(plan: any): VoyageTempAssignment[] {
-  // Build a map of compartmentId → temperature from cooling section status
+function buildTempAssignments(plan: any, temperatureZones: any[]): VoyageTempAssignment[] {
+  const zoneMap = buildZoneMap(temperatureZones);
+
+  // Build a map of compartmentId → temperature from plan's cooling section status
   const tempByCompartment = new Map<string, number>();
   if (plan.coolingSectionStatus) {
     for (const section of plan.coolingSectionStatus) {
       const temp = section.assignedTemperature ?? 0;
-      for (const compId of section.compartmentIds) {
+      for (const compId of section.coolingSectionIds) {
         tempByCompartment.set(compId, temp);
       }
     }
@@ -91,28 +98,24 @@ function buildTempAssignments(plan: any): VoyageTempAssignment[] {
     }
   }
 
-  // Build assignments for every known compartment
-  return compartmentLayouts.map((layout) => {
-    const zone = COMPARTMENT_ZONE_MAP[layout.id] || {
-      zoneId: 'ZONE_UNKNOWN',
-      zoneName: 'Unknown',
-      zoneColor: '#6B7280',
-    };
-    const cargo = cargoByCompartment.get(layout.id);
-    const temp = tempByCompartment.get(layout.id) ?? 0;
-
-    return {
-      compartmentId: layout.id,
-      zoneId: zone.zoneId,
-      zoneName: zone.zoneName,
-      zoneColor: zone.zoneColor,
+  // Build assignments for every section in the vessel
+  const assignments: VoyageTempAssignment[] = [];
+  for (const [sectionId, info] of zoneMap) {
+    const cargo = cargoByCompartment.get(sectionId);
+    const temp = tempByCompartment.get(sectionId) ?? 0;
+    assignments.push({
+      compartmentId: sectionId,
+      zoneId: info.zoneId,
+      zoneName: info.zoneName,
+      zoneColor: info.zoneColor,
       setTemperature: temp,
       cargoType: cargo?.cargoType || '',
       palletsLoaded: cargo?.palletsLoaded || 0,
-      palletsCapacity: layout.pallets,
+      palletsCapacity: info.palletsCapacity,
       shipments: cargo?.shipments || [],
-    };
-  });
+    });
+  }
+  return assignments;
 }
 
 function getZoneStats(assignments: VoyageTempAssignment[]) {
@@ -185,19 +188,24 @@ export default async function VesselDetailPage({
   let assignments: VoyageTempAssignment[] = [];
   let selectedPlan: any = null;
 
+  const temperatureZones = (vessel as any).temperatureZones ?? [];
+
   if (selectedVoyageId) {
     const plansResult = await getStowagePlansByVoyage(selectedVoyageId);
     if (plansResult.success && plansResult.data.length > 0) {
       selectedPlan = plansResult.data[0]; // Use most recent plan
-      assignments = buildTempAssignments(selectedPlan);
+      assignments = buildTempAssignments(selectedPlan, temperatureZones);
     }
     // else: voyage selected but no plan — assignments stays []
   }
 
+  // Build vessel layout for data-driven SVG rendering
+  const vesselLayout: VesselLayout = buildVesselLayout(temperatureZones);
+
   // When no plan data is available, show the vessel's own compartment structure
   // (correct layout, zero cargo, no temperature colors) instead of falling back
   // to the hardcoded ACON-062026 mock data inside VesselProfile.
-  const profileAssignments = assignments.length > 0 ? assignments : buildEmptyAssignments();
+  const profileAssignments = assignments.length > 0 ? assignments : buildEmptyAssignments(temperatureZones);
 
   // Compute stats — use profileAssignments for capacity so the vessel's total
   // capacity is always displayed, even when no voyage/plan is selected.
@@ -208,15 +216,13 @@ export default async function VesselDetailPage({
   // Build zone configs for the Configure Zones modal
   // Aggregates cargo info per zone from profileAssignments (cargoType + palletsLoaded)
   const zoneConfigs: ZoneConfig[] = zoneStats.map((z) => {
-    // Find the matching cooling section entry from the plan for compartmentIds
-    const sectionId = z.zoneId.replace('ZONE_', ''); // 'ZONE_1AB' → '1AB'
     const coolSection = selectedPlan?.coolingSectionStatus?.find(
-      (cs: any) => cs.sectionId === sectionId
+      (cs: any) => cs.zoneId === z.zoneId
     );
     return {
-      sectionId,
+      zoneId: z.zoneId,
       zoneName: z.name,
-      compartmentIds: coolSection?.compartmentIds ?? z.compartments,
+      coolingSectionIds: coolSection?.coolingSectionIds ?? z.compartments,
       currentTemp: z.temp,
       assignedCargoType: z.cargoType || undefined,
       palletsLoaded: z.loaded,
@@ -238,9 +244,9 @@ export default async function VesselDetailPage({
               <span className={styles.imo}>IMO {vessel.imoNumber}</span>
             </div>
             <p className={styles.pageSubtitle}>
-              {vessel.flag} · {vessel.holds?.length ?? 4} holds ·{' '}
-              {vessel.holds?.reduce((n, h) => n + (h.compartments?.length ?? 0), 0) ?? 18} compartments ·{' '}
-              {compartmentLayouts.reduce((n, c) => n + c.pallets, 0).toLocaleString()} pallets
+              {vessel.flag} · {vesselLayout.holds.length || vessel.holds?.length || 4} holds ·{' '}
+              {vesselLayout.holds.reduce((n, h) => n + h.levels.length, 0) || 19} compartments ·{' '}
+              {profileAssignments.reduce((n, a) => n + a.palletsCapacity, 0).toLocaleString()} pallets
             </p>
           </div>
           <div className={styles.headerActions}>
@@ -269,7 +275,11 @@ export default async function VesselDetailPage({
         {/* Vessel profile SVG */}
         {/* Always pass explicit assignments so VesselProfile never falls back to ACON-062026 mock data.
             profileAssignments is either real plan data or an empty-vessel layout for this vessel. */}
-        <VesselProfile vesselName={vessel.name} tempAssignments={profileAssignments} />
+        <VesselProfile
+          vesselName={vessel.name}
+          tempAssignments={profileAssignments}
+          vesselLayout={vesselLayout}
+        />
 
         {/* Stats row */}
         <div className={styles.statsRow}>
@@ -294,7 +304,7 @@ export default async function VesselDetailPage({
           </div>
           <div className={styles.statCard}>
             <span className={styles.statLabel}>Active Zones</span>
-            <span className={styles.statValue}>{zoneStats.filter((z) => z.cargoType).length} / 8</span>
+            <span className={styles.statValue}>{zoneStats.filter((z) => z.cargoType).length} / {zoneStats.length}</span>
             <span className={styles.statSub}>temperature zones configured</span>
           </div>
           <div className={styles.statCard}>
