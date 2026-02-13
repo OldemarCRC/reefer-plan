@@ -14,6 +14,25 @@ import connectDB from '@/lib/db/connect';
 import { StowagePlanModel, VesselModel, VoyageModel } from '@/lib/db/schemas';
 import type { StowagePlan, StowagePlanStatus } from '@/types/models';
 
+// ISO week number from a date (1–53)
+function getISOWeek(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+}
+
+// WK14-ACONCAGUA_BAY-ACON-062026-0001
+async function generatePlanNumber(voyageNumber: string, vesselName: string, departureDate?: Date): Promise<string> {
+  const week = departureDate ? getISOWeek(departureDate) : getISOWeek(new Date());
+  const wk = `WK${String(week).padStart(2, '0')}`;
+  const vessel = vesselName.toUpperCase().replace(/\s+/g, '_');
+  const count = await StowagePlanModel.countDocuments({ voyageNumber });
+  const seq = String(count + 1).padStart(4, '0');
+  return `${wk}-${vessel}-${voyageNumber}-${seq}`;
+}
+
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
 // ----------------------------------------------------------------------------
@@ -61,11 +80,6 @@ export async function createStowagePlan(data: unknown) {
     
     await connectDB();
     
-    // Generate plan number
-    const year = new Date().getFullYear();
-    const count = await StowagePlanModel.countDocuments();
-    const planNumber = `SP-${year}-${String(count + 1).padStart(4, '0')}`;
-    
     // Get vessel to initialize cooling sections
     const vessel = await VesselModel.findById(validated.vesselId);
     if (!vessel) {
@@ -80,9 +94,15 @@ export async function createStowagePlan(data: unknown) {
         )
       : 0;
     
-    const initialStatus: StowagePlanStatus = 
+    const initialStatus: StowagePlanStatus =
       daysUntilDeparture >= 28 ? 'ESTIMATED' : 'DRAFT';
-    
+
+    const planNumber = await generatePlanNumber(
+      (validated as any).voyageNumber ?? '',
+      vessel.name,
+      validated.estimatedDepartureDate,
+    );
+
     const plan = await StowagePlanModel.create({
       planNumber,
       vesselId: validated.vesselId,
@@ -90,9 +110,9 @@ export async function createStowagePlan(data: unknown) {
       status: initialStatus,
       palletPositions: [],
       containerPositions: [],
-      coolingSectionStatus: vessel.coolingSections.map(cs => ({
-        sectionId: cs.sectionId,
-        compartmentIds: cs.compartmentIds,
+      coolingSectionStatus: vessel.temperatureZones.map(cs => ({
+        zoneId: cs.zoneId,
+        coolingSectionIds: cs.coolingSections.map((s: any) => s.sectionId),
         assignedTemperature: undefined,
         locked: false,
         assignedCargo: [],
@@ -148,13 +168,14 @@ export async function createStowagePlanFromWizard(data: unknown) {
       return { success: false, error: 'Vessel not found' };
     }
 
-    // Generate plan number
-    const year = new Date().getFullYear();
-    const count = await StowagePlanModel.countDocuments();
-    const planNumber = `SP-${year}-${String(count + 1).padStart(4, '0')}`;
+    const planNumber = await generatePlanNumber(
+      voyage.voyageNumber,
+      vessel.name,
+      (voyage as any).departureDate,
+    );
 
     // Compartment map is fixed per vessel type.
-    // vessel.coolingSections is not reliably seeded, so we build directly
+    // vessel.temperatureZones is not reliably seeded, so we build directly
     // from the wizard input using the known ACONCAGUA BAY zone layout.
     const SECTION_COMPARTMENTS: Record<string, string[]> = {
       '1AB':    ['1A', '1B'],
@@ -167,22 +188,24 @@ export async function createStowagePlanFromWizard(data: unknown) {
       '4CD':    ['4C', '4D'],
     };
 
-    // Fall back to vessel.coolingSections if available (future vessels),
+    // Fall back to vessel.temperatureZones if available (future vessels),
     // otherwise use wizard input directly with the hardcoded compartment map.
-    const vesselSections = vessel.coolingSections && vessel.coolingSections.length > 0
-      ? vessel.coolingSections
+    const vesselSections = vessel.temperatureZones && vessel.temperatureZones.length > 0
+      ? vessel.temperatureZones
       : validated.coolingSectionTemps.map(t => ({
-          sectionId: t.coolingSectionId,
-          compartmentIds: SECTION_COMPARTMENTS[t.coolingSectionId] ?? [],
+          zoneId: t.coolingSectionId,
+          coolingSections: (SECTION_COMPARTMENTS[t.coolingSectionId] ?? []).map((id: string) => ({
+            sectionId: id, sqm: 0, designStowageFactor: 1.32,
+          })),
         }));
 
     const coolingSectionStatus = vesselSections.map((cs: any) => {
       const tempInput = validated.coolingSectionTemps.find(
-        t => t.coolingSectionId === cs.sectionId
+        t => t.coolingSectionId === cs.zoneId
       );
       return {
-        sectionId: cs.sectionId,
-        compartmentIds: cs.compartmentIds,
+        zoneId: cs.zoneId,
+        coolingSectionIds: cs.coolingSections.map((s: any) => s.sectionId),
         assignedTemperature: tempInput?.targetTemp ?? 13,
         locked: false,
       };
@@ -246,22 +269,22 @@ export async function assignCargoToCompartment(data: unknown) {
     }
     
     // CRITICAL: Find cooling section for this compartment
-    const coolingSection = vessel.coolingSections.find(cs =>
-      cs.compartmentIds.includes(validated.compartmentId)
+    const coolingSection = vessel.temperatureZones.find(cs =>
+      cs.coolingSections.some((s: any) => s.sectionId === validated.compartmentId)
     );
-    
+
     if (!coolingSection) {
       return {
         success: false,
         error: 'Compartment not found in any cooling section',
       };
     }
-    
+
     // CRITICAL: Validate temperature compatibility
     const sectionStatus = plan.coolingSectionStatus?.find(
-      cs => cs.sectionId === coolingSection.sectionId
+      cs => cs.zoneId === coolingSection.zoneId
     );
-    
+
     if (sectionStatus) {
       // If section already has assigned temperature
       if (
@@ -270,15 +293,15 @@ export async function assignCargoToCompartment(data: unknown) {
       ) {
         return {
           success: false,
-          error: `Temperature conflict: Cooling section ${coolingSection.sectionId} is already set to ${sectionStatus.assignedTemperature}°C. All compartments in this section must share the same temperature. Compartments in this section: ${coolingSection.compartmentIds.join(', ')}`,
+          error: `Temperature conflict: Cooling section ${coolingSection.zoneId} is already set to ${sectionStatus.assignedTemperature}°C. All compartments in this section must share the same temperature. Compartments in this section: ${coolingSection.coolingSections.map((s: any) => s.sectionId).join(', ')}`,
         };
       }
-      
+
       // If section is locked
       if (sectionStatus.locked) {
         return {
           success: false,
-          error: `Cooling section ${coolingSection.sectionId} is locked and cannot be modified`,
+          error: `Cooling section ${coolingSection.zoneId} is locked and cannot be modified`,
         };
       }
       
@@ -421,13 +444,13 @@ export async function validateCoolingSections(planId: unknown) {
     const conflicts: string[] = [];
     
     // Check each cooling section
-    for (const coolingSection of vessel.coolingSections) {
+    for (const coolingSection of vessel.temperatureZones) {
       const compartmentsInSection = plan.palletPositions.filter(pos =>
-        coolingSection.compartmentIds.includes(pos.compartment.id)
+        coolingSection.coolingSections.some((s: any) => s.sectionId === pos.compartment.id)
       );
-      
+
       if (compartmentsInSection.length === 0) continue;
-      
+
       // Get unique temperatures in this section
       const temperatures = new Set(
         compartmentsInSection.map(pos => {
@@ -435,10 +458,10 @@ export async function validateCoolingSections(planId: unknown) {
           return 0; // Placeholder
         })
       );
-      
+
       if (temperatures.size > 1) {
         conflicts.push(
-          `Cooling section ${coolingSection.sectionId} has multiple temperatures: ${Array.from(temperatures).join(', ')}°C`
+          `Cooling section ${coolingSection.zoneId} has multiple temperatures: ${Array.from(temperatures).join(', ')}°C`
         );
       }
     }
@@ -603,7 +626,7 @@ export async function updatePlanStatus(
 const UpdateZoneTemperaturesSchema = z.object({
   planId: z.string().min(1),
   updates: z.array(z.object({
-    sectionId: z.string().min(1),
+    zoneId: z.string().min(1),
     newTemp: z.number().min(-25).max(15),
   })).min(1),
   reason: z.string().optional(),
@@ -626,15 +649,15 @@ export async function updateZoneTemperatures(data: unknown) {
 
     // Determine what actually changed
     const changes: Array<{
-      sectionId: string;
-      compartmentIds: string[];
+      zoneId: string;
+      coolingSectionIds: string[];
       fromTemp: number;
       toTemp: number;
     }> = [];
 
     for (const update of validated.updates) {
       const section = plan.coolingSectionStatus.find(
-        (cs: any) => cs.sectionId === update.sectionId
+        (cs: any) => cs.zoneId === update.zoneId
       );
       if (!section) continue;
 
@@ -642,8 +665,8 @@ export async function updateZoneTemperatures(data: unknown) {
       if (fromTemp === update.newTemp) continue; // no change
 
       changes.push({
-        sectionId: update.sectionId,
-        compartmentIds: Array.from(section.compartmentIds ?? []),
+        zoneId: update.zoneId,
+        coolingSectionIds: Array.from(section.coolingSectionIds ?? []),
         fromTemp,
         toTemp: update.newTemp,
       });
@@ -660,7 +683,7 @@ export async function updateZoneTemperatures(data: unknown) {
     }
 
     // Collect affected booking/shipment IDs from cargoPositions in changed compartments
-    const changedCompartments = new Set(changes.flatMap(c => c.compartmentIds));
+    const changedCompartments = new Set(changes.flatMap(c => c.coolingSectionIds));
     const affectedBookings = new Set<string>();
 
     for (const pos of plan.cargoPositions ?? []) {

@@ -7,22 +7,32 @@ import styles from './ConfigureZonesModal.module.css';
 // Acceptable temperature ranges per cargo type (industry operational standards)
 const CARGO_TEMP_RANGES: Record<string, { min: number; max: number; label: string }> = {
   BANANAS:           { min: 12,   max: 14,   label: 'Banana' },
+  ORGANIC_BANANAS:   { min: 12,   max: 14,   label: 'Organic banana' },
+  PLANTAINS:         { min: 12,   max: 14,   label: 'Plantain' },
   PINEAPPLES:        { min: 7,    max: 10,   label: 'Pineapple' },
   AVOCADOS:          { min: 5,    max: 8,    label: 'Avocado' },
+  MANGOES:           { min: 10,   max: 13,   label: 'Mango' },
+  PAPAYA:            { min: 10,   max: 13,   label: 'Papaya' },
   CITRUS:            { min: 4,    max: 10,   label: 'Citrus' },
   TABLE_GRAPES:      { min: -0.5, max: 0.5,  label: 'Table grapes' },
+  CHERRIES:          { min: -1,   max: 1,    label: 'Cherries' },
+  BLUEBERRIES:       { min: 0,    max: 2,    label: 'Blueberries' },
   BERRIES:           { min: 0,    max: 2,    label: 'Berries' },
   KIWIS:             { min: 0,    max: 2,    label: 'Kiwis' },
+  PLUMS:             { min: -0.5, max: 2,    label: 'Plums' },
+  PEACHES:           { min: -0.5, max: 2,    label: 'Peaches' },
+  APPLES:            { min: -1,   max: 4,    label: 'Apples' },
+  PEARS:             { min: -1,   max: 4,    label: 'Pears' },
   FROZEN_FISH:       { min: -25,  max: -18,  label: 'Frozen fish' },
   OTHER_FROZEN:      { min: -25,  max: -18,  label: 'Frozen cargo' },
   OTHER_CHILLED:     { min: -1,   max: 15,   label: 'Chilled cargo' },
 };
 
 export interface ZoneConfig {
-  sectionId: string;        // '1AB'
-  zoneName: string;         // 'Hold 1 A|B'
-  compartmentIds: string[]; // ['1A', '1B']
-  currentTemp: number;      // 13
+  zoneId: string;             // '1AB'
+  zoneName: string;           // 'Hold 1 A|B'
+  coolingSectionIds: string[]; // ['1A', '1B']
+  currentTemp: number;        // 13
   assignedCargoType?: string;
   palletsLoaded: number;
 }
@@ -99,7 +109,7 @@ export default function ConfigureZonesModal({
     if (isOpen) {
       const initial: Record<string, number> = {};
       for (const z of zones) {
-        initial[z.sectionId] = z.currentTemp;
+        initial[z.zoneId] = z.currentTemp;
       }
       setDraftTemps(initial);
       setReason('');
@@ -113,7 +123,7 @@ export default function ConfigureZonesModal({
   // Zones where the new temp conflicts with assigned cargo
   const conflictingZones = zones.filter((z) => {
     const status = getTempStatus(
-      draftTemps[z.sectionId] ?? z.currentTemp,
+      draftTemps[z.zoneId] ?? z.currentTemp,
       z.assignedCargoType,
       z.palletsLoaded
     );
@@ -122,13 +132,13 @@ export default function ConfigureZonesModal({
 
   // Zones where something actually changed
   const changedZones = zones.filter(
-    (z) => (draftTemps[z.sectionId] ?? z.currentTemp) !== z.currentTemp
+    (z) => (draftTemps[z.zoneId] ?? z.currentTemp) !== z.currentTemp
   );
 
-  function handleTempChange(sectionId: string, raw: string) {
+  function handleTempChange(zoneId: string, raw: string) {
     const val = parseFloat(raw);
     if (!isNaN(val)) {
-      setDraftTemps((prev) => ({ ...prev, [sectionId]: val }));
+      setDraftTemps((prev) => ({ ...prev, [zoneId]: val }));
     } else if (raw === '' || raw === '-') {
       // allow partial typing — keep previous
     }
@@ -152,8 +162,8 @@ export default function ConfigureZonesModal({
     setSaveError(null);
     try {
       const updates = changedZones.map((z) => ({
-        sectionId: z.sectionId,
-        newTemp: draftTemps[z.sectionId] ?? z.currentTemp,
+        zoneId: z.zoneId,
+        newTemp: draftTemps[z.zoneId] ?? z.currentTemp,
       }));
 
       const result = await updateZoneTemperatures({
@@ -205,15 +215,15 @@ export default function ConfigureZonesModal({
                 </thead>
                 <tbody>
                   {zones.map((z) => {
-                    const newTemp = draftTemps[z.sectionId] ?? z.currentTemp;
+                    const newTemp = draftTemps[z.zoneId] ?? z.currentTemp;
                     const status = getTempStatus(newTemp, z.assignedCargoType, z.palletsLoaded);
                     const changed = newTemp !== z.currentTemp;
                     return (
-                      <tr key={z.sectionId} className={changed ? styles.rowChanged : undefined}>
+                      <tr key={z.zoneId} className={changed ? styles.rowChanged : undefined}>
                         <td>
                           <span className={styles.zoneName}>{z.zoneName}</span>
                         </td>
-                        <td className={styles.cellMono}>{z.compartmentIds.join(', ')}</td>
+                        <td className={styles.cellMono}>{z.coolingSectionIds.join(', ')}</td>
                         <td className={styles.cellTemp}>{formatTemp(z.currentTemp)}</td>
                         <td>
                           <input
@@ -226,7 +236,7 @@ export default function ConfigureZonesModal({
                             max={15}
                             step={1}
                             value={newTemp}
-                            onChange={(e) => handleTempChange(z.sectionId, e.target.value)}
+                            onChange={(e) => handleTempChange(z.zoneId, e.target.value)}
                           />
                         </td>
                         <td>
@@ -287,10 +297,10 @@ export default function ConfigureZonesModal({
 
             <div className={styles.conflictList}>
               {conflictingZones.map((z) => {
-                const newTemp = draftTemps[z.sectionId] ?? z.currentTemp;
+                const newTemp = draftTemps[z.zoneId] ?? z.currentTemp;
                 const range = z.assignedCargoType ? CARGO_TEMP_RANGES[z.assignedCargoType] : null;
                 return (
-                  <div key={z.sectionId} className={styles.conflictRow}>
+                  <div key={z.zoneId} className={styles.conflictRow}>
                     <span className={styles.conflictZone}>{z.zoneName}</span>
                     <span className={styles.conflictChange}>
                       {formatTemp(z.currentTemp)} → {formatTemp(newTemp)}

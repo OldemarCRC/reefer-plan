@@ -156,15 +156,15 @@ export async function getVesselCoolingSections(vesselId: unknown) {
     await connectDB();
     
     const vessel = await VesselModel.findById(id)
-      .select('coolingSections maxTemperatureZones')
+      .select('temperatureZones maxTemperatureZones')
       .lean();
-    
+
     if (!vessel) {
       throw new Error('Vessel not found');
     }
-    
+
     return JSON.parse(JSON.stringify({
-      coolingSections: vessel.coolingSections,
+      temperatureZones: vessel.temperatureZones,
       maxTemperatureZones: vessel.maxTemperatureZones,
     }));
   } catch (error) {
@@ -188,21 +188,21 @@ export async function getVesselCompartments(vesselId: unknown) {
     await connectDB();
     
     const vessel = await VesselModel.findById(id)
-      .select('holds coolingSections')
+      .select('holds temperatureZones')
       .lean();
-    
+
     if (!vessel) {
       throw new Error('Vessel not found');
     }
-    
+
     // Flatten all compartments from all holds
-    const compartments = vessel.holds.flatMap(hold => 
+    const compartments = vessel.holds.flatMap(hold =>
       hold.compartments.map(comp => ({
         ...comp,
         holdNumber: hold.holdNumber,
-        coolingSectionId: vessel.coolingSections.find(cs => 
-          cs.compartmentIds.includes(comp.id)
-        )?.sectionId || null,
+        coolingSectionId: vessel.temperatureZones.find(cs =>
+          cs.coolingSections.some((s: any) => s.sectionId === comp.id)
+        )?.zoneId || null,
       }))
     );
     
@@ -259,25 +259,25 @@ export async function validateCoolingSectionTemperature(
   try {
     // Validate inputs
     const id = VesselIdSchema.parse(vesselId);
-    const sectionId = z.string().parse(coolingSectionId);
+    const zoneId = z.string().parse(coolingSectionId);
     const temp = z.number().min(-30).max(20).parse(temperature);
-    
+
     await connectDB();
-    
+
     const vessel = await VesselModel.findById(id).lean();
-    
+
     if (!vessel) {
       throw new Error('Vessel not found');
     }
-    
-    const coolingSection = vessel.coolingSections.find(
-      cs => cs.sectionId === sectionId
+
+    const coolingSection = vessel.temperatureZones.find(
+      cs => cs.zoneId === zoneId
     );
-    
+
     if (!coolingSection) {
       throw new Error('Cooling section not found');
     }
-    
+
     // If section has assigned temperature and it's different, conflict
     if (
       coolingSection.currentTemperature !== undefined &&
@@ -285,15 +285,15 @@ export async function validateCoolingSectionTemperature(
     ) {
       return {
         valid: false,
-        message: `Cooling section ${sectionId} is already set to ${coolingSection.currentTemperature}°C. All compartments in this section must share the same temperature.`,
+        message: `Cooling section ${zoneId} is already set to ${coolingSection.currentTemperature}°C. All compartments in this section must share the same temperature.`,
       };
     }
-    
+
     // If section is locked, cannot change temperature
     if (coolingSection.locked) {
       return {
         valid: false,
-        message: `Cooling section ${sectionId} is locked and cannot be modified.`,
+        message: `Cooling section ${zoneId} is locked and cannot be modified.`,
       };
     }
     

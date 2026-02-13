@@ -9,8 +9,10 @@
 // CARGO TYPES
 // ----------------------------------------------------------------------------
 
-export type CargoType = 
+export type CargoType =
   | 'BANANAS'
+  | 'ORGANIC_BANANAS'
+  | 'PLANTAINS'
   | 'FROZEN_FISH'
   | 'TABLE_GRAPES'
   | 'CITRUS'
@@ -18,6 +20,14 @@ export type CargoType =
   | 'BERRIES'
   | 'KIWIS'
   | 'PINEAPPLES'
+  | 'CHERRIES'
+  | 'BLUEBERRIES'
+  | 'PLUMS'
+  | 'PEACHES'
+  | 'APPLES'
+  | 'PEARS'
+  | 'PAPAYA'
+  | 'MANGOES'
   | 'OTHER_FROZEN'
   | 'OTHER_CHILLED';
 
@@ -325,21 +335,24 @@ export interface VesselCapacity {
   totalPallets: number;
 }
 
-export interface TemperatureZone {
-  zoneId: string;
-  minTemp: number;
-  maxTemp: number;
-  color: string;
-  name: string;
+// Individual cooling section with physical specs
+export interface CoolingSectionDetail {
+  sectionId: string;              // "1A", "2UPD", "1FC", etc.
+  sqm: number;                    // floor area in sqm (from vessel spec sheet)
+  designStowageFactor: number;    // from vessel spec sheet (e.g. 1.32)
+  historicalStowageFactor?: number; // rolling average across completed voyages
+  historicalVoyageCount?: number; // # voyages in historical average
+  // maxPallets is CALCULATED: Math.floor(sqm * chosenFactor)
 }
 
-// CAMBIO #6 y #9: Cooling Sections - Específicas por barco
+// CoolingSection = one temperature zone entry on the Vessel document.
+// zoneId = "1AB", "2UPDAB", etc. — a group of sections on the same refrigeration circuit
 export interface CoolingSection {
-  sectionId: string; // "1AB", "1CD", "2UPDAB", etc.
-  compartmentIds: string[]; // Compartimentos que comparten temperatura
+  zoneId: string;                 // "1AB", "1CD", "2UPDAB", etc.
+  coolingSections: CoolingSectionDetail[]; // nested per-section physical specs
   assignedTemperatureZone?: string;
   currentTemperature?: number;
-  locked: boolean; // Si está asignada, no se puede cambiar fácilmente
+  locked: boolean;
 }
 
 export interface Compartment {
@@ -406,11 +419,10 @@ export interface Vessel {
   dimensions: VesselDimensions;
   capacity: VesselCapacity;
   holds: Hold[];
-  temperatureZones: TemperatureZone[];
-  
-  // CAMBIO #6 y #9: Cooling sections específicas de este barco
-  coolingSections: CoolingSection[];
-  maxTemperatureZones: number; // = coolingSections.length
+  // temperatureZones: one entry per temperature zone (e.g. "1AB", "2UPDAB")
+  // Each zone groups the individual cooling sections that share a refrigeration circuit.
+  temperatureZones: CoolingSection[];
+  maxTemperatureZones: number; // = temperatureZones.length
   
   // CAMBIO #7: Capacidad de contenedores en cubierta
   deckContainerCapacity: {
@@ -439,8 +451,8 @@ export interface TemperatureChangelogEntry {
   changedBy: string;
   reason?: string;
   changes: Array<{
-    sectionId: string;
-    compartmentIds: string[];
+    zoneId: string;
+    coolingSectionIds: string[];
     fromTemp: number;
     toTemp: number;
   }>;
@@ -534,8 +546,8 @@ export interface StowagePlan {
   weightDistributionWarnings: string[];
 
   coolingSectionStatus?: Array<{
-    sectionId: string;
-    compartmentIds: string[];
+    zoneId: string;
+    coolingSectionIds: string[];
     assignedTemperature?: number;
     locked: boolean;
   }>;

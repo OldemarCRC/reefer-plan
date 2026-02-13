@@ -282,9 +282,20 @@ const PositionSchema = new Schema({
   vcg: { type: Number, required: true },
 }, { _id: false });
 
+// Individual cooling section with physical specs (floor area, stowage factors)
+const CoolingSectionDetailSchema = new Schema({
+  sectionId: { type: String, required: true },       // "1A", "2UPD", "1FC"
+  sqm: { type: Number, required: true },             // floor area in sqm (from vessel spec sheet)
+  designStowageFactor: { type: Number, required: true, default: 1.32 }, // from spec sheet
+  historicalStowageFactor: { type: Number },         // rolling average across completed voyages
+  historicalVoyageCount: { type: Number, default: 0 }, // # voyages in historical average
+  // maxPallets is CALCULATED (not stored): Math.floor(sqm * chosenFactor)
+}, { _id: false });
+
+// Temperature zone = group of cooling sections on the same refrigeration circuit
 const CoolingSectionSchema = new Schema({
-  sectionId: { type: String, required: true },
-  compartmentIds: [{ type: String }],
+  zoneId: { type: String, required: true },          // "1AB", "2UPDAB", etc.
+  coolingSections: [CoolingSectionDetailSchema],     // nested per-section specs
   temperatureRange: {
     min: { type: Number },
     max: { type: Number },
@@ -326,14 +337,6 @@ const HoldSchema = new Schema({
   totalCapacitySqm: { type: Number },
 }, { _id: false });
 
-const TemperatureZoneSchema = new Schema({
-  zoneId: { type: String, required: true },
-  minTemp: { type: Number },
-  maxTemp: { type: Number },
-  color: { type: String },
-  name: { type: String },
-}, { _id: false });
-
 const VesselSchema = new Schema<Vessel>({
   name: { type: String, required: true, unique: true },
   imoNumber: { type: String, required: true, unique: true },
@@ -362,8 +365,7 @@ const VesselSchema = new Schema<Vessel>({
     totalPallets: { type: Number },
   },
   holds: [HoldSchema],
-  temperatureZones: [TemperatureZoneSchema],
-  coolingSections: [CoolingSectionSchema],
+  temperatureZones: [CoolingSectionSchema],
   maxTemperatureZones: { type: Number },
   deckContainerCapacity: {
     maxReeferPlugs: { type: Number },
@@ -487,8 +489,8 @@ const StowagePlanSchema = new Schema<StowagePlan>({
   }],
   weightDistributionWarnings: [{ type: String }],
   coolingSectionStatus: [{
-    sectionId: { type: String, required: true },
-    compartmentIds: [{ type: String }],
+    zoneId: { type: String, required: true },
+    coolingSectionIds: [{ type: String }],
     assignedTemperature: { type: Number },
     locked: { type: Boolean, default: false },
   }],
@@ -497,8 +499,8 @@ const StowagePlanSchema = new Schema<StowagePlan>({
     changedBy: { type: String, required: true },
     reason: { type: String },
     changes: [{
-      sectionId: { type: String, required: true },
-      compartmentIds: [{ type: String }],
+      zoneId: { type: String, required: true },
+      coolingSectionIds: [{ type: String }],
       fromTemp: { type: Number, required: true },
       toTemp: { type: Number, required: true },
       _id: false,

@@ -27,19 +27,19 @@ interface Props {
   initialVoyageId: string | null;
 }
 
-const coolingSections = [
-  { sectionId: '1AB', compartmentIds: ['1A', '1B'], hold: 1 },
-  { sectionId: '1CD', compartmentIds: ['1C', '1D'], hold: 1 },
-  { sectionId: '2UPDAB', compartmentIds: ['2UPD', '2A', '2B'], hold: 2 },
-  { sectionId: '2CD', compartmentIds: ['2C', '2D'], hold: 2 },
-  { sectionId: '3UPDAB', compartmentIds: ['3UPD', '3A', '3B'], hold: 3 },
-  { sectionId: '3CD', compartmentIds: ['3C', '3D'], hold: 3 },
-  { sectionId: '4UPDAB', compartmentIds: ['4UPD', '4A', '4B'], hold: 4 },
-  { sectionId: '4CD', compartmentIds: ['4C', '4D'], hold: 4 },
+const temperatureZones = [
+  { zoneId: '1AB', coolingSectionIds: ['1A', '1B'], hold: 1 },
+  { zoneId: '1CD', coolingSectionIds: ['1C', '1D'], hold: 1 },
+  { zoneId: '2UPDAB', coolingSectionIds: ['2UPD', '2A', '2B'], hold: 2 },
+  { zoneId: '2CD', coolingSectionIds: ['2C', '2D'], hold: 2 },
+  { zoneId: '3UPDAB', coolingSectionIds: ['3UPD', '3A', '3B'], hold: 3 },
+  { zoneId: '3CD', coolingSectionIds: ['3C', '3D'], hold: 3 },
+  { zoneId: '4UPDAB', coolingSectionIds: ['4UPD', '4A', '4B'], hold: 4 },
+  { zoneId: '4CD', coolingSectionIds: ['4C', '4D'], hold: 4 },
 ];
 
-const defaultAssignments = coolingSections.map(s => ({
-  coolingSectionId: s.sectionId,
+const defaultAssignments = temperatureZones.map(s => ({
+  coolingSectionId: s.zoneId,
   targetTemp: 13,
 }));
 
@@ -222,8 +222,8 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
               </div>
 
               {tempAssignments.map(assignment => {
-                const section = coolingSections.find(
-                  s => s.sectionId === assignment.coolingSectionId
+                const section = temperatureZones.find(
+                  s => s.zoneId === assignment.coolingSectionId
                 );
                 return (
                   <div key={assignment.coolingSectionId} className={styles.tableRow}>
@@ -231,7 +231,7 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
                       <strong>{assignment.coolingSectionId}</strong>
                     </div>
                     <div className={styles.colCompartments}>
-                      {section?.compartmentIds.join(', ')}
+                      {section?.coolingSectionIds.join(', ')}
                     </div>
                     <div className={styles.colTemp}>
                       <input
@@ -306,22 +306,22 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
                 {[1, 2, 3, 4].map(holdNum => (
                   <div key={holdNum} className={styles.holdColumn}>
                     <div className={styles.holdLabel}>Hold {holdNum}</div>
-                    {coolingSections
+                    {temperatureZones
                       .filter(section => section.hold === holdNum)
                       .map(section => {
                         const assignment = tempAssignments.find(
-                          a => a.coolingSectionId === section.sectionId
+                          a => a.coolingSectionId === section.zoneId
                         );
                         const temp = assignment?.targetTemp ?? 13;
                         const color = tempToColor(temp);
                         return (
                           <div
-                            key={section.sectionId}
+                            key={section.zoneId}
                             className={styles.sectionCard}
                             style={{ borderColor: color }}
                           >
                             <div className={styles.sectionHeader}>
-                              <span className={styles.sectionName}>{section.sectionId}</span>
+                              <span className={styles.sectionName}>{section.zoneId}</span>
                               <span className={styles.sectionTemp}>
                                 {temp > 0 ? '+' : ''}
                                 {temp}°C
@@ -332,7 +332,7 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
                               style={{ backgroundColor: color }}
                             />
                             <div className={styles.compartments}>
-                              {section.compartmentIds.join(', ')}
+                              {section.coolingSectionIds.join(', ')}
                             </div>
                           </div>
                         );

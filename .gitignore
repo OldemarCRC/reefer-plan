@@ -48,3 +48,5 @@ lib/db/data/
 
 # Documentación local (no para repositorio)
 PROJECT_STATUS.md
+prompt.md
+vessels.csv

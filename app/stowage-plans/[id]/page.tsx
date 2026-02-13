@@ -76,10 +76,10 @@ export default function StowagePlanDetailPage() {
         if (Array.isArray(p.coolingSectionStatus) && p.coolingSectionStatus.length > 0) {
           setTempZoneConfig(
             p.coolingSectionStatus.map((cs: any) => ({
-              sectionId: cs.sectionId,
-              zoneId: `ZONE_${cs.sectionId}`,
+              sectionId: cs.zoneId,
+              zoneId: `ZONE_${cs.zoneId}`,
               temp: cs.assignedTemperature ?? 13,
-              compartments: cs.compartmentIds ?? [],
+              compartments: cs.coolingSectionIds ?? [],
             }))
           );
         }
@@ -87,48 +87,7 @@ export default function StowagePlanDetailPage() {
     });
   }, [planId]);
 
-  const [shipments, setShipments] = useState<CargoInPlan[]>([
-    {
-      shipmentId: '1',
-      shipmentNumber: 'SHP-001',
-      cargoType: 'BANANAS',
-      totalQuantity: 900,
-      pol: 'CLVAP',
-      pod: 'NLRTM',
-      consignee: 'FYFFES',
-      assignments: [{ compartmentId: '2A', quantity: 500 }],
-    },
-    {
-      shipmentId: '2',
-      shipmentNumber: 'SHP-002',
-      cargoType: 'BANANAS',
-      totalQuantity: 750,
-      pol: 'CLVAP',
-      pod: 'NLRTM',
-      consignee: 'COBANA',
-      assignments: [{ compartmentId: '3B', quantity: 750 }],
-    },
-    {
-      shipmentId: '3',
-      shipmentNumber: 'SHP-003',
-      cargoType: 'TABLE_GRAPES',
-      totalQuantity: 600,
-      pol: 'CLVAP',
-      pod: 'NLRTM',
-      consignee: 'Del Monte',
-      assignments: [],
-    },
-    {
-      shipmentId: '4',
-      shipmentNumber: 'SHP-004',
-      cargoType: 'AVOCADOS',
-      totalQuantity: 400,
-      pol: 'COSMA',
-      pod: 'NLRTM',
-      consignee: 'FYFFES',
-      assignments: [],
-    },
-  ]);
+  const [shipments, setShipments] = useState<CargoInPlan[]>([]);
 
 
   // Required temperature range per cargo type (shared by validation + auto-stow)
@@ -947,11 +906,11 @@ export default function StowagePlanDetailPage() {
         }
 
         const zoneConfigs: ZoneConfig[] = tempZoneConfig.map((zone) => ({
-          sectionId: zone.sectionId,
+          zoneId: zone.sectionId,
           zoneName: zone.sectionId.replace(/(\d+)(UPD)?([A-Z]+)/, (_, hold, upd, levels) =>
             `Hold ${hold}${upd ? ' UPD|' : ' '}${levels.split('').join('|')}`
           ),
-          compartmentIds: zone.compartments,
+          coolingSectionIds: zone.compartments,
           currentTemp: zone.temp,
           assignedCargoType: cargoByZone[zone.sectionId]?.cargoType || undefined,
           palletsLoaded: cargoByZone[zone.sectionId]?.palletsLoaded ?? 0,
@@ -968,10 +927,10 @@ export default function StowagePlanDetailPage() {
               if (Array.isArray(updatedSections) && updatedSections.length > 0) {
                 setTempZoneConfig(
                   updatedSections.map((cs: any) => ({
-                    sectionId: cs.sectionId,
-                    zoneId: `ZONE_${cs.sectionId}`,
+                    sectionId: cs.zoneId,
+                    zoneId: `ZONE_${cs.zoneId}`,
                     temp: cs.assignedTemperature ?? 13,
-                    compartments: cs.compartmentIds ?? [],
+                    compartments: cs.coolingSectionIds ?? [],
                   }))
                 );
               }
