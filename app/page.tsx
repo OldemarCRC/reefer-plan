@@ -128,7 +128,7 @@ export default async function DashboardPage() {
   };
 
   return (
-    <AppShell activeVessel="ACONCAGUA BAY" activeVoyage="ACON-062026">
+    <AppShell>
       <div className={styles.dashboard}>
         {/* Header */}
         <div className={styles.pageHeader}>
