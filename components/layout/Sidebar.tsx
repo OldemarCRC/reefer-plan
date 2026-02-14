@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation';
 import styles from './Sidebar.module.css';
 import { getPortWeather } from '@/app/actions/weather';
 import { getFleetStatus } from '@/app/actions/voyage';
+// getServicePortsForWeather is kept for future use when user auth is available
+// import { getServicePortsForWeather } from '@/app/actions/service';
 
 // --- SVG Icons (inline, no dependencies) ---
 
@@ -61,6 +63,19 @@ const icons = {
   ),
 };
 
+// --- Static port list for sidebar weather widget ---
+// Curated to the 6 key service ports. Dynamic DB loading caused overflow (14 ports).
+// Replace with getServicePortsForWeather() once user auth filters by office/service.
+
+const SIDEBAR_PORTS = [
+  { code: 'CLVAP', label: 'Valparaíso', flag: '🇨🇱', city: 'Valparaíso', country: 'CL' },
+  { code: 'ECGYE', label: 'Guayaquil',  flag: '🇪🇨', city: 'Guayaquil',  country: 'EC' },
+  { code: 'USILG', label: 'Wilmington', flag: '🇺🇸', city: 'Wilmington', country: 'US' },
+  { code: 'COSMR', label: 'Santa Marta',flag: '🇨🇴', city: 'Santa Marta',country: 'CO' },
+  { code: 'NLVLI', label: 'Flushing',   flag: '🇳🇱', city: 'Flushing',   country: 'NL' },
+  { code: 'GBPME', label: 'Portsmouth', flag: '🇬🇧', city: 'Portsmouth', country: 'GB' },
+];
+
 // --- Navigation items ---
 
 interface NavItem {
@@ -79,14 +94,6 @@ const navItems: NavItem[] = [
   { id: 'stowage-plans', label: 'Stowage Plans', href: '/stowage-plans', icon: 'stowagePlan' },
 ];
 
-// --- Service ports shown in the temperature widget (rotation order) ---
-
-const SERVICE_PORTS = [
-  { code: 'CLVAP', label: 'Valparaíso', city: 'Valparaiso', country: 'CL', flag: '🇨🇱' },
-  { code: 'COSMA', label: 'San Antonio', city: 'San Antonio', country: 'CR', flag: '🇨🇷' },
-  { code: 'ITMIL', label: 'Milan',       city: 'Milan',       country: 'IT', flag: '🇮🇹' },
-  { code: 'NLRTM', label: 'Rotterdam',   city: 'Rotterdam',   country: 'NL', flag: '🇳🇱' },
-];
 
 function tempClass(temp: number): string {
   if (temp >= 35) return styles.tempHot;
@@ -121,9 +128,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const [fleet, setFleet] = useState<FleetStatus | null>(null);
 
   useEffect(() => {
-    // Fetch all port temps in parallel
+    // Fetch weather for each static port in parallel
     Promise.all(
-      SERVICE_PORTS.map(async (p) => {
+      SIDEBAR_PORTS.map(async (p) => {
         const temp = await getPortWeather(p.city, p.country);
         return { code: p.code, label: p.label, flag: p.flag, temp };
       })

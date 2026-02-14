@@ -249,6 +249,57 @@ export async function getServices() {
 }
 
 // ----------------------------------------------------------------------------
+// GET SERVICE PORTS FOR WEATHER WIDGET
+// Returns all unique ports from active services, deduped by portCode.
+// Used by the sidebar Port Temperatures widget.
+// Future: filter by user's office/service when auth is implemented.
+// ----------------------------------------------------------------------------
+
+function countryCodeToFlag(countryCode: string): string {
+  // Convert ISO 3166-1 alpha-2 code to flag emoji using regional indicator symbols
+  return countryCode
+    .toUpperCase()
+    .split('')
+    .map((c) => String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65))
+    .join('');
+}
+
+export interface ServicePortInfo {
+  portCode: string;
+  portName: string;  // used as city for weather lookup
+  country: string;   // ISO 2-letter code
+  flag: string;      // flag emoji
+}
+
+export async function getServicePortsForWeather(): Promise<ServicePortInfo[]> {
+  try {
+    await connectDB();
+    const services = await ServiceModel.find({ active: true }).lean();
+
+    const seen = new Set<string>();
+    const ports: ServicePortInfo[] = [];
+
+    for (const service of services) {
+      for (const port of (service as any).portRotation ?? []) {
+        if (seen.has(port.portCode)) continue;
+        seen.add(port.portCode);
+        ports.push({
+          portCode: port.portCode,
+          portName: port.portName,
+          country: port.country,
+          flag: countryCodeToFlag(port.country),
+        });
+      }
+    }
+
+    return ports;
+  } catch (error) {
+    console.error('Error fetching service ports:', error);
+    return [];
+  }
+}
+
+// ----------------------------------------------------------------------------
 // GET ACTIVE SERVICES
 // Returns only active services
 // ----------------------------------------------------------------------------
