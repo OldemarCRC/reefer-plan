@@ -24,8 +24,15 @@ function getISOWeek(date: Date): number {
 }
 
 // WK14-ACONCAGUA_BAY-ACON-062026-0001
-async function generatePlanNumber(voyageNumber: string, vesselName: string, departureDate?: Date): Promise<string> {
-  const week = departureDate ? getISOWeek(departureDate) : getISOWeek(new Date());
+// weekNumber takes priority over departureDate. Falls back to ISO week from
+// departureDate for old voyages that predate the weekNumber field.
+async function generatePlanNumber(
+  voyageNumber: string,
+  vesselName: string,
+  weekNumber?: number,
+  departureDate?: Date,
+): Promise<string> {
+  const week = weekNumber ?? (departureDate ? getISOWeek(departureDate) : getISOWeek(new Date()));
   const wk = `WK${String(week).padStart(2, '0')}`;
   const vessel = vesselName.toUpperCase().replace(/\s+/g, '_');
   const count = await StowagePlanModel.countDocuments({ voyageNumber });
@@ -85,21 +92,27 @@ export async function createStowagePlan(data: unknown) {
     if (!vessel) {
       return { success: false, error: 'Vessel not found' };
     }
-    
+
+    // Fetch voyage to get weekNumber and voyageNumber
+    const voyage = await VoyageModel.findById(validated.voyageId).lean();
+    const voyageNumber = (voyage as any)?.voyageNumber ?? (validated as any).voyageNumber ?? '';
+    const voyageWeekNumber: number | undefined = (voyage as any)?.weekNumber ?? undefined;
+
     // Determine initial status based on departure date
     const daysUntilDeparture = validated.estimatedDepartureDate
       ? Math.ceil(
-          (validated.estimatedDepartureDate.getTime() - Date.now()) / 
+          (validated.estimatedDepartureDate.getTime() - Date.now()) /
           (1000 * 60 * 60 * 24)
         )
       : 0;
-    
+
     const initialStatus: StowagePlanStatus =
       daysUntilDeparture >= 28 ? 'ESTIMATED' : 'DRAFT';
 
     const planNumber = await generatePlanNumber(
-      (validated as any).voyageNumber ?? '',
+      voyageNumber,
       vessel.name,
+      voyageWeekNumber,
       validated.estimatedDepartureDate,
     );
 
@@ -171,6 +184,7 @@ export async function createStowagePlanFromWizard(data: unknown) {
     const planNumber = await generatePlanNumber(
       voyage.voyageNumber,
       vessel.name,
+      (voyage as any).weekNumber ?? undefined,
       (voyage as any).departureDate,
     );
 

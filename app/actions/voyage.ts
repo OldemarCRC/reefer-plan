@@ -62,6 +62,7 @@ const WizardPortCallSchema = z.object({
 
 const CreateVoyageFromWizardSchema = z.object({
   voyageNumber: z.string().regex(/^[A-Z0-9-]+$/, 'Voyage number must be uppercase alphanumeric with hyphens'),
+  weekNumber: z.number().int().min(1).max(53).optional(),
   serviceId: z.string().min(1),
   vesselId: z.string().min(1),
   vesselName: z.string().min(1),
@@ -101,6 +102,7 @@ export async function createVoyageFromWizard(data: unknown) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const voyage: any = await VoyageModel.create({
       voyageNumber: validated.voyageNumber,
+      weekNumber: validated.weekNumber,
       serviceId: validated.serviceId,
       vesselId: validated.vesselId,
       vesselName: validated.vesselName,

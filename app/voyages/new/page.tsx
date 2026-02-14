@@ -78,6 +78,7 @@ export default function NewVoyagePage() {
   const [selectedService, setSelectedService] = useState<ServiceData | null>(null);
   const [selectedVessel, setSelectedVessel] = useState<VesselData | null>(null);
   const [voyageNumber, setVoyageNumber] = useState('');
+  const [weekNumber, setWeekNumber] = useState<number | ''>('');
   const [portSchedule, setPortSchedule] = useState<PortScheduleEntry[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -129,6 +130,7 @@ export default function NewVoyagePage() {
     try {
       const result = await createVoyageFromWizard({
         voyageNumber,
+        weekNumber: weekNumber !== '' ? weekNumber : undefined,
         serviceId: selectedService._id,
         vesselId: selectedVessel._id,
         vesselName: selectedVessel.name,
@@ -283,6 +285,19 @@ export default function NewVoyagePage() {
                     />
                   </div>
 
+                  <div className={styles.voyageNumberRow}>
+                    <label className={styles.fieldLabel}>Week Number</label>
+                    <input
+                      type="number"
+                      className={styles.voyageNumberInput}
+                      value={weekNumber}
+                      onChange={e => setWeekNumber(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                      min={1}
+                      max={53}
+                      placeholder="1–53"
+                    />
+                  </div>
+
                   <div className={styles.portTable}>
                     <div className={styles.portTableHeader}>
                       <span>Port</span>
@@ -332,6 +347,12 @@ export default function NewVoyagePage() {
                       <span className={styles.reviewLabel}>Voyage Number</span>
                       <span className={styles.reviewValue} style={{ fontFamily: "'Space Grotesk', monospace" }}>{voyageNumber}</span>
                     </div>
+                    {weekNumber !== '' && (
+                      <div className={styles.reviewItem}>
+                        <span className={styles.reviewLabel}>Week Number</span>
+                        <span className={styles.reviewValue}>WK{String(weekNumber).padStart(2, '0')}</span>
+                      </div>
+                    )}
                     <div className={styles.reviewItem}>
                       <span className={styles.reviewLabel}>Service</span>
                       <span className={styles.reviewValue}>{selectedService?.serviceCode} — {selectedService?.serviceName}</span>

@@ -72,7 +72,7 @@ const VoyageSchema = new Schema<Voyage>({
 
   // Campos opcionales (se pueden agregar después)
   serviceCode: { type: String },
-  startWeek: { type: Number, min: 1, max: 53 },
+  weekNumber: { type: Number, min: 1, max: 53 },
   year: { type: Number },
   startDate: { type: Date },
   departureDate: { type: Date },
@@ -97,7 +97,7 @@ const VoyageSchema = new Schema<Voyage>({
 VoyageSchema.index({ vesselId: 1 });
 VoyageSchema.index({ serviceId: 1 });
 VoyageSchema.index({ status: 1 });
-VoyageSchema.index({ startWeek: 1, year: 1 });
+VoyageSchema.index({ weekNumber: 1, year: 1 });
 
 // ============================================================================
 // CONTRACT SCHEMA

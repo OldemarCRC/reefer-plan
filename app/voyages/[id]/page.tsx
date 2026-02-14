@@ -94,7 +94,9 @@ export default async function VoyageDetailPage({
               <StatusBadge status={voyage.status || 'PLANNED'} />
             </div>
             <p className={styles.pageSubtitle}>
-              {vesselName} · {serviceCode} · Departure {formatDate(voyage.departureDate)}
+              {vesselName} · {serviceCode}
+              {(voyage as any).weekNumber != null && ` · WK${String((voyage as any).weekNumber).padStart(2, '0')}`}
+              {' · '}Departure {formatDate(voyage.departureDate)}
             </p>
           </div>
           <div className={styles.headerActions}>

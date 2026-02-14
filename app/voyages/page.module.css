@@ -135,6 +135,18 @@
   color: var(--color-cyan-light);
 }
 
+.weekBadge {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 4px;
+  padding: 2px 6px;
+  letter-spacing: 0.04em;
+}
+
 .voyageMeta {
   display: flex;
   align-items: center;

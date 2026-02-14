@@ -44,6 +44,7 @@ export default async function VoyagesPage() {
   const displayVoyages: DisplayVoyage[] = voyages.map((v: any) => ({
     _id: v._id,
     voyageNumber: v.voyageNumber,
+    weekNumber: v.weekNumber ?? undefined,
     status: v.status || 'PLANNED',
     vesselName: v.vesselName,
     serviceCode: v.serviceId?.serviceCode || 'N/A',

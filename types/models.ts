@@ -96,7 +96,7 @@ export interface Voyage {
   vesselName: string;
   serviceId: string;
   serviceCode: string;
-  startWeek: number;
+  weekNumber?: number;
   year: number;
   startDate: Date;
   estimatedEndDate: Date;

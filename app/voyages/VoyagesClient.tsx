@@ -52,6 +52,7 @@ export interface DisplayPortCall {
 export interface DisplayVoyage {
   _id: string;
   voyageNumber: string;
+  weekNumber?: number;
   status: string;
   vesselName: string;
   vesselImoNumber: string | null;
@@ -156,6 +157,9 @@ export default function VoyagesClient({ voyages }: VoyagesClientProps) {
               <div className={styles.voyageHeader}>
                 <div className={styles.voyageId}>
                   <span className={styles.voyageCode}>{v.voyageNumber}</span>
+                  {v.weekNumber != null && (
+                    <span className={styles.weekBadge}>WK{String(v.weekNumber).padStart(2, '0')}</span>
+                  )}
                   <StatusBadge status={v.status} />
                 </div>
                 <div className={styles.voyageMeta}>
