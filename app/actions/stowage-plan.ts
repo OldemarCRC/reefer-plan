@@ -174,30 +174,12 @@ export async function createStowagePlanFromWizard(data: unknown) {
       (voyage as any).departureDate,
     );
 
-    // Compartment map is fixed per vessel type.
-    // vessel.temperatureZones is not reliably seeded, so we build directly
-    // from the wizard input using the known ACONCAGUA BAY zone layout.
-    const SECTION_COMPARTMENTS: Record<string, string[]> = {
-      '1AB':    ['1A', '1B'],
-      '1CD':    ['1C', '1D'],
-      '2UPDAB': ['2UPD', '2A', '2B'],
-      '2CD':    ['2C', '2D'],
-      '3UPDAB': ['3UPD', '3A', '3B'],
-      '3CD':    ['3C', '3D'],
-      '4UPDAB': ['4UPD', '4A', '4B'],
-      '4CD':    ['4C', '4D'],
-    };
+    // Phase 3 seeding guarantees all vessels have temperatureZones populated.
+    if (!vessel.temperatureZones || vessel.temperatureZones.length === 0) {
+      return { success: false, error: 'Vessel has no temperature zone data. Re-seed the database.' };
+    }
 
-    // Fall back to vessel.temperatureZones if available (future vessels),
-    // otherwise use wizard input directly with the hardcoded compartment map.
-    const vesselSections = vessel.temperatureZones && vessel.temperatureZones.length > 0
-      ? vessel.temperatureZones
-      : validated.coolingSectionTemps.map(t => ({
-          zoneId: t.coolingSectionId,
-          coolingSections: (SECTION_COMPARTMENTS[t.coolingSectionId] ?? []).map((id: string) => ({
-            sectionId: id, sqm: 0, designStowageFactor: 1.32,
-          })),
-        }));
+    const vesselSections = vessel.temperatureZones;
 
     const coolingSectionStatus = vesselSections.map((cs: any) => {
       const tempInput = validated.coolingSectionTemps.find(

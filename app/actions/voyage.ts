@@ -535,6 +535,36 @@ export async function getVoyages() {
 }
 
 // ----------------------------------------------------------------------------
+// GET VOYAGES FOR STOWAGE PLAN WIZARD
+// Returns only active voyages, with vessel temperatureZones populated so the
+// wizard can render the correct zone table for each vessel type.
+// ----------------------------------------------------------------------------
+
+export async function getVoyagesForPlanWizard() {
+  try {
+    await connectDB();
+
+    const voyages = await VoyageModel.find({
+      status: { $in: ['PLANNED', 'CONFIRMED', 'IN_PROGRESS'] },
+    })
+      .populate('vesselId', 'name temperatureZones')
+      .sort({ departureDate: -1 })
+      .lean();
+
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(voyages)),
+    };
+  } catch (error) {
+    console.error('Error fetching voyages for plan wizard:', error);
+    return {
+      success: false,
+      error: 'Failed to fetch voyages',
+    };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // GET ACTIVE VOYAGES
 // Returns voyages with PLANNED or ACTIVE status
 // ----------------------------------------------------------------------------

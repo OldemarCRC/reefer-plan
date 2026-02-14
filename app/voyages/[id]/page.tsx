@@ -241,7 +241,7 @@ export default async function VoyageDetailPage({
               {plans.map((plan: any) => (
                 <div key={plan._id} className={styles.planRow}>
                   <div className={styles.planInfo}>
-                    <span className={styles.planName}>{plan.planName || `Plan ${plan._id.slice(-6)}`}</span>
+                    <span className={styles.planName}>{plan.planNumber || `Plan ${plan._id.slice(-6)}`}</span>
                     <span className={styles.planMeta}>
                       {plan.status || 'DRAFT'} · Created {formatDate(plan.createdAt)}
                     </span>
