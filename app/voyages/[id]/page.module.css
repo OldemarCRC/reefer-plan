@@ -54,6 +54,25 @@
   margin-top: var(--space-1);
 }
 
+.mtLink {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  color: var(--color-text-secondary);
+  opacity: 0.75;
+  vertical-align: middle;
+  text-decoration: none;
+  transition: color 0.15s, opacity 0.15s;
+}
+.mtLink:hover {
+  color: var(--color-cyan-light);
+  opacity: 1;
+}
+.mtLink svg {
+  width: 12px;
+  height: 12px;
+}
+
 .headerActions {
   display: flex;
   gap: var(--space-2);

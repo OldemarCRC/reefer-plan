@@ -543,6 +543,18 @@ const StowagePlanSchema = new Schema<StowagePlan>({
     cargoManifestPDF: { type: String },
     loadingSequencePDF: { type: String },
   },
+  communicationLog: [{
+    sentAt: { type: Date, required: true },
+    sentBy: { type: String, default: 'SYSTEM' },
+    recipients: [{
+      name: { type: String },
+      email: { type: String, required: true },
+      role: { type: String, default: 'CAPTAIN' }, // CAPTAIN | CC
+      _id: false,
+    }],
+    planStatus: { type: String },
+    note: { type: String },
+  }],
   createdBy: { type: String, default: 'SYSTEM' },
 }, {
   timestamps: true,

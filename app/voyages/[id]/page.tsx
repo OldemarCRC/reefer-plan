@@ -69,6 +69,7 @@ export default async function VoyageDetailPage({
   const bookings = bookingsResult.success ? bookingsResult.data : [];
 
   const vesselName = voyage.vesselId?.name || voyage.vesselName || '—';
+  const vesselImo = (voyage.vesselId as any)?.imoNumber ?? null;
   const serviceCode = voyage.serviceId?.serviceCode || 'N/A';
 
   return (
@@ -84,7 +85,23 @@ export default async function VoyageDetailPage({
               <StatusBadge status={voyage.status || 'PLANNED'} />
             </div>
             <p className={styles.pageSubtitle}>
-              {vesselName} · {serviceCode}
+              {vesselName}
+              {vesselImo && (
+                <a
+                  href={`https://www.marinetraffic.com/en/ais/details/ships/imo:${vesselImo}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.mtLink}
+                  title={`Track ${vesselName} on MarineTraffic (IMO ${vesselImo})`}
+                >
+                  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M7 1h4v4" />
+                    <path d="M11 1L5.5 6.5" />
+                    <path d="M5 2H2a1 1 0 00-1 1v7a1 1 0 001 1h7a1 1 0 001-1V8" />
+                  </svg>
+                </a>
+              )}
+              {' · '}{serviceCode}
               {(voyage as any).weekNumber != null && ` · WK${String((voyage as any).weekNumber).padStart(2, '0')}`}
               {' · '}Departure {formatDate(voyage.departureDate)}
             </p>

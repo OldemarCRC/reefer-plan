@@ -590,6 +590,14 @@ export interface StowagePlan {
     loadingSequencePDF?: string;
   };
   
+  communicationLog?: {
+    sentAt: Date;
+    sentBy: string;
+    recipients: { name?: string; email: string; role: 'CAPTAIN' | 'CC' }[];
+    planStatus?: string;
+    note?: string;
+  }[];
+
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
