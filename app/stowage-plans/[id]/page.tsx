@@ -1,12 +1,14 @@
 // app/stowage-plans/[id]/page.tsx
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import AppShell from '@/components/layout/AppShell';
 import VesselProfile from '@/components/vessel/VesselProfile';
-import { getStowagePlanById } from '@/app/actions/stowage-plan';
+import { getStowagePlanById, deleteStowagePlan, saveCargoAssignments, updatePlanStatus } from '@/app/actions/stowage-plan';
+import { getShipmentsByVoyage } from '@/app/actions/shipment';
 import ConfigureZonesModal, { type ZoneConfig } from '@/components/vessel/ConfigureZonesModal';
 import type { VoyageTempAssignment } from '@/lib/vessel-profile-data';
 import styles from './page.module.css';
@@ -30,14 +32,20 @@ interface CargoInPlan {
 export default function StowagePlanDetailPage() {
   const params = useParams();
   const planId = params.id as string;
+  const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<'cargo' | 'stability' | 'validation'>('cargo');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, startDeleteTransition] = useTransition();
   const [assigningShipment, setAssigningShipment] = useState<CargoInPlan | null>(null);
   const [selectedCompartment, setSelectedCompartment] = useState<string>('');
   const [assignQuantity, setAssignQuantity] = useState<number>(0);
   const [showConflictWarning, setShowConflictWarning] = useState(false);
   const [confirmedConflicts, setConfirmedConflicts] = useState<Set<string>>(new Set());
   const [showZoneModal, setShowZoneModal] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isSaving, startSaveTransition] = useTransition();
 
   // Plan header info — populated from DB on mount
   const [plan, setPlan] = useState({
@@ -62,7 +70,7 @@ export default function StowagePlanDetailPage() {
   const [tempZoneConfig, setTempZoneConfig] = useState(defaultTempZoneConfig);
 
   useEffect(() => {
-    getStowagePlanById(planId).then((result) => {
+    getStowagePlanById(planId).then(async (result) => {
       if (result.success && result.data) {
         const p = result.data;
         setPlan({
@@ -82,6 +90,38 @@ export default function StowagePlanDetailPage() {
               compartments: cs.coolingSectionIds ?? [],
             }))
           );
+        }
+
+        // Load shipments for this voyage
+        const voyageId = typeof p.voyageId === 'object' ? p.voyageId?._id : p.voyageId;
+        if (voyageId) {
+          const shipmentsResult = await getShipmentsByVoyage(voyageId);
+          if (shipmentsResult.success && Array.isArray(shipmentsResult.data)) {
+            // Build assignment map from saved cargoPositions
+            const positionsByShipment: Record<string, CargoAssignment[]> = {};
+            for (const pos of (p.cargoPositions ?? [])) {
+              const sid = String(pos.shipmentId ?? '');
+              if (!sid) continue;
+              if (!positionsByShipment[sid]) positionsByShipment[sid] = [];
+              positionsByShipment[sid].push({
+                compartmentId: pos.compartment?.id ?? '',
+                quantity: pos.quantity ?? 0,
+              });
+            }
+
+            setShipments(
+              shipmentsResult.data.map((s: any) => ({
+                shipmentId: s._id,
+                shipmentNumber: s.shipmentNumber,
+                cargoType: s.cargo?.type ?? '',
+                totalQuantity: s.cargo?.quantity ?? 0,
+                pol: s.pol?.portCode ?? '',
+                pod: s.pod?.portCode ?? '',
+                consignee: s.consignee?.name ?? '',
+                assignments: positionsByShipment[s._id] ?? [],
+              }))
+            );
+          }
         }
       }
     });
@@ -357,13 +397,51 @@ export default function StowagePlanDetailPage() {
   };
 
   const handleSavePlan = () => {
-    // TODO: Call Server Action to update plan
-    console.log('Saving plan...');
+    const allAssignments = shipments.flatMap(s =>
+      s.assignments.map(a => ({
+        shipmentId: s.shipmentId,
+        cargoType: s.cargoType,
+        quantity: a.quantity,
+        compartmentId: a.compartmentId,
+      }))
+    );
+    startSaveTransition(async () => {
+      const result = await saveCargoAssignments({ planId, assignments: allAssignments });
+      setSaveMsg(
+        result.success
+          ? { type: 'success', text: 'Plan saved' }
+          : { type: 'error', text: result.error ?? 'Failed to save' }
+      );
+      setTimeout(() => setSaveMsg(null), 3000);
+      if (result.success) {
+        setPlan(prev => ({ ...prev, status: 'DRAFT' }));
+      }
+    });
   };
 
   const handleSendToCaptain = () => {
-    // TODO: Generate PDF and send email
-    console.log('Sending to captain...');
+    startSaveTransition(async () => {
+      // First persist current assignments
+      const allAssignments = shipments.flatMap(s =>
+        s.assignments.map(a => ({
+          shipmentId: s.shipmentId,
+          cargoType: s.cargoType,
+          quantity: a.quantity,
+          compartmentId: a.compartmentId,
+        }))
+      );
+      await saveCargoAssignments({ planId, assignments: allAssignments });
+
+      // Advance status to READY_FOR_CAPTAIN
+      const result = await updatePlanStatus(planId, 'READY_FOR_CAPTAIN');
+      if (result.success) {
+        setPlan(prev => ({ ...prev, status: 'READY_FOR_CAPTAIN' }));
+        setSaveMsg({ type: 'success', text: 'Plan marked as Ready for Captain' });
+      } else {
+        setSaveMsg({ type: 'error', text: result.error ?? 'Failed to update status' });
+      }
+      setTimeout(() => setSaveMsg(null), 3000);
+    });
   };
 
   return (
@@ -390,14 +468,32 @@ export default function StowagePlanDetailPage() {
             </div>
           </div>
           <div className={styles.headerActions}>
+            {saveMsg && (
+              <span style={{
+                fontSize: '0.8rem',
+                color: saveMsg.type === 'success' ? 'var(--color-success)' : 'var(--color-danger)',
+                padding: '0.25rem 0.5rem',
+                background: saveMsg.type === 'success' ? 'var(--color-success-muted)' : 'var(--color-danger-muted)',
+                borderRadius: '4px',
+              }}>
+                {saveMsg.text}
+              </span>
+            )}
             <button className={styles.btnSecondary} onClick={() => setShowZoneModal(true)}>
               Configure Zones
             </button>
-            <button className={styles.btnSecondary} onClick={handleSavePlan}>
-              Save Draft
+            <button className={styles.btnSecondary} onClick={handleSavePlan} disabled={isSaving}>
+              {isSaving ? 'Saving…' : 'Save Draft'}
             </button>
-            <button className={styles.btnPrimary} onClick={handleSendToCaptain}>
-              Send to Captain
+            <button className={styles.btnPrimary} onClick={handleSendToCaptain} disabled={isSaving}>
+              {isSaving ? 'Saving…' : 'Send to Captain'}
+            </button>
+            <button
+              className={styles.btnDanger}
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={isDeleting}
+            >
+              Delete Plan
             </button>
           </div>
         </div>
@@ -940,6 +1036,63 @@ export default function StowagePlanDetailPage() {
         );
       })()}
       </div>
+
+      {/* Delete Plan Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+          <div style={{
+            background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)',
+            borderRadius: '12px', padding: '2rem', maxWidth: '400px', width: '90%',
+          }}>
+            <h3 style={{ margin: '0 0 1rem', color: 'var(--color-text-primary)', fontSize: '1.1rem', fontWeight: 600 }}>
+              Delete Stowage Plan
+            </h3>
+            <p style={{ margin: '0 0 1.5rem', color: 'var(--color-text-secondary)', fontSize: '0.875rem', lineHeight: 1.6 }}>
+              Delete plan <strong style={{ color: 'var(--color-text-primary)', fontFamily: 'monospace' }}>{plan.planNumber}</strong>?
+              This cannot be undone.
+            </p>
+            {deleteError && (
+              <p style={{ margin: '0 0 1rem', color: 'var(--color-danger)', fontSize: '0.8rem' }}>{deleteError}</p>
+            )}
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+                style={{
+                  padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer',
+                  border: '1px solid var(--color-border)', background: 'transparent',
+                  color: 'var(--color-text-secondary)', fontSize: '0.875rem',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  startDeleteTransition(async () => {
+                    const result = await deleteStowagePlan(planId);
+                    if (result.success) {
+                      router.push('/stowage-plans');
+                    } else {
+                      setDeleteError(result.error ?? 'Failed to delete plan');
+                      setShowDeleteConfirm(false);
+                    }
+                  });
+                }}
+                disabled={isDeleting}
+                style={{
+                  padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer',
+                  border: 'none', background: 'var(--color-danger)', color: 'white', fontSize: '0.875rem',
+                }}
+              >
+                {isDeleting ? 'Deleting…' : 'Delete Plan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }

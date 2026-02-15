@@ -71,22 +71,38 @@ export type VoyageStatus =
   | 'CLOSED'      // Para estadísticas - no más cambios
   | 'CANCELLED';
 
+export type PortCallStatus = 'SCHEDULED' | 'CANCELLED' | 'COMPLETED' | 'SKIPPED';
+
 export interface VoyagePortCall {
   portCode: string;
   portName: string;
   country: string;
   sequence: number;
-  weekNumber: number; // Semana del año (1-52)
-  eta: Date;
-  etd: Date;
+  weekNumber?: number;
+  eta?: Date;
+  etd?: Date;
   ata?: Date;
   atd?: Date;
   operations: ('LOAD' | 'DISCHARGE')[];
-  
-  // CAMBIO #2: Cierre por puerto (no del viaje completo)
-  locked: boolean; // true cuando el barco zarpa
+  locked: boolean;
   lockedBy?: string;
   lockedAt?: Date;
+  status: PortCallStatus;
+  addedPostCreation?: boolean;
+  cancelledAt?: Date;
+  cancelledBy?: string;
+  cancellationReason?: string;
+}
+
+export interface PortCallChangelogEntry {
+  changedAt: Date;
+  changedBy: string;
+  action: 'CANCELLED' | 'RESTORED' | 'ADDED' | 'REORDERED' | 'DATE_CHANGED';
+  portCode: string;
+  portName: string;
+  previousValue?: string;
+  newValue?: string;
+  reason?: string;
 }
 
 export interface Voyage {
@@ -102,6 +118,7 @@ export interface Voyage {
   estimatedEndDate: Date;
   actualEndDate?: Date;
   portCalls: VoyagePortCall[];
+  portCallChangelog: PortCallChangelogEntry[];
   status: VoyageStatus;
   stowagePlanId?: string;
   notes?: string;

@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { VoyageModel, VesselModel, StowagePlanModel } from '@/lib/db/schemas';
+import { VoyageModel, VesselModel, StowagePlanModel, BookingModel } from '@/lib/db/schemas';
 import type { Voyage, VoyagePortCall } from '@/types/models';
 
 // ----------------------------------------------------------------------------
@@ -476,13 +476,19 @@ export async function deleteVoyage(voyageId: unknown) {
 
     await connectDB();
 
-    // Guard: cannot cancel a voyage that still has stowage plans
-    const planCount = await StowagePlanModel.countDocuments({ voyageId: id });
-    if (planCount > 0) {
+    // Guard: cannot cancel a voyage that still has stowage plans or bookings
+    const [planCount, bookingCount] = await Promise.all([
+      StowagePlanModel.countDocuments({ voyageId: id }),
+      BookingModel.countDocuments({ voyageId: id }),
+    ]);
+    if (planCount > 0 || bookingCount > 0) {
+      const reasons: string[] = [];
+      if (planCount > 0) reasons.push(`${planCount} stowage plan${planCount > 1 ? 's' : ''}`);
+      if (bookingCount > 0) reasons.push(`${bookingCount} booking${bookingCount > 1 ? 's' : ''}`);
       return {
         success: false,
-        error: `Cannot cancel voyage: ${planCount} stowage plan${planCount > 1 ? 's' : ''} must be deleted first`,
-        blockedBy: { plans: planCount },
+        error: `Cannot cancel voyage: ${reasons.join(' and ')} must be removed first`,
+        blockedBy: { plans: planCount, bookings: bookingCount },
       };
     }
 
@@ -506,6 +512,171 @@ export async function deleteVoyage(voyageId: unknown) {
       success: false,
       error: 'Failed to delete voyage',
     };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// UPDATE PORT ROTATION (post-creation port call editing)
+// Handles: cancel, restore, add, reorder, date changes.
+// Each change appends an entry to voyage.portCallChangelog[].
+// ----------------------------------------------------------------------------
+
+export interface PortCallChange {
+  action: 'CANCEL' | 'RESTORE' | 'ADD' | 'REORDER' | 'DATE_CHANGED' | 'CHANGE_PORT';
+  portCode: string;       // current portCode (identifies which port call to modify)
+  portName?: string;
+  country?: string;
+  sequence?: number;
+  eta?: string;           // ISO date string
+  etd?: string;           // ISO date string
+  operations?: ('LOAD' | 'DISCHARGE')[];
+  reason?: string;
+  // For CHANGE_PORT action:
+  newPortCode?: string;
+  newPortName?: string;
+}
+
+export async function updatePortRotation(
+  voyageId: unknown,
+  changes: PortCallChange[],
+  globalReason?: string,
+) {
+  try {
+    const id = z.string().min(1).parse(voyageId);
+    await connectDB();
+
+    // Use lean() to get plain JS objects — avoids Mongoose doc validation on old subdocs
+    const voyage = await VoyageModel.findById(id).lean();
+    if (!voyage) return { success: false, error: 'Voyage not found' };
+
+    const now = new Date();
+    const changedBy = 'SYSTEM'; // TODO: replace with session user when auth added
+    const changelogEntries: object[] = [];
+
+    // Work on a mutable copy of portCalls (plain objects from lean)
+    const portCalls: any[] = (voyage.portCalls as any[]).map((pc: any) => ({ ...pc }));
+
+    for (const change of changes) {
+      const reason = change.reason ?? globalReason;
+
+      if (change.action === 'CANCEL') {
+        const pc = portCalls.find((p: any) => p.portCode === change.portCode);
+        if (!pc) continue;
+        changelogEntries.push({
+          changedAt: now, changedBy, action: 'CANCELLED',
+          portCode: pc.portCode, portName: pc.portName,
+          previousValue: pc.status ?? 'SCHEDULED', newValue: 'CANCELLED', reason,
+        });
+        pc.status = 'CANCELLED';
+        pc.cancelledAt = now;
+        pc.cancelledBy = changedBy;
+        pc.cancellationReason = reason ?? '';
+
+      } else if (change.action === 'RESTORE') {
+        const pc = portCalls.find((p: any) => p.portCode === change.portCode);
+        if (!pc) continue;
+        changelogEntries.push({
+          changedAt: now, changedBy, action: 'RESTORED',
+          portCode: pc.portCode, portName: pc.portName,
+          previousValue: 'CANCELLED', newValue: 'SCHEDULED', reason,
+        });
+        pc.status = 'SCHEDULED';
+        delete pc.cancelledAt;
+        delete pc.cancelledBy;
+        delete pc.cancellationReason;
+
+      } else if (change.action === 'DATE_CHANGED') {
+        const pc = portCalls.find((p: any) => p.portCode === change.portCode);
+        if (!pc) continue;
+        const etaStr = pc.eta ? new Date(pc.eta).toISOString().slice(0, 10) : '';
+        const etdStr = pc.etd ? new Date(pc.etd).toISOString().slice(0, 10) : '';
+        const prev = `ETA:${etaStr},ETD:${etdStr}`;
+        if (change.eta !== undefined) pc.eta = change.eta ? new Date(change.eta) : undefined;
+        if (change.etd !== undefined) pc.etd = change.etd ? new Date(change.etd) : undefined;
+        const etaNew = pc.eta ? new Date(pc.eta).toISOString().slice(0, 10) : '';
+        const etdNew = pc.etd ? new Date(pc.etd).toISOString().slice(0, 10) : '';
+        changelogEntries.push({
+          changedAt: now, changedBy, action: 'DATE_CHANGED',
+          portCode: pc.portCode, portName: pc.portName,
+          previousValue: prev, newValue: `ETA:${etaNew},ETD:${etdNew}`, reason,
+        });
+
+      } else if (change.action === 'CHANGE_PORT') {
+        // Rename port code/name/country on an existing port call
+        const pc = portCalls.find((p: any) => p.portCode === change.portCode);
+        if (!pc || !change.newPortCode) continue;
+        const oldInfo = `${pc.portCode}/${pc.portName}`;
+        changelogEntries.push({
+          changedAt: now, changedBy, action: 'REORDERED', // reuse REORDERED action for audit
+          portCode: change.newPortCode, portName: change.newPortName ?? change.newPortCode,
+          previousValue: oldInfo, newValue: `${change.newPortCode}/${change.newPortName ?? ''}`, reason,
+        });
+        pc.portCode = change.newPortCode;
+        pc.portName = change.newPortName ?? change.newPortCode;
+        if (change.country) pc.country = change.country;
+
+      } else if (change.action === 'REORDER') {
+        const pc = portCalls.find((p: any) => p.portCode === change.portCode);
+        if (!pc || change.sequence == null) continue;
+        const oldSeq = pc.sequence;
+        const newSeq = change.sequence;
+        if (oldSeq === newSeq) continue;
+        portCalls.forEach((p: any) => {
+          if (p.portCode === change.portCode) return;
+          if (oldSeq < newSeq && p.sequence > oldSeq && p.sequence <= newSeq) p.sequence--;
+          else if (oldSeq > newSeq && p.sequence >= newSeq && p.sequence < oldSeq) p.sequence++;
+        });
+        pc.sequence = newSeq;
+        changelogEntries.push({
+          changedAt: now, changedBy, action: 'REORDERED',
+          portCode: pc.portCode, portName: pc.portName,
+          previousValue: String(oldSeq), newValue: String(newSeq), reason,
+        });
+
+      } else if (change.action === 'ADD') {
+        const maxSeq = Math.max(0, ...portCalls.map((p: any) => p.sequence));
+        const newSeq = change.sequence ?? maxSeq + 1;
+        portCalls.forEach((p: any) => { if (p.sequence >= newSeq) p.sequence++; });
+        portCalls.push({
+          portCode: change.portCode,
+          portName: change.portName ?? change.portCode,
+          country: change.country ?? '',
+          sequence: newSeq,
+          eta: change.eta ? new Date(change.eta) : undefined,
+          etd: change.etd ? new Date(change.etd) : undefined,
+          operations: change.operations ?? ['LOAD'],
+          status: 'SCHEDULED',
+          locked: false,
+          addedPostCreation: true,
+        });
+        changelogEntries.push({
+          changedAt: now, changedBy, action: 'ADDED',
+          portCode: change.portCode, portName: change.portName ?? change.portCode,
+          newValue: `seq:${newSeq}`, reason,
+        });
+      }
+    }
+
+    // Persist with updateOne — bypasses full-document Mongoose validation
+    await VoyageModel.updateOne(
+      { _id: id },
+      {
+        $set: { portCalls },
+        $push: changelogEntries.length > 0
+          ? { portCallChangelog: { $each: changelogEntries } }
+          : {},
+      },
+    );
+
+    return {
+      success: true,
+      portCalls: JSON.parse(JSON.stringify(portCalls)),
+      message: `${changelogEntries.length} port rotation change(s) saved`,
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Error updating port rotation:', msg);
+    return { success: false, error: `Failed to update port rotation: ${msg}` };
   }
 }
 

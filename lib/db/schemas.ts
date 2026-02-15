@@ -61,7 +61,26 @@ const VoyagePortCallSchema = new Schema({
   locked: { type: Boolean, default: false },
   lockedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   lockedAt: { type: Date },
-  status: { type: String },
+  status: {
+    type: String,
+    enum: ['SCHEDULED', 'CANCELLED', 'COMPLETED', 'SKIPPED'],
+    default: 'SCHEDULED',
+  },
+  addedPostCreation: { type: Boolean, default: false },
+  cancelledAt: { type: Date },
+  cancelledBy: { type: String },
+  cancellationReason: { type: String },
+}, { _id: false });
+
+const PortCallChangelogEntrySchema = new Schema({
+  changedAt: { type: Date, default: Date.now },
+  changedBy: { type: String, default: 'SYSTEM' },
+  action: { type: String, enum: ['CANCELLED', 'RESTORED', 'ADDED', 'REORDERED', 'DATE_CHANGED'], required: true },
+  portCode: { type: String, required: true },
+  portName: { type: String, required: true },
+  previousValue: { type: String },
+  newValue: { type: String },
+  reason: { type: String },
 }, { _id: false });
 
 const VoyageSchema = new Schema<Voyage>({
@@ -90,6 +109,7 @@ const VoyageSchema = new Schema<Voyage>({
   stowagePlanId: { type: Schema.Types.ObjectId, ref: 'StowagePlan' },
   notes: { type: String },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  portCallChangelog: [PortCallChangelogEntrySchema],
 }, {
   timestamps: true,
 });

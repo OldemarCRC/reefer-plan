@@ -294,7 +294,7 @@
 
 .portTableHeader {
   display: grid;
-  grid-template-columns: 1fr 140px 150px 150px;
+  grid-template-columns: 28px 1fr 140px 150px 150px;
   gap: 1rem;
   padding: 0.75rem 1.25rem;
   background: var(--color-bg-primary);
@@ -308,7 +308,7 @@
 
 .portTableRow {
   display: grid;
-  grid-template-columns: 1fr 140px 150px 150px;
+  grid-template-columns: 28px 1fr 140px 150px 150px;
   gap: 1rem;
   padding: 0.875rem 1.25rem;
   border-bottom: 1px solid var(--color-border);
@@ -380,6 +380,23 @@
 .dateInput:focus {
   outline: none;
   border-color: var(--color-cyan);
+}
+
+.portCheckbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-cyan);
+  cursor: pointer;
+}
+
+.portRowExcluded {
+  opacity: 0.4;
+}
+
+.portExcludedLabel {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 
 /* ---- Step 4: Review ---- */

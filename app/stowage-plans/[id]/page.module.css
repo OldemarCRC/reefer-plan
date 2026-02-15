@@ -108,6 +108,27 @@
   transform: translateY(-1px);
 }
 
+.btnDanger {
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid var(--color-danger, #ef4444);
+  background: transparent;
+  color: var(--color-danger, #ef4444);
+}
+
+.btnDanger:hover:not(:disabled) {
+  background: var(--color-danger-muted, rgba(239,68,68,0.1));
+}
+
+.btnDanger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Stats Bar */
 .statsBar {
   display: flex;

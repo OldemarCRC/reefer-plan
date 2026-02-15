@@ -2,9 +2,9 @@ import AppShell from '@/components/layout/AppShell';
 import { getVoyageById } from '@/app/actions/voyage';
 import { getStowagePlansByVoyage } from '@/app/actions/stowage-plan';
 import { getBookingsByVoyage } from '@/app/actions/booking';
-import { getPortWeatherForecast } from '@/app/actions/weather';
 import Link from 'next/link';
 import styles from './page.module.css';
+import { DeleteVoyageButton, PortCallsEditor, DeletePlanButton } from './VoyageDetailClient';
 
 const statusStyles: Record<string, { bg: string; color: string }> = {
   IN_PROGRESS: { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
@@ -59,24 +59,14 @@ export default async function VoyageDetailPage({
     const tb = b.eta ? new Date(b.eta).getTime() : (b.sequence ?? 0) * 1e10;
     return ta - tb;
   });
-  console.log('[VoyageDetail] portCalls sorted order:', portCalls.map(pc => `${pc.portCode} ${pc.eta ?? 'no-eta'} seq=${pc.sequence}`));
-
   // Parallel fetches
-  const [plansResult, bookingsResult, weatherResults] = await Promise.all([
+  const [plansResult, bookingsResult] = await Promise.all([
     getStowagePlansByVoyage(id),
     getBookingsByVoyage(id),
-    Promise.all(
-      portCalls.map((pc: any) => getPortWeatherForecast(pc.portName, pc.country || '', pc.eta || null))
-    ),
   ]);
 
   const plans = plansResult.success ? plansResult.data : [];
   const bookings = bookingsResult.success ? bookingsResult.data : [];
-
-  // Build portWeather map: portCode → { temp, isForecast }
-  const weatherMap: Record<string, { temp: number; isForecast: boolean } | null> = Object.fromEntries(
-    portCalls.map((pc: any, i: number) => [pc.portCode, weatherResults[i]])
-  );
 
   const vesselName = voyage.vesselId?.name || voyage.vesselName || '—';
   const serviceCode = voyage.serviceId?.serviceCode || 'N/A';
@@ -108,10 +98,15 @@ export default async function VoyageDetailPage({
             <Link href={`/stowage-plans/new?voyageId=${id}`} className={styles.btnSecondary}>
               + New Plan
             </Link>
+            <DeleteVoyageButton
+              voyageId={id}
+              voyageNumber={voyage.voyageNumber}
+              voyageStatus={voyage.status || 'PLANNED'}
+            />
           </div>
         </div>
 
-        {/* Port Call Table */}
+        {/* Port Calls (editable) */}
         <div className={styles.card}>
           <div className={styles.cardHeader}>
             <h2 className={styles.cardTitle}>Port Calls</h2>
@@ -120,71 +115,20 @@ export default async function VoyageDetailPage({
           {portCalls.length === 0 ? (
             <p className={styles.cellMuted}>No port calls defined for this voyage.</p>
           ) : (
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Code</th>
-                    <th>Port</th>
-                    <th>ETA</th>
-                    <th>ETD</th>
-                    <th>ATA</th>
-                    <th>ATD</th>
-                    <th>Operations</th>
-                    <th>Forecast</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {portCalls.map((pc: any, i: number) => (
-                    <tr key={i}>
-                      <td className={styles.cellMono}>{pc.sequence ?? i + 1}</td>
-                      <td className={styles.cellMono}>{pc.portCode}</td>
-                      <td>
-                        <div className={styles.portCell}>
-                          <span>{pc.portName}</span>
-                          {pc.country && <span className={styles.countryCode}>{pc.country}</span>}
-                        </div>
-                      </td>
-                      <td className={styles.cellMono}>{formatDate(pc.eta)}</td>
-                      <td className={styles.cellMono}>{formatDate(pc.etd)}</td>
-                      <td className={styles.cellMono}>{formatDate(pc.ata)}</td>
-                      <td className={styles.cellMono}>{formatDate(pc.atd)}</td>
-                      <td>
-                        <div className={styles.opTags}>
-                          {(pc.operations || []).map((op: string) => (
-                            <span key={op} className={styles.opTag} data-op={op}>
-                              {op === 'LOAD' ? '▲' : '▼'} {op}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className={styles.cellTemp}>
-                        {weatherMap[pc.portCode] != null
-                          ? (
-                            <>
-                              {weatherMap[pc.portCode]!.temp}°C
-                              {!weatherMap[pc.portCode]!.isForecast && (
-                                <span className={styles.cellMuted}> now</span>
-                              )}
-                            </>
-                          )
-                          : <span className={styles.cellMuted}>—</span>
-                        }
-                      </td>
-                      <td>
-                        {pc.locked ? (
-                          <span className={styles.lockedBadge}>Locked</span>
-                        ) : (
-                          <span className={styles.cellMuted}>Open</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <PortCallsEditor
+              voyageId={id}
+              portCalls={portCalls.map((pc: any) => ({
+                portCode: pc.portCode,
+                portName: pc.portName,
+                country: pc.country ?? '',
+                sequence: pc.sequence ?? 0,
+                eta: pc.eta ?? null,
+                etd: pc.etd ?? null,
+                operations: pc.operations ?? [],
+                locked: pc.locked ?? false,
+                status: pc.status ?? 'SCHEDULED',
+              }))}
+            />
           )}
         </div>
 
@@ -248,9 +192,16 @@ export default async function VoyageDetailPage({
                       {plan.status || 'DRAFT'} · Created {formatDate(plan.createdAt)}
                     </span>
                   </div>
-                  <Link href={`/stowage-plans/${plan._id}`} className={styles.btnGhost}>
-                    Open →
-                  </Link>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <Link href={`/stowage-plans/${plan._id}`} className={styles.btnGhost}>
+                      Open →
+                    </Link>
+                    <DeletePlanButton
+                      planId={plan._id}
+                      planNumber={plan.planNumber || `Plan ${plan._id.slice(-6)}`}
+                      voyageId={id}
+                    />
+                  </div>
                 </div>
               ))}
             </div>

@@ -43,6 +43,7 @@ interface PortScheduleEntry {
   operations: string[];
   eta: string;
   etd: string;
+  included: boolean; // false = omit from this voyage (not stored in portCalls)
 }
 
 type Step = 1 | 2 | 3 | 4;
@@ -109,6 +110,7 @@ export default function NewVoyagePage() {
         operations: p.operations ?? ['LOAD'],
         eta: addWeeks(today, p.weeksFromStart ?? 0),
         etd: addWeeks(today, p.weeksFromStart ?? 0),
+        included: true,
       }));
     setPortSchedule(schedule);
   };
@@ -123,19 +125,26 @@ export default function NewVoyagePage() {
     );
   };
 
+  const handlePortToggle = (portCode: string) => {
+    setPortSchedule(prev =>
+      prev.map(p => (p.portCode === portCode ? { ...p, included: !p.included } : p))
+    );
+  };
+
   const handleCreate = async () => {
     if (!selectedService || !selectedVessel || !voyageNumber) return;
     setIsSubmitting(true);
     setSubmitError(null);
     try {
+      const includedPorts = portSchedule.filter(p => p.included);
       const result = await createVoyageFromWizard({
         voyageNumber,
         weekNumber: weekNumber !== '' ? weekNumber : undefined,
         serviceId: selectedService._id,
         vesselId: selectedVessel._id,
         vesselName: selectedVessel.name,
-        departureDate: portSchedule[0]?.eta || new Date().toISOString().split('T')[0],
-        portCalls: portSchedule.map(p => ({
+        departureDate: includedPorts[0]?.eta || new Date().toISOString().split('T')[0],
+        portCalls: includedPorts.map(p => ({
           portCode: p.portCode,
           portName: p.portName,
           country: p.country,
@@ -155,10 +164,11 @@ export default function NewVoyagePage() {
     }
   };
 
+  const includedPortCount = portSchedule.filter(p => p.included).length;
   const nextEnabled =
     (step === 1 && !!selectedService) ||
     (step === 2 && !!selectedVessel) ||
-    (step === 3 && !!voyageNumber && voyageNumber.length >= 4);
+    (step === 3 && !!voyageNumber && voyageNumber.length >= 4 && includedPortCount >= 2);
 
   // ---------------------------------------------------------------------------
   // Render
@@ -300,13 +310,23 @@ export default function NewVoyagePage() {
 
                   <div className={styles.portTable}>
                     <div className={styles.portTableHeader}>
+                      <span></span>
                       <span>Port</span>
                       <span>Operations</span>
                       <span>ETA</span>
                       <span>ETD</span>
                     </div>
                     {portSchedule.map(p => (
-                      <div key={p.portCode} className={styles.portTableRow}>
+                      <div
+                        key={p.portCode}
+                        className={`${styles.portTableRow} ${!p.included ? styles.portRowExcluded : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          className={styles.portCheckbox}
+                          checked={p.included}
+                          onChange={() => handlePortToggle(p.portCode)}
+                        />
                         <div className={styles.portCellInfo}>
                           <span className={styles.portCellCode}>{p.portCode}</span>
                           <span className={styles.portCellName}>{p.portName}, {p.country}</span>
@@ -318,18 +338,26 @@ export default function NewVoyagePage() {
                             </span>
                           ))}
                         </div>
-                        <input
-                          type="date"
-                          className={styles.dateInput}
-                          value={p.eta}
-                          onChange={e => handlePortDateChange(p.sequence, 'eta', e.target.value)}
-                        />
-                        <input
-                          type="date"
-                          className={styles.dateInput}
-                          value={p.etd}
-                          onChange={e => handlePortDateChange(p.sequence, 'etd', e.target.value)}
-                        />
+                        {p.included ? (
+                          <>
+                            <input
+                              type="date"
+                              className={styles.dateInput}
+                              value={p.eta}
+                              onChange={e => handlePortDateChange(p.sequence, 'eta', e.target.value)}
+                            />
+                            <input
+                              type="date"
+                              className={styles.dateInput}
+                              value={p.etd}
+                              onChange={e => handlePortDateChange(p.sequence, 'etd', e.target.value)}
+                            />
+                          </>
+                        ) : (
+                          <span className={styles.portExcludedLabel} style={{ gridColumn: 'span 2' }}>
+                            Not included this sailing
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -363,11 +391,11 @@ export default function NewVoyagePage() {
                     </div>
                     <div className={styles.reviewItem}>
                       <span className={styles.reviewLabel}>Departure</span>
-                      <span className={styles.reviewValue}>{portSchedule[0]?.eta ?? '—'}</span>
+                      <span className={styles.reviewValue}>{portSchedule.filter(p => p.included)[0]?.eta ?? '—'}</span>
                     </div>
                     <div className={styles.reviewItem}>
                       <span className={styles.reviewLabel}>Estimated Arrival</span>
-                      <span className={styles.reviewValue}>{portSchedule[portSchedule.length - 1]?.etd ?? '—'}</span>
+                      <span className={styles.reviewValue}>{portSchedule.filter(p => p.included).slice(-1)[0]?.etd ?? '—'}</span>
                     </div>
                     <div className={styles.reviewItem}>
                       <span className={styles.reviewLabel}>Status</span>
@@ -376,8 +404,8 @@ export default function NewVoyagePage() {
                   </div>
 
                   <div className={styles.reviewPortSection}>
-                    <h3>Port Schedule</h3>
-                    {portSchedule.map(p => (
+                    <h3>Port Schedule ({portSchedule.filter(p => p.included).length} ports)</h3>
+                    {portSchedule.filter(p => p.included).map(p => (
                       <div key={p.portCode} className={styles.reviewPortRow}>
                         <span className={styles.reviewSeq}>{p.sequence}</span>
                         <div className={styles.reviewPortInfo}>

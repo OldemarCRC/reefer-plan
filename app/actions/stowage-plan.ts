@@ -756,6 +756,63 @@ export async function deleteStowagePlan(planId: unknown) {
 }
 
 // ----------------------------------------------------------------------------
+// SAVE CARGO ASSIGNMENTS
+// Replaces all cargoPositions on a plan with the current in-memory assignments.
+// Called by "Save Draft" on the stowage plan detail page.
+// ----------------------------------------------------------------------------
+
+const SaveCargoAssignmentsSchema = z.object({
+  planId: z.string().min(1),
+  assignments: z.array(z.object({
+    shipmentId: z.string(),
+    cargoType: z.string(),
+    quantity: z.number().int().nonnegative(),
+    compartmentId: z.string().min(1),
+  })),
+});
+
+export async function saveCargoAssignments(data: unknown) {
+  try {
+    const validated = SaveCargoAssignmentsSchema.parse(data);
+
+    await connectDB();
+
+    const plan = await StowagePlanModel.findById(validated.planId);
+    if (!plan) {
+      return { success: false, error: 'Plan not found' };
+    }
+
+    plan.cargoPositions = validated.assignments.map(a => ({
+      shipmentId: a.shipmentId || undefined,
+      cargoType: a.cargoType,
+      quantity: a.quantity,
+      compartment: {
+        id: a.compartmentId,
+        holdNumber: getHoldNumber(a.compartmentId),
+        level: getLevel(a.compartmentId),
+      },
+      weight: 0,
+      position: { lcg: 0, tcg: 0, vcg: 0 },
+    }));
+
+    plan.markModified('cargoPositions');
+    await plan.save();
+
+    return {
+      success: true,
+      message: `Plan saved with ${validated.assignments.length} cargo position(s)`,
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: `Validation error: ${error.errors[0].message}` };
+    }
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Error saving cargo assignments:', msg);
+    return { success: false, error: `Failed to save plan: ${msg}` };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // HELPER FUNCTIONS
 // ----------------------------------------------------------------------------
 

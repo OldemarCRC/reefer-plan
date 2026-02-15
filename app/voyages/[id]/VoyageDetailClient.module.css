@@ -1,0 +1,341 @@
+/* VoyageDetailClient.module.css */
+
+/* --- Danger button (Cancel Voyage) --- */
+
+.btnDanger {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  border: 1px solid var(--color-danger);
+  background: transparent;
+  color: var(--color-danger);
+  transition: all var(--transition-fast);
+}
+
+.btnDanger:hover:not(:disabled) {
+  background: var(--color-danger-muted);
+}
+
+.btnDanger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- Confirmation modal --- */
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  max-width: 440px;
+  width: 90%;
+}
+
+.modalTitle {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 1rem 0;
+}
+
+.modalBody {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin: 0 0 1.5rem 0;
+}
+
+.modalBody strong {
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+}
+
+.modalActions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.btnModalCancel {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.btnModalCancel:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.btnModalConfirm {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  border: none;
+  background: var(--color-danger);
+  color: white;
+  transition: all var(--transition-fast);
+}
+
+.btnModalConfirm:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.btnModalConfirm:disabled,
+.btnModalCancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- Toast messages --- */
+
+.errorToast {
+  padding: 0.6rem 1rem;
+  background: var(--color-danger-muted);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  margin-bottom: 1rem;
+}
+
+.successToast {
+  padding: 0.6rem 1rem;
+  background: var(--color-success-muted);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-md);
+  color: var(--color-success);
+  font-size: var(--text-sm);
+  margin-bottom: 1rem;
+}
+
+/* --- Port call row states --- */
+
+.rowCancelled td {
+  opacity: 0.45;
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.2);
+}
+
+.rowCancelled td:last-child,
+.rowCancelled td:nth-last-child(2) {
+  opacity: 1;
+  text-decoration: none;
+}
+
+.cancelledBadge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* --- Row action buttons --- */
+
+.rowActions {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+}
+
+.btnEdit,
+.btnSave,
+.btnCancelEdit,
+.btnCancelPort,
+.btnRestore {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btnEdit {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.btnEdit:hover:not(:disabled) {
+  background: var(--color-blue-muted);
+  border-color: var(--color-blue);
+  color: var(--color-blue-light);
+}
+
+.btnSave {
+  background: var(--color-success-muted);
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.btnSave:hover:not(:disabled) {
+  background: var(--color-success);
+  color: white;
+}
+
+.btnCancelEdit {
+  background: transparent;
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+  padding: 2px 6px;
+}
+
+.btnCancelEdit:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+.btnCancelPort {
+  background: transparent;
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.btnCancelPort:hover:not(:disabled) {
+  background: var(--color-danger-muted);
+}
+
+.btnRestore {
+  background: var(--color-success-muted);
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.btnRestore:hover:not(:disabled) {
+  background: var(--color-success);
+  color: white;
+}
+
+.btnEdit:disabled,
+.btnSave:disabled,
+.btnCancelEdit:disabled,
+.btnCancelPort:disabled,
+.btnRestore:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* --- Small danger button (delete plan) --- */
+
+.btnDangerSm {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--color-danger);
+  background: transparent;
+  color: var(--color-danger);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btnDangerSm:hover:not(:disabled) {
+  background: var(--color-danger-muted);
+}
+
+.btnDangerSm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.inlineError {
+  font-size: 11px;
+  color: var(--color-danger);
+  margin-left: 0.5rem;
+}
+
+/* --- Inline date input --- */
+
+.dateInput {
+  padding: 3px 6px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-cyan);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  width: 120px;
+}
+
+.dateInput:focus {
+  outline: none;
+}
+
+/* --- Port edit inputs (CHANGE_PORT mode) --- */
+
+.portEditFields {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.portCodeInput {
+  padding: 3px 6px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-cyan);
+  border-radius: var(--radius-sm);
+  color: var(--color-cyan-light);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  width: 68px;
+  text-transform: uppercase;
+}
+
+.portNameInput {
+  padding: 3px 6px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-cyan);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: 11px;
+  width: 130px;
+}
+
+.portCountryInput {
+  padding: 3px 6px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  width: 36px;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.portCodeInput:focus,
+.portNameInput:focus,
+.portCountryInput:focus {
+  outline: none;
+  border-color: var(--color-cyan);
+}
