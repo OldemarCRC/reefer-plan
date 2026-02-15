@@ -7,7 +7,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import AppShell from '@/components/layout/AppShell';
 import VesselProfile from '@/components/vessel/VesselProfile';
-import { getStowagePlanById, deleteStowagePlan, saveCargoAssignments, updatePlanStatus } from '@/app/actions/stowage-plan';
+import { getStowagePlanById, deleteStowagePlan, saveCargoAssignments, updatePlanStatus, copyStowagePlan } from '@/app/actions/stowage-plan';
+import MarkSentModal from '@/components/stowage/MarkSentModal';
 import { getShipmentsByVoyage } from '@/app/actions/shipment';
 import ConfigureZonesModal, { type ZoneConfig } from '@/components/vessel/ConfigureZonesModal';
 import type { VoyageTempAssignment } from '@/lib/vessel-profile-data';
@@ -46,6 +47,8 @@ export default function StowagePlanDetailPage() {
   const [showZoneModal, setShowZoneModal] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSaving, startSaveTransition] = useTransition();
+  const [isCopying, startCopyTransition] = useTransition();
+  const [showSentModal, setShowSentModal] = useState(false);
 
   // Plan header info — populated from DB on mount
   const [plan, setPlan] = useState({
@@ -444,6 +447,26 @@ export default function StowagePlanDetailPage() {
     });
   };
 
+  // Plans are locked once sent — no further edits allowed
+  const LOCKED_STATUSES = ['EMAIL_SENT', 'CAPTAIN_APPROVED', 'CAPTAIN_REJECTED', 'IN_REVISION', 'READY_FOR_EXECUTION', 'IN_EXECUTION', 'COMPLETED'];
+  const isLocked = LOCKED_STATUSES.includes(plan.status);
+
+  const handleMarkSent = () => {
+    setShowSentModal(true);
+  };
+
+  const handleNewDraft = () => {
+    startCopyTransition(async () => {
+      const result = await copyStowagePlan(planId);
+      if (result.success && result.planId) {
+        router.push(`/stowage-plans/${result.planId}`);
+      } else {
+        setSaveMsg({ type: 'error', text: result.error ?? 'Failed to create new draft' });
+        setTimeout(() => setSaveMsg(null), 3000);
+      }
+    });
+  };
+
   return (
     <AppShell activeVessel={plan.vesselName} activeVoyage={plan.voyageNumber}>
       <div className={styles.container}>
@@ -479,15 +502,42 @@ export default function StowagePlanDetailPage() {
                 {saveMsg.text}
               </span>
             )}
-            <button className={styles.btnSecondary} onClick={() => setShowZoneModal(true)}>
-              Configure Zones
-            </button>
-            <button className={styles.btnSecondary} onClick={handleSavePlan} disabled={isSaving}>
-              {isSaving ? 'Saving…' : 'Save Draft'}
-            </button>
-            <button className={styles.btnPrimary} onClick={handleSendToCaptain} disabled={isSaving}>
-              {isSaving ? 'Saving…' : 'Send to Captain'}
-            </button>
+            {isLocked ? (
+              <>
+                <span style={{
+                  fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.05em',
+                  color: 'var(--color-warning)', background: 'var(--color-warning-muted)',
+                  padding: '0.25rem 0.6rem', borderRadius: '4px',
+                }}>
+                  🔒 LOCKED
+                </span>
+                <button
+                  className={styles.btnPrimary}
+                  onClick={handleNewDraft}
+                  disabled={isCopying}
+                >
+                  {isCopying ? 'Creating…' : '+ New Draft'}
+                </button>
+              </>
+            ) : (
+              <>
+                <button className={styles.btnSecondary} onClick={() => setShowZoneModal(true)}>
+                  Configure Zones
+                </button>
+                <button className={styles.btnSecondary} onClick={handleSavePlan} disabled={isSaving}>
+                  {isSaving ? 'Saving…' : 'Save Draft'}
+                </button>
+                {plan.status === 'READY_FOR_CAPTAIN' ? (
+                  <button className={styles.btnPrimary} onClick={handleMarkSent} disabled={isSaving}>
+                    {isSaving ? 'Saving…' : 'Mark as Sent ✉'}
+                  </button>
+                ) : (
+                  <button className={styles.btnPrimary} onClick={handleSendToCaptain} disabled={isSaving}>
+                    {isSaving ? 'Saving…' : 'Send to Captain'}
+                  </button>
+                )}
+              </>
+            )}
             <button
               className={styles.btnDanger}
               onClick={() => setShowDeleteConfirm(true)}
@@ -533,12 +583,14 @@ export default function StowagePlanDetailPage() {
         <div className={styles.leftPanel}>
           <div className={styles.panelHeader}>
             <h2>Cargo Management</h2>
-            <button className={styles.btnAuto} onClick={handleAutoStow}>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M8 2v12m4-8l-4-4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-              Auto-Stow
-            </button>
+            {!isLocked && (
+              <button className={styles.btnAuto} onClick={handleAutoStow}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 2v12m4-8l-4-4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+                Auto-Stow
+              </button>
+            )}
           </div>
 
           {/* Tabs */}
@@ -604,16 +656,18 @@ export default function StowagePlanDetailPage() {
                             <span className={styles.value}>{shipment.consignee}</span>
                           </div>
                         </div>
-                        <button
-                          className={styles.btnAssign}
-                          onClick={() => {
-                            setAssigningShipment(shipment);
-                            setSelectedCompartment('');
-                            setAssignQuantity(remainingQty(shipment));
-                          }}
-                        >
-                          Assign to Compartment
-                        </button>
+                        {!isLocked && (
+                          <button
+                            className={styles.btnAssign}
+                            onClick={() => {
+                              setAssigningShipment(shipment);
+                              setSelectedCompartment('');
+                              setAssignQuantity(remainingQty(shipment));
+                            }}
+                          >
+                            Assign to Compartment
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -646,23 +700,27 @@ export default function StowagePlanDetailPage() {
                             <div key={a.compartmentId} className={styles.assignmentRow}>
                               <span className={styles.compartmentTag}>{a.compartmentId}</span>
                               <span className={styles.assignmentQty}>{a.quantity} pal.</span>
-                              <button
-                                className={styles.btnRemoveSmall}
-                                onClick={() => handleRemoveAssignment(shipment.shipmentId, a.compartmentId)}
-                              >✕</button>
+                              {!isLocked && (
+                                <button
+                                  className={styles.btnRemoveSmall}
+                                  onClick={() => handleRemoveAssignment(shipment.shipmentId, a.compartmentId)}
+                                >✕</button>
+                              )}
                             </div>
                           ))}
                         </div>
-                        <button
-                          className={styles.btnAssign}
-                          onClick={() => {
-                            setAssigningShipment(shipment);
-                            setSelectedCompartment('');
-                            setAssignQuantity(remainingQty(shipment) || 1);
-                          }}
-                        >
-                          + Add Compartment
-                        </button>
+                        {!isLocked && (
+                          <button
+                            className={styles.btnAssign}
+                            onClick={() => {
+                              setAssigningShipment(shipment);
+                              setSelectedCompartment('');
+                              setAssignQuantity(remainingQty(shipment) || 1);
+                            }}
+                          >
+                            + Add Compartment
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1036,6 +1094,21 @@ export default function StowagePlanDetailPage() {
         );
       })()}
       </div>
+
+      {/* Mark as Sent Modal */}
+      {showSentModal && (
+        <MarkSentModal
+          planId={planId}
+          planNumber={plan.planNumber}
+          onClose={() => setShowSentModal(false)}
+          onSuccess={() => {
+            setShowSentModal(false);
+            setPlan(prev => ({ ...prev, status: 'EMAIL_SENT' }));
+            setSaveMsg({ type: 'success', text: 'Plan locked — marked as sent to captain' });
+            setTimeout(() => setSaveMsg(null), 4000);
+          }}
+        />
+      )}
 
       {/* Delete Plan Confirmation Modal */}
       {showDeleteConfirm && (

@@ -756,6 +756,139 @@ export async function deleteStowagePlan(planId: unknown) {
 }
 
 // ----------------------------------------------------------------------------
+// MARK PLAN SENT
+// Sets status to EMAIL_SENT, records recipients in communicationLog,
+// and populates captainCommunication.emailSentAt + captainName/Email.
+// Called by "Mark as Sent" modal on the stowage plan detail page.
+// ----------------------------------------------------------------------------
+
+const MarkPlanSentSchema = z.object({
+  planId: z.string().min(1),
+  captainName: z.string().min(1, 'Captain name is required'),
+  captainEmail: z.string().email('Valid captain email required'),
+  ccEmails: z.array(z.string().email()).optional(),
+  note: z.string().optional(),
+});
+
+export async function markPlanSent(data: unknown) {
+  try {
+    const validated = MarkPlanSentSchema.parse(data);
+
+    await connectDB();
+
+    const plan = await StowagePlanModel.findById(validated.planId);
+    if (!plan) {
+      return { success: false, error: 'Plan not found' };
+    }
+
+    const LOCKED = ['EMAIL_SENT', 'CAPTAIN_APPROVED', 'CAPTAIN_REJECTED', 'IN_REVISION', 'READY_FOR_EXECUTION', 'IN_EXECUTION', 'COMPLETED'];
+    if (LOCKED.includes(plan.status)) {
+      return { success: false, error: `Plan is already locked (status: ${plan.status})` };
+    }
+
+    const recipients: { name?: string; email: string; role: 'CAPTAIN' | 'CC' }[] = [
+      { name: validated.captainName, email: validated.captainEmail, role: 'CAPTAIN' },
+      ...(validated.ccEmails ?? []).map(email => ({ email, role: 'CC' as const })),
+    ];
+
+    plan.status = 'EMAIL_SENT';
+
+    plan.captainCommunication = {
+      emailSentAt: new Date(),
+      captainName: validated.captainName,
+      captainEmail: validated.captainEmail,
+      responseType: 'PENDING',
+    };
+
+    if (!plan.communicationLog) {
+      plan.communicationLog = [];
+    }
+    (plan.communicationLog as any[]).push({
+      sentAt: new Date(),
+      sentBy: 'SYSTEM',
+      recipients,
+      planStatus: 'EMAIL_SENT',
+      note: validated.note ?? undefined,
+    });
+
+    plan.markModified('captainCommunication');
+    plan.markModified('communicationLog');
+    await plan.save();
+
+    return {
+      success: true,
+      message: `Plan marked as sent to ${validated.captainEmail}`,
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.errors[0]?.message ?? 'Validation error' };
+    }
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Error marking plan as sent:', msg);
+    return { success: false, error: `Failed to mark plan as sent: ${msg}` };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// COPY STOWAGE PLAN (New Draft from locked plan)
+// Duplicates cargoPositions + coolingSectionStatus into a new DRAFT plan.
+// Called by "New Draft" button on a locked (EMAIL_SENT or beyond) plan.
+// ----------------------------------------------------------------------------
+
+export async function copyStowagePlan(sourcePlanId: unknown) {
+  try {
+    const id = StowagePlanIdSchema.parse(sourcePlanId);
+
+    await connectDB();
+
+    const source = await StowagePlanModel.findById(id)
+      .populate('voyageId')
+      .populate('vesselId')
+      .lean();
+
+    if (!source) {
+      return { success: false, error: 'Source plan not found' };
+    }
+
+    const voyage = source.voyageId as any;
+    const vessel = source.vesselId as any;
+
+    const planNumber = await generatePlanNumber(
+      (source as any).voyageNumber || voyage?.voyageNumber || '',
+      (source as any).vesselName || vessel?.name || '',
+      voyage?.weekNumber ?? undefined,
+      voyage?.departureDate ?? undefined,
+    );
+
+    const newPlan = await StowagePlanModel.create({
+      planNumber,
+      voyageId: (source as any).voyageId?._id ?? (source as any).voyageId,
+      voyageNumber: (source as any).voyageNumber || voyage?.voyageNumber || '',
+      vesselId: (source as any).vesselId?._id ?? (source as any).vesselId,
+      vesselName: (source as any).vesselName || vessel?.name || '',
+      status: 'DRAFT',
+      cargoPositions: (source as any).cargoPositions ?? [],
+      coolingSectionStatus: (source as any).coolingSectionStatus ?? [],
+      overstowViolations: [],
+      temperatureConflicts: [],
+      weightDistributionWarnings: [],
+      createdBy: 'SYSTEM',
+    });
+
+    return {
+      success: true,
+      planId: newPlan._id.toString(),
+      planNumber,
+      message: `New draft ${planNumber} created from ${(source as any).planNumber}`,
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Error copying stowage plan:', msg);
+    return { success: false, error: `Failed to create new draft: ${msg}` };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // SAVE CARGO ASSIGNMENTS
 // Replaces all cargoPositions on a plan with the current in-memory assignments.
 // Called by "Save Draft" on the stowage plan detail page.
