@@ -204,7 +204,15 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <div className={styles.widgets}>
 
         {/* Fleet Status */}
-        <div className={styles.widget} title={collapsed ? `Fleet: ${totalActive} active` : undefined}>
+        <div className={styles.widget}>
+          {/* Collapsed tooltip icon — only visible when sidebar is collapsed */}
+          <span
+            className={styles.widgetCollapsedHint}
+            title={fleet
+              ? `Fleet: ${fleet.inTransit} in transit · ${fleet.confirmed} confirmed · ${fleet.planned} planned`
+              : 'Fleet status loading…'}
+          >⛴</span>
+          {/* Full content — hidden when collapsed */}
           <div className={styles.widgetLabel}>Fleet Status</div>
           <div className={styles.fleetRow}>
             <span className={styles.fleetIcon}>⛴</span>
@@ -228,7 +236,15 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <div className={styles.widgetDivider} />
 
         {/* Port Temperatures */}
-        <div className={styles.widget} title={collapsed ? 'Port temperatures' : undefined}>
+        <div className={styles.widget}>
+          {/* Collapsed tooltip icon */}
+          <span
+            className={styles.widgetCollapsedHint}
+            title={portTemps.length > 0
+              ? portTemps.map(p => `${p.flag} ${p.label} ${p.temp !== null ? `${p.temp > 0 ? '+' : ''}${p.temp}°` : '—'}`).join(' · ')
+              : 'Port temperatures loading…'}
+          >🌡</span>
+          {/* Full content — hidden when collapsed */}
           <div className={styles.widgetLabel}>Port Temps</div>
           {portTemps.length === 0 ? (
             <div className={styles.tempLoading}>Loading…</div>

@@ -251,6 +251,29 @@
 }
 
 .sidebar--collapsed .widget {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 0;
+}
+
+/* Collapsed hint icon — hidden when expanded, visible when collapsed */
+.widgetCollapsedHint {
+  display: none;
+  font-size: 15px;
+  cursor: default;
+  line-height: 1;
+}
+
+.sidebar--collapsed .widgetCollapsedHint {
+  display: flex;
+}
+
+/* Hide all full-content children when collapsed */
+.sidebar--collapsed .widgetLabel,
+.sidebar--collapsed .fleetRow,
+.sidebar--collapsed .tempRow,
+.sidebar--collapsed .tempLoading {
   display: none;
 }
 
