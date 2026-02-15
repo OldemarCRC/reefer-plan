@@ -35,7 +35,7 @@ export default function StowagePlanDetailPage() {
   const planId = params.id as string;
   const router = useRouter();
 
-  const [activeTab, setActiveTab] = useState<'cargo' | 'stability' | 'validation'>('cargo');
+  const [activeTab, setActiveTab] = useState<'cargo' | 'validation'>('cargo');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, startDeleteTransition] = useTransition();
@@ -602,12 +602,6 @@ export default function StowagePlanDetailPage() {
               Cargo List ({shipments.length})
             </button>
             <button
-              className={`${styles.tab} ${activeTab === 'stability' ? styles.active : ''}`}
-              onClick={() => setActiveTab('stability')}
-            >
-              Stability
-            </button>
-            <button
               className={`${styles.tab} ${activeTab === 'validation' ? styles.active : ''}`}
               onClick={() => setActiveTab('validation')}
             >
@@ -728,59 +722,6 @@ export default function StowagePlanDetailPage() {
               </div>
             )}
 
-            {activeTab === 'stability' && (
-              <div className={styles.stabilityPanel}>
-                <h3>Preliminary Stability Estimate</h3>
-                <div className={styles.stabilityGrid}>
-                  <div className={styles.stabilityItem}>
-                    <span className={styles.label}>Displacement:</span>
-                    <span className={styles.value}>{stability.displacement} MT</span>
-                  </div>
-                  <div className={styles.stabilityItem}>
-                    <span className={styles.label}>GM:</span>
-                    <span className={styles.value}>{stability.estimatedGM} m</span>
-                  </div>
-                  <div className={styles.stabilityItem}>
-                    <span className={styles.label}>Trim:</span>
-                    <span className={styles.value}>{stability.estimatedTrim} m</span>
-                  </div>
-                  <div className={styles.stabilityItem}>
-                    <span className={styles.label}>List:</span>
-                    <span className={styles.value}>{stability.estimatedList}°</span>
-                  </div>
-                  <div className={styles.stabilityItem}>
-                    <span className={styles.label}>Draft Forward:</span>
-                    <span className={styles.value}>{stability.estimatedDrafts.forward} m</span>
-                  </div>
-                  <div className={styles.stabilityItem}>
-                    <span className={styles.label}>Draft Aft:</span>
-                    <span className={styles.value}>{stability.estimatedDrafts.aft} m</span>
-                  </div>
-                </div>
-
-                {stability.preliminaryCheck.warnings.length > 0 && (
-                  <div className={styles.warningBox}>
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                      <path d="M10 6v4m0 4h.01M2 10l8-8 8 8-8 8-8-8z" stroke="currentColor" strokeWidth="1.5"/>
-                    </svg>
-                    <div>
-                      <strong>Warnings:</strong>
-                      <ul>
-                        {stability.preliminaryCheck.warnings.map((warning, idx) => (
-                          <li key={idx}>{warning}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                )}
-
-                <div className={styles.disclaimer}>
-                  <strong>⚠️ Disclaimer:</strong> This is a preliminary estimate only. 
-                  Final stability calculations must be performed by the ship's stability system onboard.
-                </div>
-              </div>
-            )}
-
             {activeTab === 'validation' && (
               <div className={styles.validationPanel}>
                 <h3>Plan Validation</h3>
@@ -893,7 +834,7 @@ export default function StowagePlanDetailPage() {
           </div>
         </div>
 
-        {/* Right Panel - Vessel Visualization */}
+        {/* Right Panel - Vessel Visualization + Stability */}
         <div className={styles.rightPanel}>
           <div className={styles.panelHeader}>
             <h2>Vessel Profile</h2>
@@ -904,6 +845,48 @@ export default function StowagePlanDetailPage() {
             tempAssignments={vesselProfileData}
           />
 
+          {/* Stability card — below SVG, keeps left panel for cargo only */}
+          <div className={styles.stabilityCard}>
+            <div className={styles.stabilityCardHeader}>
+              <span className={styles.stabilityCardTitle}>Preliminary Stability</span>
+              <span className={styles.stabilityCardDisclaimer}>estimate only — verify onboard</span>
+            </div>
+            <div className={styles.stabilityInlineGrid}>
+              <div className={styles.stabilityInlineItem}>
+                <span className={styles.stabilityInlineLabel}>Displacement</span>
+                <span className={styles.stabilityInlineValue}>{stability.displacement} MT</span>
+              </div>
+              <div className={styles.stabilityInlineItem}>
+                <span className={styles.stabilityInlineLabel}>GM</span>
+                <span className={styles.stabilityInlineValue}>{stability.estimatedGM} m</span>
+              </div>
+              <div className={styles.stabilityInlineItem}>
+                <span className={styles.stabilityInlineLabel}>Trim</span>
+                <span className={styles.stabilityInlineValue}>{stability.estimatedTrim > 0 ? '+' : ''}{stability.estimatedTrim} m</span>
+              </div>
+              <div className={styles.stabilityInlineItem}>
+                <span className={styles.stabilityInlineLabel}>List</span>
+                <span className={styles.stabilityInlineValue}>{stability.estimatedList}°</span>
+              </div>
+              <div className={styles.stabilityInlineItem}>
+                <span className={styles.stabilityInlineLabel}>Fwd Draft</span>
+                <span className={styles.stabilityInlineValue}>{stability.estimatedDrafts.forward} m</span>
+              </div>
+              <div className={styles.stabilityInlineItem}>
+                <span className={styles.stabilityInlineLabel}>Aft Draft</span>
+                <span className={styles.stabilityInlineValue}>{stability.estimatedDrafts.aft} m</span>
+              </div>
+            </div>
+            {stability.preliminaryCheck.warnings.map((w, i) => (
+              <div key={i} className={styles.stabilityWarningRow}>
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                  <path d="M10 2l8 16H2l8-16z" stroke="#eab308" strokeWidth="1.5" strokeLinejoin="round"/>
+                  <path d="M10 8v4m0 3h.01" stroke="#eab308" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+                <span>{w}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
