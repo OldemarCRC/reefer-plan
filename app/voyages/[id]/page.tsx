@@ -4,7 +4,7 @@ import { getStowagePlansByVoyage } from '@/app/actions/stowage-plan';
 import { getBookingsByVoyage } from '@/app/actions/booking';
 import Link from 'next/link';
 import styles from './page.module.css';
-import { DeleteVoyageButton, PortCallsEditor, DeletePlanButton } from './VoyageDetailClient';
+import { PortCallsEditor } from './VoyageDetailClient';
 
 const statusStyles: Record<string, { bg: string; color: string }> = {
   IN_PROGRESS: { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
@@ -115,11 +115,6 @@ export default async function VoyageDetailPage({
             <Link href={`/stowage-plans/new?voyageId=${id}`} className={styles.btnSecondary}>
               + New Plan
             </Link>
-            <DeleteVoyageButton
-              voyageId={id}
-              voyageNumber={voyage.voyageNumber}
-              voyageStatus={voyage.status || 'PLANNED'}
-            />
           </div>
         </div>
 
@@ -209,16 +204,9 @@ export default async function VoyageDetailPage({
                       {plan.status || 'DRAFT'} · Created {formatDate(plan.createdAt)}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <Link href={`/stowage-plans/${plan._id}`} className={styles.btnGhost}>
-                      Open →
-                    </Link>
-                    <DeletePlanButton
-                      planId={plan._id}
-                      planNumber={plan.planNumber || `Plan ${plan._id.slice(-6)}`}
-                      voyageId={id}
-                    />
-                  </div>
+                  <Link href={`/stowage-plans/${plan._id}`} className={styles.btnGhost}>
+                    Open →
+                  </Link>
                 </div>
               ))}
             </div>

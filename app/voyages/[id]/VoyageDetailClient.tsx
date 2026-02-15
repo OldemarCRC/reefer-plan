@@ -284,25 +284,6 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls }: {
     });
   };
 
-  const toggleCancel = (pc: PortCallRow) => {
-    const action = pc.status === 'CANCELLED' ? 'RESTORE' : 'CANCEL';
-    startTransition(async () => {
-      const result = await updatePortRotation(voyageId, [{
-        action,
-        portCode: pc.portCode,
-      }]);
-      if (result.success) {
-        setPortCalls(result.portCalls);
-        setSuccessMsg(action === 'CANCEL' ? `${pc.portName} cancelled` : `${pc.portName} restored`);
-        clearFeedback();
-        router.refresh();
-      } else {
-        setError(result.error ?? 'Failed to update port call');
-        clearFeedback();
-      }
-    });
-  };
-
   return (
     <div>
       {(error || successMsg) && (
@@ -470,14 +451,6 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls }: {
                                   </button>
                                 </>
                               )}
-                              <button
-                                className={isCancelled ? clientStyles.btnRestore : clientStyles.btnCancelPort}
-                                onClick={() => toggleCancel(pc)}
-                                disabled={isPending}
-                                title={isCancelled ? 'Restore port call' : 'Cancel port call'}
-                              >
-                                {isCancelled ? 'Restore' : 'Cancel'}
-                              </button>
                             </>
                           )}
                         </div>

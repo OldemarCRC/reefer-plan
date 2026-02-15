@@ -516,6 +516,49 @@ export async function deleteVoyage(voyageId: unknown) {
 }
 
 // ----------------------------------------------------------------------------
+// HARD DELETE VOYAGE (admin only — removes document from DB)
+// Only allowed when voyage has zero stowage plans AND zero bookings.
+// For operational cancellations, use deleteVoyage (soft cancel).
+// ----------------------------------------------------------------------------
+
+export async function hardDeleteVoyage(voyageId: unknown) {
+  try {
+    const id = VoyageIdSchema.parse(voyageId);
+
+    await connectDB();
+
+    const [planCount, bookingCount] = await Promise.all([
+      StowagePlanModel.countDocuments({ voyageId: id }),
+      BookingModel.countDocuments({ voyageId: id }),
+    ]);
+
+    if (planCount > 0 || bookingCount > 0) {
+      const reasons: string[] = [];
+      if (planCount > 0) reasons.push(`${planCount} stowage plan${planCount > 1 ? 's' : ''}`);
+      if (bookingCount > 0) reasons.push(`${bookingCount} booking${bookingCount > 1 ? 's' : ''}`);
+      return {
+        success: false,
+        error: `Cannot delete voyage: ${reasons.join(' and ')} must be removed first`,
+        blockedBy: { plans: planCount, bookings: bookingCount },
+      };
+    }
+
+    const voyage = await VoyageModel.findByIdAndDelete(id).lean();
+    if (!voyage) {
+      return { success: false, error: 'Voyage not found' };
+    }
+
+    return {
+      success: true,
+      message: `Voyage ${(voyage as any).voyageNumber} permanently deleted`,
+    };
+  } catch (error) {
+    console.error('Error hard-deleting voyage:', error);
+    return { success: false, error: 'Failed to delete voyage' };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // UPDATE PORT ROTATION (post-creation port call editing)
 // Handles: cancel, restore, add, reorder, date changes.
 // Each change appends an entry to voyage.portCallChangelog[].
@@ -932,6 +975,81 @@ export async function getVoyagePortSequence(voyageId: unknown) {
       success: false,
       error: 'Failed to fetch port sequence',
     };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// CANCEL VOYAGE (soft cancel — admin, no guard)
+// Sets status to CANCELLED regardless of plans or bookings.
+// For admin use: preserves full audit trail.
+// ----------------------------------------------------------------------------
+
+export async function cancelVoyage(voyageId: unknown) {
+  try {
+    const id = VoyageIdSchema.parse(voyageId);
+    await connectDB();
+
+    const voyage = await VoyageModel.findByIdAndUpdate(
+      id,
+      { status: 'CANCELLED' },
+      { new: true }
+    ).lean();
+
+    if (!voyage) {
+      return { success: false, error: 'Voyage not found' };
+    }
+
+    return {
+      success: true,
+      message: `Voyage ${(voyage as any).voyageNumber} cancelled`,
+    };
+  } catch (error) {
+    console.error('Error cancelling voyage:', error);
+    return { success: false, error: 'Failed to cancel voyage' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// GET ADMIN VOYAGES — full list with plan + booking counts (for /admin page)
+// ----------------------------------------------------------------------------
+
+export async function getAdminVoyages() {
+  try {
+    await connectDB();
+
+    const voyages = await VoyageModel.find()
+      .populate('vesselId', 'name imoNumber')
+      .populate('serviceId', 'serviceCode serviceName')
+      .sort({ departureDate: -1 })
+      .lean();
+
+    // Fetch plan + booking counts for all voyages in parallel
+    const ids = voyages.map((v: any) => v._id);
+    const [planCounts, bookingCounts] = await Promise.all([
+      StowagePlanModel.aggregate([
+        { $match: { voyageId: { $in: ids } } },
+        { $group: { _id: '$voyageId', count: { $sum: 1 } } },
+      ]),
+      BookingModel.aggregate([
+        { $match: { voyageId: { $in: ids } } },
+        { $group: { _id: '$voyageId', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const planMap = Object.fromEntries(planCounts.map((r: any) => [r._id.toString(), r.count]));
+    const bookingMap = Object.fromEntries(bookingCounts.map((r: any) => [r._id.toString(), r.count]));
+
+    const data = voyages.map((v: any) => ({
+      ...v,
+      _id: v._id.toString(),
+      planCount: planMap[v._id.toString()] ?? 0,
+      bookingCount: bookingMap[v._id.toString()] ?? 0,
+    }));
+
+    return { success: true, data: JSON.parse(JSON.stringify(data)) };
+  } catch (error) {
+    console.error('Error fetching admin voyages:', error);
+    return { success: false, error: 'Failed to fetch voyages' };
   }
 }
 
