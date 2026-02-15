@@ -1,6 +1,7 @@
 import AppShell from '@/components/layout/AppShell';
 import VesselProfile from '@/components/vessel/VesselProfile';
 import VoyageSelector from './VoyageSelector';
+import PlanSelector from './PlanSelector';
 import ConfigureZonesButton from './ConfigureZonesButton';
 import { getVesselById } from '@/app/actions/vessel';
 import { getVoyagesByVessel } from '@/app/actions/voyage';
@@ -157,15 +158,18 @@ function getZoneStats(assignments: VoyageTempAssignment[]) {
   return Array.from(zoneMap.values());
 }
 
+// Priority order for auto-selecting the "active" voyage when none is in the URL
+const VOYAGE_STATUS_PRIORITY = ['IN_PROGRESS', 'CONFIRMED', 'PLANNED', 'ESTIMATED'];
+
 export default async function VesselDetailPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ voyageId?: string }>;
+  searchParams: Promise<{ voyageId?: string; planId?: string }>;
 }) {
   const { id } = await params;
-  const { voyageId: selectedVoyageId } = await searchParams;
+  const { voyageId: selectedVoyageId, planId: selectedPlanId } = await searchParams;
 
   // Fetch vessel
   const vessel = await getVesselById(id).catch(() => null);
@@ -184,19 +188,30 @@ export default async function VesselDetailPage({
   const voyagesResult = await getVoyagesByVessel(vessel._id);
   const voyages = voyagesResult.success ? voyagesResult.data : [];
 
-  // If a voyageId is selected, fetch its stowage plan
+  // Auto-select: use URL param if provided, else pick the most active voyage
+  const effectiveVoyageId: string | undefined = selectedVoyageId ?? (() => {
+    for (const status of VOYAGE_STATUS_PRIORITY) {
+      const match = voyages.find((v: any) => v.status === status);
+      if (match) return match._id;
+    }
+    return voyages[0]?._id;
+  })();
+
+  // Fetch stowage plans for the effective voyage
   let assignments: VoyageTempAssignment[] = [];
   let selectedPlan: any = null;
+  let plans: any[] = [];
 
   const temperatureZones = (vessel as any).temperatureZones ?? [];
 
-  if (selectedVoyageId) {
-    const plansResult = await getStowagePlansByVoyage(selectedVoyageId);
+  if (effectiveVoyageId) {
+    const plansResult = await getStowagePlansByVoyage(effectiveVoyageId);
     if (plansResult.success && plansResult.data.length > 0) {
-      selectedPlan = plansResult.data[0]; // Use most recent plan
+      plans = plansResult.data; // sorted newest-first by action
+      // If a specific planId is in the URL, use it; otherwise default to newest
+      selectedPlan = plans.find((p: any) => p._id === selectedPlanId) ?? plans[0];
       assignments = buildTempAssignments(selectedPlan, temperatureZones);
     }
-    // else: voyage selected but no plan — assignments stays []
   }
 
   // Build vessel layout for data-driven SVG rendering
@@ -214,7 +229,6 @@ export default async function VesselDetailPage({
   const zoneStats = getZoneStats(profileAssignments);
 
   // Build zone configs for the Configure Zones modal
-  // Aggregates cargo info per zone from profileAssignments (cargoType + palletsLoaded)
   const zoneConfigs: ZoneConfig[] = zoneStats.map((z) => {
     const coolSection = selectedPlan?.coolingSectionStatus?.find(
       (cs: any) => cs.zoneId === z.zoneId
@@ -229,8 +243,8 @@ export default async function VesselDetailPage({
     };
   });
 
-  // Selected voyage label for the table header
-  const selectedVoyage = voyages.find((v: any) => v._id === selectedVoyageId);
+  // Labels for header/selectors
+  const selectedVoyage = voyages.find((v: any) => v._id === effectiveVoyageId);
   const voyageLabel = selectedVoyage?.voyageNumber || null;
 
   return (
@@ -257,11 +271,23 @@ export default async function VesselDetailPage({
                 voyageNumber: v.voyageNumber,
                 status: v.status,
               }))}
-              currentVoyageId={selectedVoyageId}
+              currentVoyageId={effectiveVoyageId}
             />
+            {plans.length > 1 && effectiveVoyageId && (
+              <PlanSelector
+                vesselId={id}
+                voyageId={effectiveVoyageId}
+                plans={plans.map((p: any) => ({
+                  _id: p._id,
+                  planNumber: p.planNumber,
+                  status: p.status,
+                }))}
+                currentPlanId={selectedPlan?._id}
+              />
+            )}
             <ConfigureZonesButton
               planId={selectedPlan?._id?.toString() ?? null}
-              hasVoyage={!!selectedVoyageId}
+              hasVoyage={!!effectiveVoyageId}
               zones={zoneConfigs}
             />
             {selectedPlan && (
