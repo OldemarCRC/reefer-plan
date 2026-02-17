@@ -83,7 +83,7 @@ export async function createVoyageFromWizard(data: unknown) {
     }
 
     // Build portCalls with Date objects
-    const portCalls = validated.portCalls.map(pc => ({
+    const portCalls = validated.portCalls.map((pc: any) => ({
       portCode: pc.portCode,
       portName: pc.portName,
       country: pc.country,
@@ -152,7 +152,7 @@ export async function createVoyage(data: unknown) {
     }
     
     // Validate port sequence (must be consecutive)
-    const sequences = validated.portCalls.map(p => p.sequence).sort((a, b) => a - b);
+    const sequences = validated.portCalls.map((p: any) => p.sequence).sort((a: any, b: any) => a - b);
     for (let i = 0; i < sequences.length; i++) {
       if (sequences[i] !== i + 1) {
         return {
@@ -171,7 +171,7 @@ export async function createVoyage(data: unknown) {
     }
     
     // IMPORTANT: All ports start unlocked
-    const portCallsWithDefaults = validated.portCalls.map(pc => ({
+    const portCallsWithDefaults = validated.portCalls.map((pc: any) => ({
       ...pc,
       locked: false,
     }));
@@ -190,7 +190,7 @@ export async function createVoyage(data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error creating voyage:', error);
@@ -224,7 +224,7 @@ export async function lockPort(
     }
     
     // Find the port in portCalls array
-    const portCall = voyage.portCalls.find(p => p.portCode === code);
+    const portCall = voyage.portCalls.find((p: any) => p.portCode === code);
     
     if (!portCall) {
       return {
@@ -282,15 +282,15 @@ export async function unlockPort(
       return { success: false, error: 'Voyage not found' };
     }
     
-    const portCall = voyage.portCalls.find(p => p.portCode === code);
-    
+    const portCall = voyage.portCalls.find((p: any) => p.portCode === code);
+
     if (!portCall) {
       return {
         success: false,
         error: `Port ${code} not found in voyage`,
       };
     }
-    
+
     if (!portCall.locked) {
       return {
         success: false,
@@ -338,8 +338,8 @@ export async function getLockedPorts(voyageId: unknown) {
     }
     
     const lockedPorts = voyage.portCalls
-      .filter(pc => pc.locked)
-      .map(pc => ({
+      .filter((pc: any) => pc.locked)
+      .map((pc: any) => ({
         portCode: pc.portCode,
         portName: pc.portName,
         sequence: pc.sequence,
@@ -387,12 +387,12 @@ export async function isPortLocked(
       return { success: false, error: 'Voyage not found' };
     }
     
-    const portCall = voyage.portCalls.find(p => p.portCode === code);
-    
+    const portCall = voyage.portCalls.find((p: any) => p.portCode === code);
+
     if (!portCall) {
       return { success: false, error: 'Port not found in voyage' };
     }
-    
+
     return {
       success: true,
       locked: portCall.locked || false,
@@ -454,7 +454,7 @@ export async function updateVoyage(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error updating voyage:', error);
@@ -950,8 +950,8 @@ export async function getVoyagePortSequence(voyageId: unknown) {
     }
     
     const sortedPorts = voyage.portCalls
-      .sort((a, b) => a.sequence - b.sequence)
-      .map(pc => ({
+      .sort((a: any, b: any) => a.sequence - b.sequence)
+      .map((pc: any) => ({
         sequence: pc.sequence,
         portCode: pc.portCode,
         portName: pc.portName,

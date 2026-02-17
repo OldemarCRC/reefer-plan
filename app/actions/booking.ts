@@ -1,20 +1,15 @@
 // ============================================================================
 // BOOKING SERVER ACTIONS
-// Handles booking requests with partial confirmation support
-// 
-// CHANGE #3: Partial Booking Confirmation
-// - requestedQuantity: What client requested
-// - confirmedQuantity: What we confirmed
-// - standbyQuantity: On waiting list
-// - Status: CONFIRMED | PARTIAL | STANDBY | REJECTED
+// Phase 9A — Redesigned with contract-based creation, per-voyage sequential
+// booking numbers, and SHIPPER/CONSIGNEE model.
 // ============================================================================
 
 'use server'
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { BookingModel } from '@/lib/db/schemas';
-import type { Booking, BookingStatus } from '@/types/models';
+import { BookingModel, ContractModel, VoyageModel, ServiceModel } from '@/lib/db/schemas';
+import type { BookingStatus } from '@/types/models';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -23,149 +18,188 @@ import type { Booking, BookingStatus } from '@/types/models';
 const BookingIdSchema = z.string().min(1, 'Booking ID is required');
 
 const CargoTypeSchema = z.enum([
-  'BANANAS',
-  'FROZEN_FISH',
-  'TABLE_GRAPES',
-  'CITRUS',
-  'AVOCADOS',
-  'BERRIES',
-  'OTHER_FROZEN',
-  'OTHER_CHILLED',
+  'BANANAS', 'ORGANIC_BANANAS', 'PLANTAINS', 'FROZEN_FISH', 'TABLE_GRAPES',
+  'CITRUS', 'AVOCADOS', 'BERRIES', 'KIWIS', 'PINEAPPLES', 'CHERRIES',
+  'BLUEBERRIES', 'PLUMS', 'PEACHES', 'APPLES', 'PEARS', 'PAPAYA',
+  'MANGOES', 'OTHER_FROZEN', 'OTHER_CHILLED',
 ]);
 
-const PortSchema = z.object({
-  code: z.string().min(4).max(6),
-  name: z.string().min(1),
-  country: z.string().min(1),
-});
-
-// IMPORTANT: Temperature NOT specified by client
-// Temperature is a property of the vessel compartment
-const CreateBookingSchema = z.object({
+const CreateBookingFromContractSchema = z.object({
+  contractId: z.string().min(1, 'Contract ID is required'),
   voyageId: z.string().min(1, 'Voyage ID is required'),
-  contractId: z.string().optional(), // Optional if no contract exists
-  
-  exporter: z.object({
-    name: z.string().min(1).max(200),
-    contact: z.string().min(1),
-    email: z.string().email(),
-  }),
-  
-  origin: PortSchema,
-  destination: PortSchema,
-  
-  cargo: z.object({
-    type: CargoTypeSchema,
-    requestedQuantity: z.number().int().positive().max(10000),
-    totalWeight: z.number().positive(), // kg
-    // NO temperature here - it's vessel-defined
-  }),
-  
-  requestedDate: z.date().optional().default(() => new Date()),
+  shipperCode: z.string().min(1, 'Shipper code is required'),
+  consigneeCode: z.string().min(1, 'Consignee code is required'),
+  cargoType: CargoTypeSchema,
+  requestedQuantity: z.number().int().positive().max(10000),
+  requestedTemperature: z.number().optional(),
+  estimateSource: z.enum(['CONTRACT_DEFAULT', 'SHIPPER_CONFIRMED']).default('CONTRACT_DEFAULT'),
 });
 
 const ApproveBookingSchema = z.object({
   bookingId: z.string().min(1),
-  confirmedQuantity: z.number().int().positive(),
-  approvedBy: z.string().min(1), // User ID
-  notes: z.string().optional(),
+  confirmedQuantity: z.number().int().min(0),
+  approvedBy: z.string().min(1),
 });
 
 const RejectBookingSchema = z.object({
   bookingId: z.string().min(1),
   rejectionReason: z.string().min(1).max(500),
-  rejectedBy: z.string().min(1), // User ID
+  rejectedBy: z.string().min(1),
 });
 
 // ----------------------------------------------------------------------------
-// CREATE BOOKING
-// Client requests space - always starts as PENDING
+// AUTO-NUMBERING HELPER
+// Format: {officeCode}-{serviceShortCode}-{voyageNumber}-{seq:3}
+// Sequential per voyage
 // ----------------------------------------------------------------------------
 
-export async function createBooking(data: unknown) {
+async function generateBookingNumber(
+  officeCode: string,
+  serviceShortCode: string,
+  voyageNumber: string,
+  voyageId: string
+): Promise<string> {
+  const count = await BookingModel.countDocuments({ voyageId });
+  const seq = String(count + 1).padStart(3, '0');
+  return `${officeCode}-${serviceShortCode}-${voyageNumber}-${seq}`;
+}
+
+// ----------------------------------------------------------------------------
+// CREATE BOOKING FROM CONTRACT
+// Primary creation path — looks up contract to auto-fill fields
+// ----------------------------------------------------------------------------
+
+export async function createBookingFromContract(data: unknown) {
   try {
-    // Validate input
-    const validated = CreateBookingSchema.parse(data);
-    
+    const validated = CreateBookingFromContractSchema.parse(data);
     await connectDB();
-    
+
+    // Look up contract
+    const contract = await ContractModel.findById(validated.contractId).lean();
+    if (!contract) {
+      return { success: false, error: 'Contract not found' };
+    }
+    if (!contract.active) {
+      return { success: false, error: 'Contract is not active' };
+    }
+
+    // Look up voyage
+    const voyage = await VoyageModel.findById(validated.voyageId).lean();
+    if (!voyage) {
+      return { success: false, error: 'Voyage not found' };
+    }
+
+    // Look up service for shortCode
+    const service = await ServiceModel.findById(contract.serviceId).lean();
+    if (!service || !service.shortCode) {
+      return { success: false, error: 'Service not found or missing shortCode' };
+    }
+
+    // Resolve shipper from contract counterparties or client
+    let shipperName: string;
+    let shipperCode: string;
+    if (contract.client.type === 'SHIPPER') {
+      // Client is the shipper — use client info
+      shipperName = contract.client.name;
+      shipperCode = validated.shipperCode;
+    } else {
+      // Client is consignee — look up shipper from shippers array
+      const shipper = contract.shippers?.find((s: any) => s.code === validated.shipperCode);
+      if (!shipper) {
+        return { success: false, error: `Shipper with code ${validated.shipperCode} not found in contract` };
+      }
+      shipperName = shipper.name;
+      shipperCode = shipper.code;
+    }
+
+    // Resolve consignee from contract counterparties or client
+    let consigneeName: string;
+    let consigneeCode: string;
+    if (contract.client.type === 'CONSIGNEE') {
+      // Client is the consignee — use client info
+      consigneeName = contract.client.name;
+      consigneeCode = validated.consigneeCode;
+    } else {
+      // Client is shipper — look up consignee from consignees array
+      const consignee = contract.consignees?.find((c: any) => c.code === validated.consigneeCode);
+      if (!consignee) {
+        return { success: false, error: `Consignee with code ${validated.consigneeCode} not found in contract` };
+      }
+      consigneeName = consignee.name;
+      consigneeCode = consignee.code;
+    }
+
     // Generate booking number
-    const count = await BookingModel.countDocuments();
-    const bookingNumber = `BK-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
-    
-    // Create booking with PENDING status
+    const bookingNumber = await generateBookingNumber(
+      contract.officeCode,
+      service.shortCode,
+      voyage.voyageNumber,
+      validated.voyageId
+    );
+
     const booking = await BookingModel.create({
       bookingNumber,
-      voyageId: validated.voyageId,
       contractId: validated.contractId,
-      exporter: validated.exporter,
-      origin: validated.origin,
-      destination: validated.destination,
-      cargo: {
-        type: validated.cargo.type,
-        quantity: validated.cargo.requestedQuantity,
-        totalWeight: validated.cargo.totalWeight,
-        temperatureRange: {
-          // Default ranges by cargo type - will be validated against vessel
-          min: getDefaultMinTemp(validated.cargo.type),
-          max: getDefaultMaxTemp(validated.cargo.type),
-        },
-        units: [], // Will be populated when confirmed
+      voyageId: validated.voyageId,
+      voyageNumber: voyage.voyageNumber,
+      officeCode: contract.officeCode,
+      serviceCode: contract.serviceCode,
+      client: {
+        name: contract.client.name,
+        clientNumber: contract.client.clientNumber,
+        contact: contract.client.contact,
+        email: contract.client.email,
       },
-      requestedQuantity: validated.cargo.requestedQuantity,
+      shipper: { name: shipperName, code: shipperCode },
+      consignee: { name: consigneeName, code: consigneeCode },
+      cargoType: validated.cargoType,
+      requestedQuantity: validated.requestedQuantity,
       confirmedQuantity: 0,
-      standbyQuantity: 0,
+      requestedTemperature: validated.requestedTemperature,
+      pol: contract.originPort,
+      pod: contract.destinationPort,
+      estimateSource: validated.estimateSource,
       status: 'PENDING',
-      requestedDate: validated.requestedDate,
+      requestedDate: new Date(),
     });
-    
+
     return {
       success: true,
       data: JSON.parse(JSON.stringify(booking)),
+      message: `Booking ${bookingNumber} created successfully`,
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: `Validation error: ${error.errors[0].message}`,
-      };
+      return { success: false, error: `Validation error: ${error.issues[0].message}` };
     }
     console.error('Error creating booking:', error);
-    return {
-      success: false,
-      error: 'Failed to create booking',
-    };
+    return { success: false, error: 'Failed to create booking' };
   }
 }
 
 // ----------------------------------------------------------------------------
 // APPROVE BOOKING (Full or Partial)
-// CHANGE #3: Supports partial confirmation
 // ----------------------------------------------------------------------------
 
 export async function approveBooking(data: unknown) {
   try {
     const validated = ApproveBookingSchema.parse(data);
-    
     await connectDB();
-    
+
     const booking = await BookingModel.findById(validated.bookingId);
-    
     if (!booking) {
       return { success: false, error: 'Booking not found' };
     }
-    
     if (booking.status !== 'PENDING') {
       return { success: false, error: 'Booking is not in PENDING status' };
     }
-    
+
     const requested = booking.requestedQuantity;
     const confirmed = validated.confirmedQuantity;
-    
-    // Determine status based on confirmation
+
     let status: BookingStatus;
     let standby = 0;
-    
+
     if (confirmed === 0) {
       status = 'STANDBY';
       standby = requested;
@@ -174,43 +208,30 @@ export async function approveBooking(data: unknown) {
       standby = requested - confirmed;
     } else {
       status = 'CONFIRMED';
-      standby = 0;
     }
-    
-    // Update booking
+
     booking.confirmedQuantity = confirmed;
     booking.standbyQuantity = standby;
     booking.status = status;
-    booking.approvalDate = new Date();
+    booking.confirmedDate = new Date();
     booking.approvedBy = validated.approvedBy;
-    
-    if (validated.notes) {
-      booking.notes = validated.notes;
-    }
-    
     await booking.save();
-    
-    // TODO: Send email notification to exporter
-    
+
     return {
       success: true,
       data: JSON.parse(JSON.stringify(booking)),
-      message: status === 'PARTIAL' 
-        ? `Partially confirmed: ${confirmed}/${requested} units. ${standby} on standby.`
-        : `Fully confirmed: ${confirmed} units.`,
+      message: status === 'PARTIAL'
+        ? `Partially confirmed: ${confirmed}/${requested} pallets. ${standby} on standby.`
+        : status === 'STANDBY'
+          ? `All ${requested} pallets placed on standby.`
+          : `Fully confirmed: ${confirmed} pallets.`,
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: `Validation error: ${error.errors[0].message}`,
-      };
+      return { success: false, error: `Validation error: ${error.issues[0].message}` };
     }
     console.error('Error approving booking:', error);
-    return {
-      success: false,
-      error: 'Failed to approve booking',
-    };
+    return { success: false, error: 'Failed to approve booking' };
   }
 }
 
@@ -221,67 +242,29 @@ export async function approveBooking(data: unknown) {
 export async function rejectBooking(data: unknown) {
   try {
     const validated = RejectBookingSchema.parse(data);
-    
     await connectDB();
-    
+
     const booking = await BookingModel.findById(validated.bookingId);
-    
     if (!booking) {
       return { success: false, error: 'Booking not found' };
     }
-    
+
     booking.status = 'REJECTED';
     booking.rejectionReason = validated.rejectionReason;
-    booking.approvalDate = new Date();
+    booking.confirmedDate = new Date();
     booking.approvedBy = validated.rejectedBy;
-    
     await booking.save();
-    
-    // TODO: Send rejection email to exporter
-    
+
     return {
       success: true,
       data: JSON.parse(JSON.stringify(booking)),
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: `Validation error: ${error.errors[0].message}`,
-      };
+      return { success: false, error: `Validation error: ${error.issues[0].message}` };
     }
     console.error('Error rejecting booking:', error);
-    return {
-      success: false,
-      error: 'Failed to reject booking',
-    };
-  }
-}
-
-// ----------------------------------------------------------------------------
-// GET BOOKINGS BY VOYAGE
-// ----------------------------------------------------------------------------
-
-export async function getBookingsByVoyage(voyageId: unknown) {
-  try {
-    const id = z.string().parse(voyageId);
-    
-    await connectDB();
-    
-    const bookings = await BookingModel.find({ voyageId: id })
-      .sort({ requestedDate: -1 })
-      .lean();
-    
-    return {
-      success: true,
-      data: JSON.parse(JSON.stringify(bookings)),
-    };
-  } catch (error) {
-    console.error('Error fetching bookings:', error);
-    return {
-      success: false,
-      error: 'Failed to fetch bookings',
-    };
+    return { success: false, error: 'Failed to reject booking' };
   }
 }
 
@@ -304,11 +287,27 @@ export async function getBookings() {
     };
   } catch (error) {
     console.error('Error fetching bookings:', error);
-    return {
-      success: false,
-      error: 'Failed to fetch bookings',
-      data: [],
-    };
+    return { success: false, error: 'Failed to fetch bookings', data: [] };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// GET BOOKINGS BY VOYAGE
+// ----------------------------------------------------------------------------
+
+export async function getBookingsByVoyage(voyageId: unknown) {
+  try {
+    const id = z.string().parse(voyageId);
+    await connectDB();
+
+    const bookings = await BookingModel.find({ voyageId: id })
+      .sort({ requestedDate: -1 })
+      .lean();
+
+    return { success: true, data: JSON.parse(JSON.stringify(bookings)) };
+  } catch (error) {
+    console.error('Error fetching bookings:', error);
+    return { success: false, error: 'Failed to fetch bookings' };
   }
 }
 
@@ -319,53 +318,38 @@ export async function getBookings() {
 export async function getPendingBookings() {
   try {
     await connectDB();
-    
+
     const bookings = await BookingModel.find({ status: 'PENDING' })
-      .sort({ requestedDate: 1 }) // Oldest first
+      .sort({ requestedDate: 1 })
       .lean();
-    
-    return {
-      success: true,
-      data: JSON.parse(JSON.stringify(bookings)),
-    };
+
+    return { success: true, data: JSON.parse(JSON.stringify(bookings)) };
   } catch (error) {
     console.error('Error fetching pending bookings:', error);
-    return {
-      success: false,
-      error: 'Failed to fetch pending bookings',
-    };
+    return { success: false, error: 'Failed to fetch pending bookings' };
   }
 }
 
 // ----------------------------------------------------------------------------
-// GET CONFIRMED BOOKINGS (for stowage planning)
-// Returns CONFIRMED and PARTIAL bookings ready to be assigned
+// GET CONFIRMED BOOKINGS FOR VOYAGE (for stowage planning)
 // ----------------------------------------------------------------------------
 
 export async function getConfirmedBookingsForVoyage(voyageId: unknown) {
   try {
     const id = z.string().parse(voyageId);
-    
     await connectDB();
-    
+
     const bookings = await BookingModel.find({
       voyageId: id,
       status: { $in: ['CONFIRMED', 'PARTIAL'] },
-      assignedStowagePlanId: { $exists: false }, // Not yet assigned
     })
-      .sort({ origin: 1 }) // Sort by origin port
+      .sort({ 'pol.portCode': 1 })
       .lean();
-    
-    return {
-      success: true,
-      data: JSON.parse(JSON.stringify(bookings)),
-    };
+
+    return { success: true, data: JSON.parse(JSON.stringify(bookings)) };
   } catch (error) {
     console.error('Error fetching confirmed bookings:', error);
-    return {
-      success: false,
-      error: 'Failed to fetch confirmed bookings',
-    };
+    return { success: false, error: 'Failed to fetch confirmed bookings' };
   }
 }
 
@@ -373,68 +357,24 @@ export async function getConfirmedBookingsForVoyage(voyageId: unknown) {
 // UPDATE BOOKING
 // ----------------------------------------------------------------------------
 
-export async function updateBooking(
-  bookingId: unknown,
-  updates: unknown
-) {
+export async function updateBooking(bookingId: unknown, updates: Record<string, unknown>) {
   try {
     const id = BookingIdSchema.parse(bookingId);
-    
-    // TODO: Add proper validation schema for updates
-    
     await connectDB();
-    
+
     const booking = await BookingModel.findByIdAndUpdate(
       id,
       { $set: updates },
       { new: true, runValidators: true }
     );
-    
+
     if (!booking) {
       return { success: false, error: 'Booking not found' };
     }
-    
-    return {
-      success: true,
-      data: JSON.parse(JSON.stringify(booking)),
-    };
+
+    return { success: true, data: JSON.parse(JSON.stringify(booking)) };
   } catch (error) {
     console.error('Error updating booking:', error);
-    return {
-      success: false,
-      error: 'Failed to update booking',
-    };
+    return { success: false, error: 'Failed to update booking' };
   }
-}
-
-// ----------------------------------------------------------------------------
-// HELPER FUNCTIONS
-// ----------------------------------------------------------------------------
-
-function getDefaultMinTemp(cargoType: string): number {
-  const tempMap: Record<string, number> = {
-    BANANAS: 12,
-    FROZEN_FISH: -25,
-    TABLE_GRAPES: -1,
-    CITRUS: 4,
-    AVOCADOS: 5,
-    BERRIES: -1,
-    OTHER_FROZEN: -20,
-    OTHER_CHILLED: 0,
-  };
-  return tempMap[cargoType] || 0;
-}
-
-function getDefaultMaxTemp(cargoType: string): number {
-  const tempMap: Record<string, number> = {
-    BANANAS: 14,
-    FROZEN_FISH: -18,
-    TABLE_GRAPES: 0,
-    CITRUS: 8,
-    AVOCADOS: 8,
-    BERRIES: 0,
-    OTHER_FROZEN: -18,
-    OTHER_CHILLED: 5,
-  };
-  return tempMap[cargoType] || 5;
 }

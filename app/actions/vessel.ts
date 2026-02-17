@@ -60,7 +60,7 @@ export async function getVesselById(id: unknown): Promise<Vessel | null> {
     return JSON.parse(JSON.stringify(vessel));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation error: ${error.errors[0].message}`);
+      throw new Error(`Validation error: ${error.issues[0].message}`);
     }
     console.error('Error fetching vessel by ID:', error);
     throw new Error('Failed to fetch vessel');
@@ -89,7 +89,7 @@ export async function getVesselByName(name: unknown): Promise<Vessel | null> {
     return JSON.parse(JSON.stringify(vessel));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation error: ${error.errors[0].message}`);
+      throw new Error(`Validation error: ${error.issues[0].message}`);
     }
     console.error('Error fetching vessel by name:', error);
     throw new Error('Failed to fetch vessel');
@@ -117,7 +117,7 @@ export async function getVesselByImo(imoNumber: unknown): Promise<Vessel | null>
     return JSON.parse(JSON.stringify(vessel));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation error: ${error.errors[0].message}`);
+      throw new Error(`Validation error: ${error.issues[0].message}`);
     }
     console.error('Error fetching vessel by IMO:', error);
     throw new Error('Failed to fetch vessel');
@@ -169,7 +169,7 @@ export async function getVesselCoolingSections(vesselId: unknown) {
     }));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation error: ${error.errors[0].message}`);
+      throw new Error(`Validation error: ${error.issues[0].message}`);
     }
     console.error('Error fetching cooling sections:', error);
     throw new Error('Failed to fetch cooling sections');
@@ -196,11 +196,11 @@ export async function getVesselCompartments(vesselId: unknown) {
     }
 
     // Flatten all compartments from all holds
-    const compartments = vessel.holds.flatMap(hold =>
-      hold.compartments.map(comp => ({
+    const compartments = vessel.holds.flatMap((hold: any) =>
+      hold.compartments.map((comp: any) => ({
         ...comp,
         holdNumber: hold.holdNumber,
-        coolingSectionId: vessel.temperatureZones.find(cs =>
+        coolingSectionId: vessel.temperatureZones.find((cs: any) =>
           cs.coolingSections.some((s: any) => s.sectionId === comp.id)
         )?.zoneId || null,
       }))
@@ -209,7 +209,7 @@ export async function getVesselCompartments(vesselId: unknown) {
     return JSON.parse(JSON.stringify(compartments));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation error: ${error.errors[0].message}`);
+      throw new Error(`Validation error: ${error.issues[0].message}`);
     }
     console.error('Error fetching compartments:', error);
     throw new Error('Failed to fetch compartments');
@@ -238,7 +238,7 @@ export async function getVesselDeckCapacity(vesselId: unknown) {
     return JSON.parse(JSON.stringify(vessel.deckContainerCapacity));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation error: ${error.errors[0].message}`);
+      throw new Error(`Validation error: ${error.issues[0].message}`);
     }
     console.error('Error fetching deck capacity:', error);
     throw new Error('Failed to fetch deck capacity');
@@ -271,7 +271,7 @@ export async function validateCoolingSectionTemperature(
     }
 
     const coolingSection = vessel.temperatureZones.find(
-      cs => cs.zoneId === zoneId
+      (cs: any) => cs.zoneId === zoneId
     );
 
     if (!coolingSection) {
@@ -300,7 +300,7 @@ export async function validateCoolingSectionTemperature(
     return { valid: true };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation error: ${error.errors[0].message}`);
+      throw new Error(`Validation error: ${error.issues[0].message}`);
     }
     console.error('Error validating cooling section temperature:', error);
     throw error;

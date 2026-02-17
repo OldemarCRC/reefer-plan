@@ -121,9 +121,8 @@ export async function createStowagePlan(data: unknown) {
       vesselId: validated.vesselId,
       voyageId: validated.voyageId,
       status: initialStatus,
-      palletPositions: [],
-      containerPositions: [],
-      coolingSectionStatus: vessel.temperatureZones.map(cs => ({
+      cargoPositions: [],
+      coolingSectionStatus: vessel.temperatureZones.map((cs: any) => ({
         zoneId: cs.zoneId,
         coolingSectionIds: cs.coolingSections.map((s: any) => s.sectionId),
         assignedTemperature: undefined,
@@ -147,7 +146,7 @@ export async function createStowagePlan(data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error creating stowage plan:', error);
@@ -231,7 +230,7 @@ export async function createStowagePlanFromWizard(data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     const msg = error instanceof Error ? error.message : String(error);
@@ -265,7 +264,7 @@ export async function assignCargoToCompartment(data: unknown) {
     }
     
     // CRITICAL: Find cooling section for this compartment
-    const coolingSection = vessel.temperatureZones.find(cs =>
+    const coolingSection = vessel.temperatureZones.find((cs: any) =>
       cs.coolingSections.some((s: any) => s.sectionId === validated.compartmentId)
     );
 
@@ -278,7 +277,7 @@ export async function assignCargoToCompartment(data: unknown) {
 
     // CRITICAL: Validate temperature compatibility
     const sectionStatus = plan.coolingSectionStatus?.find(
-      cs => cs.zoneId === coolingSection.zoneId
+      (cs: any) => cs.zoneId === coolingSection.zoneId
     );
 
     if (sectionStatus) {
@@ -308,7 +307,7 @@ export async function assignCargoToCompartment(data: unknown) {
     }
     
     // Add cargo to plan
-    plan.palletPositions.push({
+    plan.cargoPositions.push({
       bookingId: validated.bookingId,
       cargoUnitId: `UNIT-${Date.now()}`, // Generate unique ID
       compartment: {
@@ -335,7 +334,7 @@ export async function assignCargoToCompartment(data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error assigning cargo:', error);
@@ -368,20 +367,21 @@ export async function assignContainersToDeck(data: unknown) {
     }
     
     // CRITICAL: Check reefer plug limit
-    const currentDeckContainers = plan.containerPositions?.length || 0;
+    const currentDeckContainers = plan.cargoPositions.filter(
+      (p: any) => p.compartment.level === 'DECK'
+    ).length;
     const maxReeferPlugs = vessel.deckContainerCapacity?.maxReeferPlugs || 0;
-    
+
     if (currentDeckContainers + validated.quantity > maxReeferPlugs) {
       return {
         success: false,
         error: `Reefer plug limit exceeded: ${currentDeckContainers} + ${validated.quantity} > ${maxReeferPlugs} max plugs`,
       };
     }
-    
+
     // Add containers to deck
     for (let i = 0; i < validated.quantity; i++) {
-      plan.containerPositions = plan.containerPositions || [];
-      plan.containerPositions.push({
+      plan.cargoPositions.push({
         bookingId: validated.bookingId,
         cargoUnitId: `DECK-${Date.now()}-${i}`,
         compartment: {
@@ -405,7 +405,7 @@ export async function assignContainersToDeck(data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error assigning deck containers:', error);
@@ -441,7 +441,7 @@ export async function validateCoolingSections(planId: unknown) {
     
     // Check each cooling section
     for (const coolingSection of vessel.temperatureZones) {
-      const compartmentsInSection = plan.palletPositions.filter(pos =>
+      const compartmentsInSection = plan.cargoPositions.filter((pos: any) =>
         coolingSection.coolingSections.some((s: any) => s.sectionId === pos.compartment.id)
       );
 
@@ -449,7 +449,7 @@ export async function validateCoolingSections(planId: unknown) {
 
       // Get unique temperatures in this section
       const temperatures = new Set(
-        compartmentsInSection.map(pos => {
+        compartmentsInSection.map((pos: any) => {
           // TODO: Get actual temperature from cargo data
           return 0; // Placeholder
         })
@@ -714,7 +714,7 @@ export async function updateZoneTemperatures(data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     const msg = error instanceof Error ? error.message : String(error);
@@ -788,7 +788,7 @@ export async function markPlanSent(data: unknown) {
 
     const recipients: { name?: string; email: string; role: 'CAPTAIN' | 'CC' }[] = [
       { name: validated.captainName, email: validated.captainEmail, role: 'CAPTAIN' },
-      ...(validated.ccEmails ?? []).map(email => ({ email, role: 'CC' as const })),
+      ...(validated.ccEmails ?? []).map((email: any) => ({ email, role: 'CC' as const })),
     ];
 
     plan.status = 'EMAIL_SENT';
@@ -821,7 +821,7 @@ export async function markPlanSent(data: unknown) {
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0]?.message ?? 'Validation error' };
+      return { success: false, error: error.issues[0]?.message ?? 'Validation error' };
     }
     const msg = error instanceof Error ? error.message : String(error);
     console.error('Error marking plan as sent:', msg);
@@ -915,7 +915,7 @@ export async function saveCargoAssignments(data: unknown) {
       return { success: false, error: 'Plan not found' };
     }
 
-    plan.cargoPositions = validated.assignments.map(a => ({
+    plan.cargoPositions = validated.assignments.map((a: any) => ({
       shipmentId: a.shipmentId || undefined,
       cargoType: a.cargoType,
       quantity: a.quantity,
@@ -937,7 +937,7 @@ export async function saveCargoAssignments(data: unknown) {
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { success: false, error: `Validation error: ${error.errors[0].message}` };
+      return { success: false, error: `Validation error: ${error.issues[0].message}` };
     }
     const msg = error instanceof Error ? error.message : String(error);
     console.error('Error saving cargo assignments:', msg);
