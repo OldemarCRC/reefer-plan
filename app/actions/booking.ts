@@ -49,7 +49,7 @@ const RejectBookingSchema = z.object({
 
 // ----------------------------------------------------------------------------
 // AUTO-NUMBERING HELPER
-// Format: {officeCode}-{serviceShortCode}-{voyageNumber}-{seq:3}
+// Format: {officeCode}{serviceShortCode}{voyageNumber}{seq:3}
 // Sequential per voyage
 // ----------------------------------------------------------------------------
 
@@ -61,7 +61,7 @@ async function generateBookingNumber(
 ): Promise<string> {
   const count = await BookingModel.countDocuments({ voyageId });
   const seq = String(count + 1).padStart(3, '0');
-  return `${officeCode}-${serviceShortCode}-${voyageNumber}-${seq}`;
+  return `${officeCode}${serviceShortCode}${voyageNumber}${seq}`;
 }
 
 // ----------------------------------------------------------------------------
