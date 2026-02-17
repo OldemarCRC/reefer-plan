@@ -228,7 +228,7 @@ const BookingSchema = new Schema({
   },
   requestedDate: { type: Date },
   confirmedDate: { type: Date },
-  approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  approvedBy: { type: String },
   rejectionReason: { type: String },
 }, {
   timestamps: true,
