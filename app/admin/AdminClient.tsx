@@ -4,6 +4,8 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { cancelVoyage, hardDeleteVoyage } from '@/app/actions/voyage';
+import ContractsClient from '@/app/contracts/ContractsClient';
+import type { DisplayContract } from '@/app/contracts/ContractsClient';
 import styles from './page.module.css';
 
 // ---------------------------------------------------------------------------
@@ -23,7 +25,7 @@ interface AdminVoyage {
   serviceId?: { serviceCode?: string; serviceName?: string };
 }
 
-type Tab = 'voyages' | 'plans' | 'vessels' | 'services' | 'users';
+type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users';
 
 type ConfirmAction =
   | { type: 'cancel'; voyage: AdminVoyage }
@@ -325,14 +327,22 @@ function StubTab({ label }: { label: string }) {
 // ---------------------------------------------------------------------------
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'voyages',  label: 'Voyages'       },
-  { id: 'plans',    label: 'Stowage Plans' },
-  { id: 'vessels',  label: 'Vessels'       },
-  { id: 'services', label: 'Services'      },
-  { id: 'users',    label: 'Users'         },
+  { id: 'voyages',   label: 'Voyages'       },
+  { id: 'contracts', label: 'Contracts'     },
+  { id: 'plans',     label: 'Stowage Plans' },
+  { id: 'vessels',   label: 'Vessels'       },
+  { id: 'services',  label: 'Services'      },
+  { id: 'users',     label: 'Users'         },
 ];
 
-export default function AdminClient({ voyages }: { voyages: AdminVoyage[] }) {
+interface AdminClientProps {
+  voyages: AdminVoyage[];
+  contracts: DisplayContract[];
+  offices: any[];
+  services: any[];
+}
+
+export default function AdminClient({ voyages, contracts, offices, services }: AdminClientProps) {
   const [activeTab, setActiveTab] = useState<Tab>('voyages');
 
   return (
@@ -361,11 +371,16 @@ export default function AdminClient({ voyages }: { voyages: AdminVoyage[] }) {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'voyages'  && <VoyagesTab initialVoyages={voyages} />}
-      {activeTab === 'plans'    && <StubTab label="Stowage Plans" />}
-      {activeTab === 'vessels'  && <StubTab label="Vessels" />}
-      {activeTab === 'services' && <StubTab label="Services" />}
-      {activeTab === 'users'    && <StubTab label="Users" />}
+      {activeTab === 'voyages'   && <VoyagesTab initialVoyages={voyages} />}
+      {activeTab === 'contracts' && (
+        <div className={styles.tabContent}>
+          <ContractsClient contracts={contracts} offices={offices} services={services} />
+        </div>
+      )}
+      {activeTab === 'plans'     && <StubTab label="Stowage Plans" />}
+      {activeTab === 'vessels'   && <StubTab label="Vessels" />}
+      {activeTab === 'services'  && <StubTab label="Services" />}
+      {activeTab === 'users'     && <StubTab label="Users" />}
     </div>
   );
 }
