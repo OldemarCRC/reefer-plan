@@ -112,11 +112,11 @@ export default async function DashboardPage() {
       _id: b._id,
       bookingNumber: b.bookingNumber,
       voyageNumber: b.voyageId?.voyageNumber || 'N/A',
-      clientName: b.clientName || 'Unknown',
+      clientName: b.clientName || b.client?.name || 'Unknown',
       cargoType: b.cargoType || 'OTHER_CHILLED',
       requestedQuantity: b.requestedQuantity || 0,
-      polCode: b.origin || 'N/A',
-      podCode: b.destination || 'N/A',
+      polCode: b.polCode || b.pol?.portCode || 'N/A',
+      podCode: b.podCode || b.pod?.portCode || 'N/A',
       status: b.status,
     }));
 
@@ -164,7 +164,7 @@ export default async function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {recentVoyages.map((v) => (
+                  {recentVoyages.map((v: any) => (
                     <tr key={v._id}>
                       <td className={styles.cellMono}>{v.voyageNumber}</td>
                       <td>{v.vesselName}</td>
@@ -198,7 +198,7 @@ export default async function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {recentPlans.map((p) => (
+                  {recentPlans.map((p: any) => (
                     <ClickablePlanRow key={p._id} planId={p._id}>
                       <td className={styles.cellMono}>{p.planNumber}</td>
                       <td className={styles.cellMuted}>{p.voyageNumber}</td>
@@ -241,7 +241,7 @@ export default async function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pendingBookings.map((b) => (
+                  {pendingBookings.map((b: any) => (
                     <tr key={b._id}>
                       <td className={styles.cellMono}>{b.bookingNumber}</td>
                       <td className={styles.cellMuted}>{b.voyageNumber}</td>

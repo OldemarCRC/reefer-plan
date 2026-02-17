@@ -389,7 +389,7 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls }: {
 
                     <td>
                       <div className={styles.opTags}>
-                        {pc.operations.map((op: string) => (
+                        {pc.operations.map((op: any) => (
                           <span key={op} className={styles.opTag} data-op={op}>
                             {op === 'LOAD' ? '▲' : '▼'} {op}
                           </span>

@@ -75,7 +75,7 @@ export default function VoyagesClient({ voyages }: VoyagesClientProps) {
   const [filterService, setFilterService] = useState('');
 
   const filtered = useMemo(() => {
-    return voyages.filter((v) => {
+    return voyages.filter((v: any) => {
       if (filterStatus && v.status !== filterStatus) return false;
       if (filterVessel && v.vesselName !== filterVessel) return false;
       if (filterService && v.serviceCode !== filterService) return false;
@@ -91,11 +91,11 @@ export default function VoyagesClient({ voyages }: VoyagesClientProps) {
   }, [voyages, filterStatus, filterVessel, filterService, searchText]);
 
   const vesselNames = useMemo(() => {
-    return [...new Set(voyages.map((v) => v.vesselName))].sort();
+    return [...new Set(voyages.map((v: any) => v.vesselName))].sort();
   }, [voyages]);
 
   const serviceCodes = useMemo(() => {
-    return [...new Set(voyages.map((v) => v.serviceCode).filter((s) => s !== 'N/A'))].sort();
+    return [...new Set(voyages.map((v: any) => v.serviceCode).filter((s: any) => s !== 'N/A'))].sort();
   }, [voyages]);
 
   return (
@@ -115,7 +115,7 @@ export default function VoyagesClient({ voyages }: VoyagesClientProps) {
           onChange={(e) => setFilterVessel(e.target.value)}
         >
           <option value="">All Vessels</option>
-          {vesselNames.map((name) => (
+          {vesselNames.map((name: any) => (
             <option key={name} value={name}>{name}</option>
           ))}
         </select>
@@ -125,7 +125,7 @@ export default function VoyagesClient({ voyages }: VoyagesClientProps) {
           onChange={(e) => setFilterService(e.target.value)}
         >
           <option value="">All Services</option>
-          {serviceCodes.map((code) => (
+          {serviceCodes.map((code: any) => (
             <option key={code} value={code}>{code}</option>
           ))}
         </select>
@@ -151,7 +151,7 @@ export default function VoyagesClient({ voyages }: VoyagesClientProps) {
             No voyages match the current filters.
           </p>
         ) : (
-          filtered.map((v) => (
+          filtered.map((v: any) => (
             <div key={v._id} className={styles.voyageCard}>
               {/* Card header */}
               <div className={styles.voyageHeader}>
@@ -191,7 +191,7 @@ export default function VoyagesClient({ voyages }: VoyagesClientProps) {
 
               {/* Port call timeline */}
               <div className={styles.timeline}>
-                {v.portCalls.map((pc, i, sorted) => {
+                {v.portCalls.map((pc: any, i: any, sorted: any) => {
                   const isLoad = pc.operations.includes('LOAD');
                   return (
                     <div key={i} className={styles.timelineStop}>

@@ -59,7 +59,7 @@ export default async function StowagePlansPage() {
         </div>
 
         <div className={styles.planList}>
-          {displayPlans.map((p) => {
+          {displayPlans.map((p: any) => {
             const pct = Math.round((p.palletsAssigned / p.palletsTotal) * 100);
             const hasIssues = p.overstowViolations > 0 || p.temperatureConflicts > 0;
             const barColor = pct >= 90 ? 'var(--color-danger)' : pct >= 70 ? 'var(--color-warning)' : 'var(--color-cyan)';

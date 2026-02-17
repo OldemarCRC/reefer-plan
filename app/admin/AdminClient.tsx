@@ -165,9 +165,9 @@ function VoyagesTab({ initialVoyages }: { initialVoyages: AdminVoyage[] }) {
 
   const filtered = statusFilter === 'ALL'
     ? voyages
-    : voyages.filter((v) => v.status === statusFilter);
+    : voyages.filter((v: any) => v.status === statusFilter);
 
-  const allStatuses = ['ALL', ...Array.from(new Set(voyages.map((v) => v.status))).sort()];
+  const allStatuses = ['ALL', ...Array.from(new Set(voyages.map((v: any) => v.status))).sort()];
 
   const handleConfirm = () => {
     if (!confirmAction) return;
@@ -179,15 +179,15 @@ function VoyagesTab({ initialVoyages }: { initialVoyages: AdminVoyage[] }) {
       if (confirmAction.type === 'hard-delete') {
         result = await hardDeleteVoyage(confirmAction.voyage._id);
         if (result.success) {
-          setVoyages((prev) => prev.filter((v) => v._id !== confirmAction.voyage._id));
+          setVoyages((prev: any) => prev.filter((v: any) => v._id !== confirmAction.voyage._id));
           setConfirmAction(null);
           return;
         }
       } else {
         result = await cancelVoyage(confirmAction.voyage._id);
         if (result.success) {
-          setVoyages((prev) =>
-            prev.map((v) => v._id === confirmAction.voyage._id ? { ...v, status: 'CANCELLED' } : v)
+          setVoyages((prev: any) =>
+            prev.map((v: any) => v._id === confirmAction.voyage._id ? { ...v, status: 'CANCELLED' } : v)
           );
           setConfirmAction(null);
           router.refresh();
@@ -206,7 +206,7 @@ function VoyagesTab({ initialVoyages }: { initialVoyages: AdminVoyage[] }) {
         <div className={styles.toolbarLeft}>
           <span className={styles.toolbarCount}>{filtered.length} voyages</span>
           <div className={styles.filterGroup}>
-            {allStatuses.map((s) => (
+            {allStatuses.map((s: any) => (
               <button
                 key={s}
                 className={`${styles.filterChip} ${statusFilter === s ? styles['filterChip--active'] : ''}`}
@@ -214,7 +214,7 @@ function VoyagesTab({ initialVoyages }: { initialVoyages: AdminVoyage[] }) {
               >
                 {s === 'ALL' ? 'All' : s.replace(/_/g, ' ')}
                 <span className={styles.chipCount}>
-                  {s === 'ALL' ? voyages.length : voyages.filter((v) => v.status === s).length}
+                  {s === 'ALL' ? voyages.length : voyages.filter((v: any) => v.status === s).length}
                 </span>
               </button>
             ))}
@@ -243,7 +243,7 @@ function VoyagesTab({ initialVoyages }: { initialVoyages: AdminVoyage[] }) {
                 <td colSpan={8} className={styles.emptyCell}>No voyages found.</td>
               </tr>
             ) : (
-              filtered.map((v) => {
+              filtered.map((v: any) => {
                 const isCancelled = v.status === 'CANCELLED';
                 const canHardDelete = v.planCount === 0 && v.bookingCount === 0;
                 return (
@@ -349,7 +349,7 @@ export default function AdminClient({ voyages }: { voyages: AdminVoyage[] }) {
 
       {/* Tab bar */}
       <div className={styles.tabBar}>
-        {TABS.map((t) => (
+        {TABS.map((t: any) => (
           <button
             key={t.id}
             className={`${styles.tabBtn} ${activeTab === t.id ? styles['tabBtn--active'] : ''}`}

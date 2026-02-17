@@ -35,7 +35,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function formatCargo(type: CargoType): string {
-  return type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  return type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c: any) => c.toUpperCase());
 }
 
 export interface DisplayBooking {
@@ -65,7 +65,7 @@ export default function BookingsClient({ bookings, voyageNumbers }: BookingsClie
   const [filterStatus, setFilterStatus] = useState('');
 
   const filtered = useMemo(() => {
-    return bookings.filter((b) => {
+    return bookings.filter((b: any) => {
       if (filterStatus && b.status !== filterStatus) return false;
       if (filterCargo && b.cargoType !== filterCargo) return false;
       if (filterVoyage && b.voyageNumber !== filterVoyage) return false;
@@ -83,7 +83,7 @@ export default function BookingsClient({ bookings, voyageNumbers }: BookingsClie
 
   // Derive unique cargo types from data
   const cargoTypes = useMemo(() => {
-    return [...new Set(bookings.map((b) => b.cargoType))].sort();
+    return [...new Set(bookings.map((b: any) => b.cargoType))].sort();
   }, [bookings]);
 
   return (
@@ -103,7 +103,7 @@ export default function BookingsClient({ bookings, voyageNumbers }: BookingsClie
           onChange={(e) => setFilterVoyage(e.target.value)}
         >
           <option value="">All Voyages</option>
-          {voyageNumbers.map((v) => (
+          {voyageNumbers.map((v: any) => (
             <option key={v} value={v}>{v}</option>
           ))}
         </select>
@@ -113,7 +113,7 @@ export default function BookingsClient({ bookings, voyageNumbers }: BookingsClie
           onChange={(e) => setFilterCargo(e.target.value)}
         >
           <option value="">All Cargo</option>
-          {cargoTypes.map((ct) => (
+          {cargoTypes.map((ct: any) => (
             <option key={ct} value={ct}>{formatCargo(ct)}</option>
           ))}
         </select>
@@ -158,7 +158,7 @@ export default function BookingsClient({ bookings, voyageNumbers }: BookingsClie
                   </td>
                 </tr>
               ) : (
-                filtered.map((b) => (
+                filtered.map((b: any) => (
                   <tr
                     key={b._id}
                     className={b.status === 'PENDING' || b.status === 'STANDBY' ? styles.rowHighlight : ''}

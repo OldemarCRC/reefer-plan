@@ -24,13 +24,13 @@ export default async function BookingsPage() {
     status: b.status || 'PENDING',
   }));
 
-  const confirmed = displayBookings.filter((b) => b.status === 'CONFIRMED').length;
-  const pending = displayBookings.filter((b) =>
+  const confirmed = displayBookings.filter((b: any) => b.status === 'CONFIRMED').length;
+  const pending = displayBookings.filter((b: any) =>
     b.status === 'PENDING' || b.status === 'STANDBY' || b.status === 'PARTIAL'
   ).length;
 
   const voyageNumbers = [
-    ...new Set(displayBookings.map((b) => b.voyageNumber).filter((v) => v !== 'N/A')),
+    ...new Set(displayBookings.map((b: any) => b.voyageNumber).filter((v: any) => v !== 'N/A')),
   ];
 
   return (

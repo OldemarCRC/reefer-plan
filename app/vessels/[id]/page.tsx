@@ -229,7 +229,7 @@ export default async function VesselDetailPage({
   const zoneStats = getZoneStats(profileAssignments);
 
   // Build zone configs for the Configure Zones modal
-  const zoneConfigs: ZoneConfig[] = zoneStats.map((z) => {
+  const zoneConfigs: ZoneConfig[] = zoneStats.map((z: any) => {
     const coolSection = selectedPlan?.coolingSectionStatus?.find(
       (cs: any) => cs.zoneId === z.zoneId
     );
@@ -330,7 +330,7 @@ export default async function VesselDetailPage({
           </div>
           <div className={styles.statCard}>
             <span className={styles.statLabel}>Active Zones</span>
-            <span className={styles.statValue}>{zoneStats.filter((z) => z.cargoType).length} / {zoneStats.length}</span>
+            <span className={styles.statValue}>{zoneStats.filter((z: any) => z.cargoType).length} / {zoneStats.length}</span>
             <span className={styles.statSub}>temperature zones configured</span>
           </div>
           <div className={styles.statCard}>
@@ -368,7 +368,7 @@ export default async function VesselDetailPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {zoneStats.map((z) => {
+                  {zoneStats.map((z: any) => {
                     const pct = z.capacity > 0 ? Math.round((z.loaded / z.capacity) * 100) : 0;
                     return (
                       <tr key={z.zoneId}>
@@ -388,7 +388,7 @@ export default async function VesselDetailPage({
                         </td>
                         <td>
                           {z.cargoType ? (
-                            z.cargoType.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
+                            z.cargoType.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c: any) => c.toUpperCase())
                           ) : (
                             <span className={styles.cellMuted}>Not assigned</span>
                           )}
