@@ -53,6 +53,15 @@ const icons = {
       <path d="M7 17h2" />
     </svg>
   ),
+  contract: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+      <polyline points="10 9 9 9 8 9" />
+    </svg>
+  ),
   stowagePlan: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -97,6 +106,7 @@ const navItems: NavItem[] = [
   { id: 'voyages', label: 'Voyages', href: '/voyages', icon: 'voyage' },
   { id: 'vessels', label: 'Vessels', href: '/vessels', icon: 'vessel' },
   { id: 'bookings', label: 'Bookings', href: '/bookings', icon: 'booking' },
+  { id: 'contracts', label: 'Contracts', href: '/contracts', icon: 'contract' },
   { id: 'stowage-plans', label: 'Stowage Plans', href: '/stowage-plans', icon: 'stowagePlan' },
   { id: 'admin', label: 'Admin', href: '/admin', icon: 'admin' },
 ];
