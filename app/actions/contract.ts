@@ -94,12 +94,12 @@ async function generateContractNumber(
   year: number,
   clientNumber: string
 ): Promise<string> {
-  const prefix = `${officeCode}-${serviceShortCode}-${year}-${clientNumber}`;
+  const prefix = `${officeCode}${serviceShortCode}${year}${clientNumber}`;
   const count = await ContractModel.countDocuments({
-    contractNumber: { $regex: `^${prefix}-` },
+    contractNumber: { $regex: `^${prefix}` },
   });
   const seq = String(count + 1).padStart(3, '0');
-  return `${prefix}-${seq}`;
+  return `${prefix}${seq}`;
 }
 
 // ----------------------------------------------------------------------------

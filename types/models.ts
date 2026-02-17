@@ -155,7 +155,7 @@ export interface ContractCounterparty {
 
 export interface Contract {
   _id: string;
-  contractNumber: string;  // "RTM-CBX-2026-C012-001"
+  contractNumber: string;  // "RTMCBX2026C012001"
   officeId: string;
   officeCode: string;
   client: {
@@ -193,7 +193,7 @@ export type BookingStatus =
 
 export interface Booking {
   _id: string;
-  bookingNumber: string;  // "RTM-CBX-ACON062026-001"
+  bookingNumber: string;  // "RTMCBXACON062026001"
   contractId: string;     // required
   voyageId: string;
   voyageNumber: string;
