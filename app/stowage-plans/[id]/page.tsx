@@ -9,7 +9,7 @@ import AppShell from '@/components/layout/AppShell';
 import VesselProfile from '@/components/vessel/VesselProfile';
 import { getStowagePlanById, deleteStowagePlan, saveCargoAssignments, updatePlanStatus, copyStowagePlan } from '@/app/actions/stowage-plan';
 import MarkSentModal from '@/components/stowage/MarkSentModal';
-import { getShipmentsByVoyage } from '@/app/actions/shipment';
+import { getConfirmedBookingsForVoyage } from '@/app/actions/booking';
 import ConfigureZonesModal, { type ZoneConfig } from '@/components/vessel/ConfigureZonesModal';
 import type { VoyageTempAssignment } from '@/lib/vessel-profile-data';
 import styles from './page.module.css';
@@ -20,13 +20,14 @@ interface CargoAssignment {
 }
 
 interface CargoInPlan {
-  shipmentId: string;
-  shipmentNumber: string;
+  bookingId: string;
+  bookingNumber: string;
   cargoType: string;
   totalQuantity: number;
   pol: string;
   pod: string;
   consignee: string;
+  shipperName: string;
   assignments: CargoAssignment[];
 }
 
@@ -35,11 +36,10 @@ export default function StowagePlanDetailPage() {
   const planId = params.id as string;
   const router = useRouter();
 
-  const [activeTab, setActiveTab] = useState<'cargo' | 'validation'>('cargo');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, startDeleteTransition] = useTransition();
-  const [assigningShipment, setAssigningShipment] = useState<CargoInPlan | null>(null);
+  const [assigningBooking, setAssigningBooking] = useState<CargoInPlan | null>(null);
   const [selectedCompartment, setSelectedCompartment] = useState<string>('');
   const [assignQuantity, setAssignQuantity] = useState<number>(0);
   const [showConflictWarning, setShowConflictWarning] = useState(false);
@@ -49,6 +49,8 @@ export default function StowagePlanDetailPage() {
   const [isSaving, startSaveTransition] = useTransition();
   const [isCopying, startCopyTransition] = useTransition();
   const [showSentModal, setShowSentModal] = useState(false);
+  const [selectedBookingId, setSelectedBookingId] = useState<string>('');
+  const [expandedValidation, setExpandedValidation] = useState<Record<string, boolean>>({});
 
   // Plan header info — populated from DB on mount
   const [plan, setPlan] = useState({
@@ -72,6 +74,15 @@ export default function StowagePlanDetailPage() {
 
   const [tempZoneConfig, setTempZoneConfig] = useState(defaultTempZoneConfig);
 
+  const [bookings, setBookings] = useState<CargoInPlan[]>([]);
+
+  // Stowage factor data per compartment — extracted from the populated vessel
+  const [sectionFactors, setSectionFactors] = useState<Record<string, {
+    sqm: number;
+    designStowageFactor: number;
+    historicalStowageFactor?: number;
+  }>>({});
+
   useEffect(() => {
     getStowagePlanById(planId).then(async (result) => {
       if (result.success && result.data) {
@@ -83,6 +94,22 @@ export default function StowagePlanDetailPage() {
           vesselName: p.vesselId?.name || p.vesselName || 'Unknown Vessel',
           status: p.status || 'DRAFT',
         });
+        // Extract stowage factor data from the populated vessel (vesselId is populate()'d)
+        const temperatureZones: any[] = p.vesselId?.temperatureZones ?? [];
+        if (temperatureZones.length > 0) {
+          const factors: Record<string, { sqm: number; designStowageFactor: number; historicalStowageFactor?: number }> = {};
+          for (const zone of temperatureZones) {
+            for (const section of zone.coolingSections ?? []) {
+              factors[section.sectionId] = {
+                sqm: section.sqm ?? 0,
+                designStowageFactor: section.designStowageFactor ?? 1.32,
+                historicalStowageFactor: section.historicalStowageFactor ?? undefined,
+              };
+            }
+          }
+          setSectionFactors(factors);
+        }
+
         // Use real cooling section temperatures from the plan if available
         if (Array.isArray(p.coolingSectionStatus) && p.coolingSectionStatus.length > 0) {
           setTempZoneConfig(
@@ -95,42 +122,45 @@ export default function StowagePlanDetailPage() {
           );
         }
 
-        // Load shipments for this voyage
+        // Load confirmed bookings for this voyage
         const voyageId = typeof p.voyageId === 'object' ? p.voyageId?._id : p.voyageId;
         if (voyageId) {
-          const shipmentsResult = await getShipmentsByVoyage(voyageId);
-          if (shipmentsResult.success && Array.isArray(shipmentsResult.data)) {
+          const bookingsResult = await getConfirmedBookingsForVoyage(voyageId);
+          if (bookingsResult.success && Array.isArray(bookingsResult.data)) {
             // Build assignment map from saved cargoPositions
-            const positionsByShipment: Record<string, CargoAssignment[]> = {};
+            const positionsByBooking: Record<string, CargoAssignment[]> = {};
             for (const pos of (p.cargoPositions ?? [])) {
-              const sid = String(pos.shipmentId ?? '');
-              if (!sid) continue;
-              if (!positionsByShipment[sid]) positionsByShipment[sid] = [];
-              positionsByShipment[sid].push({
+              const bid = String(pos.bookingId ?? pos.shipmentId ?? '');
+              if (!bid) continue;
+              if (!positionsByBooking[bid]) positionsByBooking[bid] = [];
+              positionsByBooking[bid].push({
                 compartmentId: pos.compartment?.id ?? '',
                 quantity: pos.quantity ?? 0,
               });
             }
 
-            setShipments(
-              shipmentsResult.data.map((s: any) => ({
-                shipmentId: s._id,
-                shipmentNumber: s.shipmentNumber,
-                cargoType: s.cargo?.type ?? '',
-                totalQuantity: s.cargo?.quantity ?? 0,
-                pol: s.pol?.portCode ?? '',
-                pod: s.pod?.portCode ?? '',
-                consignee: s.consignee?.name ?? '',
-                assignments: positionsByShipment[s._id] ?? [],
-              }))
-            );
+            const mapped = bookingsResult.data.map((b: any) => ({
+              bookingId: b._id,
+              bookingNumber: b.bookingNumber,
+              cargoType: b.cargoType ?? '',
+              totalQuantity: b.confirmedQuantity ?? b.requestedQuantity ?? 0,
+              pol: b.pol?.portCode ?? '',
+              pod: b.pod?.portCode ?? '',
+              consignee: b.consignee?.name ?? '',
+              shipperName: b.shipper?.name ?? '',
+              assignments: positionsByBooking[b._id] ?? [],
+            }));
+
+            setBookings(mapped);
+            // Auto-select first booking
+            if (mapped.length > 0) {
+              setSelectedBookingId(mapped[0].bookingId);
+            }
           }
         }
       }
     });
   }, [planId]);
-
-  const [shipments, setShipments] = useState<CargoInPlan[]>([]);
 
 
   // Required temperature range per cargo type (shared by validation + auto-stow)
@@ -168,16 +198,16 @@ export default function StowagePlanDetailPage() {
 
   // Compute validation dynamically from current assignments
   const validation = useMemo(() => {
-    const temperatureConflicts: { compartmentId: string; coolingSectionId: string; description: string; affectedShipments: string[]; userConfirmed: boolean }[] = [];
-    const overstowViolations: { compartmentId: string; description: string; affectedShipments: string[] }[] = [];
-    const capacityViolations: { compartmentId: string; description: string; affectedShipments: string[]; overBy: number }[] = [];
+    const temperatureConflicts: { compartmentId: string; coolingSectionId: string; description: string; affectedBookings: string[]; userConfirmed: boolean }[] = [];
+    const overstowViolations: { compartmentId: string; description: string; affectedBookings: string[] }[] = [];
+    const capacityViolations: { compartmentId: string; description: string; affectedBookings: string[]; overBy: number }[] = [];
 
     // Group assignments by compartment
-    const byCompartment: Record<string, { shipment: CargoInPlan; quantity: number }[]> = {};
-    for (const s of shipments) {
-      for (const a of s.assignments) {
+    const byCompartment: Record<string, { booking: CargoInPlan; quantity: number }[]> = {};
+    for (const b of bookings) {
+      for (const a of b.assignments) {
         if (!byCompartment[a.compartmentId]) byCompartment[a.compartmentId] = [];
-        byCompartment[a.compartmentId].push({ shipment: s, quantity: a.quantity });
+        byCompartment[a.compartmentId].push({ booking: b, quantity: a.quantity });
       }
     }
 
@@ -186,26 +216,26 @@ export default function StowagePlanDetailPage() {
       if (!section) continue;
 
       // Temperature conflict check
-      for (const { shipment, quantity } of entries) {
-        const req = cargoTempRequirements[shipment.cargoType];
+      for (const { booking, quantity } of entries) {
+        const req = cargoTempRequirements[booking.cargoType];
         if (req && (section.temp < req.min || section.temp > req.max)) {
-          const userConfirmed = confirmedConflicts.has(`${shipment.shipmentId}-${compId}`);
+          const userConfirmed = confirmedConflicts.has(`${booking.bookingId}-${compId}`);
           temperatureConflicts.push({
             compartmentId: compId,
             coolingSectionId: section.sectionId,
-            description: `${shipment.cargoType.replace('_', ' ')} (${quantity} pallets) requires ${req.min}–${req.max}°C but ${section.sectionId} is set to ${section.temp > 0 ? '+' : ''}${section.temp}°C`,
-            affectedShipments: [shipment.shipmentNumber],
+            description: `${booking.cargoType.replace('_', ' ')} (${quantity} pallets) requires ${req.min}–${req.max}°C but ${section.sectionId} is set to ${section.temp > 0 ? '+' : ''}${section.temp}°C`,
+            affectedBookings: [booking.bookingNumber],
             userConfirmed,
           });
         }
       }
 
-      // Overstow: more than one shipment per compartment
+      // Overstow: more than one booking per compartment
       if (entries.length > 1) {
         overstowViolations.push({
           compartmentId: compId,
-          description: `${entries.length} shipments share this compartment`,
-          affectedShipments: entries.map(e => e.shipment.shipmentNumber),
+          description: `${entries.length} bookings share this compartment`,
+          affectedBookings: entries.map(e => e.booking.bookingNumber),
         });
       }
 
@@ -216,7 +246,7 @@ export default function StowagePlanDetailPage() {
         capacityViolations.push({
           compartmentId: compId,
           description: `${used} pallets assigned but capacity is ${cap} — over by ${used - cap}`,
-          affectedShipments: entries.map(e => e.shipment.shipmentNumber),
+          affectedBookings: entries.map(e => e.booking.bookingNumber),
           overBy: used - cap,
         });
       }
@@ -228,7 +258,17 @@ export default function StowagePlanDetailPage() {
       capacityViolations,
       weightDistributionWarnings: ['Port list of 0.8° detected - consider redistributing cargo'],
     };
-  }, [shipments, compartmentToSection, confirmedConflicts]);
+  }, [bookings, compartmentToSection, confirmedConflicts]);
+
+  // Auto-expand validation sections that have violations
+  useEffect(() => {
+    const expanded: Record<string, boolean> = {};
+    if (validation.temperatureConflicts.length > 0) expanded.temperature = true;
+    if (validation.overstowViolations.length > 0) expanded.overstow = true;
+    if (validation.capacityViolations.length > 0) expanded.capacity = true;
+    if (validation.weightDistributionWarnings.length > 0) expanded.weight = true;
+    setExpandedValidation(expanded);
+  }, [validation]);
 
   // Zone colors (hue-based on temperature, matching wizard)
   const tempToColor = (temp: number) => {
@@ -241,11 +281,11 @@ export default function StowagePlanDetailPage() {
     const result: VoyageTempAssignment[] = [];
 
     // Build assignment lookup
-    const byCompartment: Record<string, { shipment: CargoInPlan; quantity: number }[]> = {};
-    for (const s of shipments) {
-      for (const a of s.assignments) {
+    const byCompartment: Record<string, { booking: CargoInPlan; quantity: number }[]> = {};
+    for (const b of bookings) {
+      for (const a of b.assignments) {
         if (!byCompartment[a.compartmentId]) byCompartment[a.compartmentId] = [];
-        byCompartment[a.compartmentId].push({ shipment: s, quantity: a.quantity });
+        byCompartment[a.compartmentId].push({ booking: b, quantity: a.quantity });
       }
     }
 
@@ -256,9 +296,10 @@ export default function StowagePlanDetailPage() {
         const palletsLoaded = entries.reduce((sum, e) => sum + e.quantity, 0);
         const capacity = compartmentCapacities[compId] || 0;
 
-        // Determine cargo type: use first shipment's type if any, otherwise empty
-        const cargoType = entries.length > 0 ? entries[0].shipment.cargoType : '';
+        // Determine cargo type: use first booking's type if any, otherwise empty
+        const cargoType = entries.length > 0 ? entries[0].booking.cargoType : '';
 
+        const factors = sectionFactors[compId];
         result.push({
           compartmentId: compId,
           zoneId: zone.zoneId,
@@ -268,13 +309,16 @@ export default function StowagePlanDetailPage() {
           cargoType,
           palletsLoaded,
           palletsCapacity: capacity,
-          shipments: entries.map(e => e.shipment.shipmentNumber),
+          shipments: entries.map(e => e.booking.bookingNumber),
+          sqm: factors?.sqm,
+          designStowageFactor: factors?.designStowageFactor,
+          historicalStowageFactor: factors?.historicalStowageFactor,
         });
       }
     }
 
     return result;
-  }, [shipments, tempZoneConfig]);
+  }, [bookings, tempZoneConfig, sectionFactors]);
 
   const stability = {
     displacement: 8450,
@@ -292,24 +336,24 @@ export default function StowagePlanDetailPage() {
     },
   };
 
-  const assignedQty = (s: CargoInPlan) => s.assignments.reduce((sum, a) => sum + a.quantity, 0);
-  const remainingQty = (s: CargoInPlan) => s.totalQuantity - assignedQty(s);
+  const assignedQty = (b: CargoInPlan) => b.assignments.reduce((sum, a) => sum + a.quantity, 0);
+  const remainingQty = (b: CargoInPlan) => b.totalQuantity - assignedQty(b);
 
-  // Total pallets already assigned to a compartment across all shipments
+  // Total pallets already assigned to a compartment across all bookings
   const usedInCompartment = useMemo(() => {
     const map: Record<string, number> = {};
-    for (const s of shipments) {
-      for (const a of s.assignments) {
+    for (const b of bookings) {
+      for (const a of b.assignments) {
         map[a.compartmentId] = (map[a.compartmentId] ?? 0) + a.quantity;
       }
     }
     return map;
-  }, [shipments]);
+  }, [bookings]);
 
-  const unstowedShipments = shipments.filter(s => remainingQty(s) > 0);
-  const stowedShipments = shipments.filter(s => assignedQty(s) > 0);
-  const totalPallets = shipments.reduce((sum, s) => sum + s.totalQuantity, 0);
-  const stowedPallets = shipments.reduce((sum, s) => sum + assignedQty(s), 0);
+  const totalPallets = bookings.reduce((sum, b) => sum + b.totalQuantity, 0);
+  const stowedPallets = bookings.reduce((sum, b) => sum + assignedQty(b), 0);
+
+  const selectedBooking = bookings.find(b => b.bookingId === selectedBookingId) || null;
 
   const getCargoTypeColor = (cargoType: string) => {
     const colors: Record<string, string> = {
@@ -324,10 +368,10 @@ export default function StowagePlanDetailPage() {
   };
 
   const handleConfirmAssign = () => {
-    if (!assigningShipment || !selectedCompartment || assignQuantity <= 0) return;
+    if (!assigningBooking || !selectedCompartment || assignQuantity <= 0) return;
 
     const section = compartmentToSection[selectedCompartment];
-    const req = cargoTempRequirements[assigningShipment.cargoType];
+    const req = cargoTempRequirements[assigningBooking.cargoType];
     const hasConflict = req && section && (section.temp < req.min || section.temp > req.max);
 
     if (hasConflict && !showConflictWarning) {
@@ -336,51 +380,50 @@ export default function StowagePlanDetailPage() {
     }
 
     if (hasConflict) {
-      setConfirmedConflicts(prev => new Set([...prev, `${assigningShipment.shipmentId}-${selectedCompartment}`]));
+      setConfirmedConflicts(prev => new Set([...prev, `${assigningBooking.bookingId}-${selectedCompartment}`]));
     }
 
-    setShipments(prev => prev.map(s => {
-      if (s.shipmentId !== assigningShipment.shipmentId) return s;
-      const existing = s.assignments.find(a => a.compartmentId === selectedCompartment);
+    setBookings(prev => prev.map(b => {
+      if (b.bookingId !== assigningBooking.bookingId) return b;
+      const existing = b.assignments.find(a => a.compartmentId === selectedCompartment);
       const updatedAssignments = existing
-        ? s.assignments.map(a => a.compartmentId === selectedCompartment
+        ? b.assignments.map(a => a.compartmentId === selectedCompartment
             ? { ...a, quantity: a.quantity + assignQuantity }
             : a)
-        : [...s.assignments, { compartmentId: selectedCompartment, quantity: assignQuantity }];
-      return { ...s, assignments: updatedAssignments };
+        : [...b.assignments, { compartmentId: selectedCompartment, quantity: assignQuantity }];
+      return { ...b, assignments: updatedAssignments };
     }));
-    setAssigningShipment(null);
+    setAssigningBooking(null);
     setSelectedCompartment('');
     setAssignQuantity(0);
     setShowConflictWarning(false);
   };
 
   const handleCancelAssign = () => {
-    setAssigningShipment(null);
+    setAssigningBooking(null);
     setSelectedCompartment('');
     setAssignQuantity(0);
     setShowConflictWarning(false);
   };
 
-  const handleRemoveAssignment = (shipmentId: string, compartmentId: string) => {
-    setShipments(prev => prev.map(s =>
-      s.shipmentId === shipmentId
-        ? { ...s, assignments: s.assignments.filter(a => a.compartmentId !== compartmentId) }
-        : s
+  const handleRemoveAssignment = (bookingId: string, compartmentId: string) => {
+    setBookings(prev => prev.map(b =>
+      b.bookingId === bookingId
+        ? { ...b, assignments: b.assignments.filter(a => a.compartmentId !== compartmentId) }
+        : b
     ));
   };
 
   const handleAutoStow = () => {
-    setShipments(prev => {
-      const updated = prev.map(s => ({ ...s, assignments: [...s.assignments] }));
-      // Track pallet counts per compartment to avoid over-filling
-      const usedCompartments = new Set(updated.flatMap(s => s.assignments.map(a => a.compartmentId)));
+    setBookings(prev => {
+      const updated = prev.map(b => ({ ...b, assignments: [...b.assignments] }));
+      const usedCompartments = new Set(updated.flatMap(b => b.assignments.map(a => a.compartmentId)));
 
-      for (const shipment of updated) {
-        const rem = remainingQty(shipment);
+      for (const booking of updated) {
+        const rem = remainingQty(booking);
         if (rem <= 0) continue;
 
-        const req = cargoTempRequirements[shipment.cargoType];
+        const req = cargoTempRequirements[booking.cargoType];
         if (!req) continue;
 
         for (const zone of tempZoneConfig) {
@@ -389,7 +432,7 @@ export default function StowagePlanDetailPage() {
           const freeCompartment = zone.compartments.find(c => !usedCompartments.has(c));
           if (!freeCompartment) continue;
 
-          shipment.assignments.push({ compartmentId: freeCompartment, quantity: rem });
+          booking.assignments.push({ compartmentId: freeCompartment, quantity: rem });
           usedCompartments.add(freeCompartment);
           break;
         }
@@ -400,10 +443,10 @@ export default function StowagePlanDetailPage() {
   };
 
   const handleSavePlan = () => {
-    const allAssignments = shipments.flatMap(s =>
-      s.assignments.map(a => ({
-        shipmentId: s.shipmentId,
-        cargoType: s.cargoType,
+    const allAssignments = bookings.flatMap(b =>
+      b.assignments.map(a => ({
+        bookingId: b.bookingId,
+        cargoType: b.cargoType,
         quantity: a.quantity,
         compartmentId: a.compartmentId,
       }))
@@ -424,18 +467,16 @@ export default function StowagePlanDetailPage() {
 
   const handleSendToCaptain = () => {
     startSaveTransition(async () => {
-      // First persist current assignments
-      const allAssignments = shipments.flatMap(s =>
-        s.assignments.map(a => ({
-          shipmentId: s.shipmentId,
-          cargoType: s.cargoType,
+      const allAssignments = bookings.flatMap(b =>
+        b.assignments.map(a => ({
+          bookingId: b.bookingId,
+          cargoType: b.cargoType,
           quantity: a.quantity,
           compartmentId: a.compartmentId,
         }))
       );
       await saveCargoAssignments({ planId, assignments: allAssignments });
 
-      // Advance status to READY_FOR_CAPTAIN
       const result = await updatePlanStatus(planId, 'READY_FOR_CAPTAIN');
       if (result.success) {
         setPlan(prev => ({ ...prev, status: 'READY_FOR_CAPTAIN' }));
@@ -466,6 +507,12 @@ export default function StowagePlanDetailPage() {
       }
     });
   };
+
+  const toggleValidationSection = (key: string) => {
+    setExpandedValidation(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const totalViolations = validation.temperatureConflicts.length + validation.overstowViolations.length + validation.capacityViolations.length;
 
   return (
     <AppShell activeVessel={plan.vesselName} activeVoyage={plan.voyageNumber}>
@@ -509,14 +556,14 @@ export default function StowagePlanDetailPage() {
                   color: 'var(--color-warning)', background: 'var(--color-warning-muted)',
                   padding: '0.25rem 0.6rem', borderRadius: '4px',
                 }}>
-                  🔒 LOCKED
+                  LOCKED
                 </span>
                 <button
                   className={styles.btnPrimary}
                   onClick={handleNewDraft}
                   disabled={isCopying}
                 >
-                  {isCopying ? 'Creating…' : '+ New Draft'}
+                  {isCopying ? 'Creating...' : '+ New Draft'}
                 </button>
               </>
             ) : (
@@ -525,15 +572,15 @@ export default function StowagePlanDetailPage() {
                   Configure Zones
                 </button>
                 <button className={styles.btnSecondary} onClick={handleSavePlan} disabled={isSaving}>
-                  {isSaving ? 'Saving…' : 'Save Draft'}
+                  {isSaving ? 'Saving...' : 'Save Draft'}
                 </button>
                 {plan.status === 'READY_FOR_CAPTAIN' ? (
                   <button className={styles.btnPrimary} onClick={handleMarkSent} disabled={isSaving}>
-                    {isSaving ? 'Saving…' : 'Mark as Sent ✉'}
+                    {isSaving ? 'Saving...' : 'Mark as Sent'}
                   </button>
                 ) : (
                   <button className={styles.btnPrimary} onClick={handleSendToCaptain} disabled={isSaving}>
-                    {isSaving ? 'Saving…' : 'Send to Captain'}
+                    {isSaving ? 'Saving...' : 'Send to Captain'}
                   </button>
                 )}
               </>
@@ -548,7 +595,7 @@ export default function StowagePlanDetailPage() {
           </div>
         </div>
 
-        {/* Stats Bar */}
+        {/* Stats Bar — extended with stability data */}
         <div className={styles.statsBar}>
           <div className={styles.stat}>
             <div className={styles.statLabel}>Total Cargo</div>
@@ -566,6 +613,11 @@ export default function StowagePlanDetailPage() {
               {Math.round((stowedPallets / 4840) * 100)}%
             </div>
           </div>
+          <div className={styles.statDivider} />
+          <div className={styles.stat}>
+            <div className={styles.statLabel}>Displacement</div>
+            <div className={styles.statValue}>{stability.displacement} <span className={styles.statSubtext}>MT</span></div>
+          </div>
           <div className={styles.stat}>
             <div className={styles.statLabel}>GM</div>
             <div className={styles.statValue}>{stability.estimatedGM}m</div>
@@ -574,341 +626,336 @@ export default function StowagePlanDetailPage() {
             <div className={styles.statLabel}>Trim</div>
             <div className={styles.statValue}>{stability.estimatedTrim > 0 ? '+' : ''}{stability.estimatedTrim}m</div>
           </div>
+          <div className={styles.stat}>
+            <div className={styles.statLabel}>List</div>
+            <div className={styles.statValue}>{stability.estimatedList}°</div>
+          </div>
+          <div className={styles.stat}>
+            <div className={styles.statLabel}>Fwd Draft</div>
+            <div className={styles.statValue}>{stability.estimatedDrafts.forward}m</div>
+          </div>
+          <div className={styles.stat}>
+            <div className={styles.statLabel}>Aft Draft</div>
+            <div className={styles.statValue}>{stability.estimatedDrafts.aft}m</div>
+          </div>
+          {stability.preliminaryCheck.warnings.length > 0 && (
+            <div className={styles.stabilityWarningInline}>
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                <path d="M10 2l8 16H2l8-16z" stroke="#eab308" strokeWidth="1.5" strokeLinejoin="round"/>
+                <path d="M10 8v4m0 3h.01" stroke="#eab308" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+              <span>{stability.preliminaryCheck.warnings[0]}</span>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className={styles.content}>
-        {/* Left Panel - Cargo Management */}
-        <div className={styles.leftPanel}>
-          <div className={styles.panelHeader}>
-            <h2>Cargo Management</h2>
-            {!isLocked && (
+      {/* Cargo Assignment Bar */}
+      <div className={styles.cargoBar}>
+        <div className={styles.cargoBarTop}>
+          <select
+            className={styles.cargoSelect}
+            value={selectedBookingId}
+            onChange={e => setSelectedBookingId(e.target.value)}
+            disabled={isLocked}
+          >
+            <option value="">Select booking...</option>
+            {bookings.map(b => (
+              <option key={b.bookingId} value={b.bookingId}>
+                {b.bookingNumber} — {b.consignee} — {b.cargoType.replace('_', ' ')} — {remainingQty(b)} pal remaining
+              </option>
+            ))}
+          </select>
+
+          {selectedBooking && (
+            <div className={styles.cargoDetail}>
+              <span
+                className={styles.cargoDot}
+                style={{ backgroundColor: getCargoTypeColor(selectedBooking.cargoType) }}
+              />
+              <span className={styles.cargoType}>
+                {selectedBooking.cargoType.replace('_', ' ')}
+              </span>
+              <span className={styles.cargoDetailSep}>·</span>
+              <span>{assignedQty(selectedBooking)}/{selectedBooking.totalQuantity} pallets assigned</span>
+              <div className={styles.progressBar}>
+                <div
+                  className={styles.progressFill}
+                  style={{ width: `${selectedBooking.totalQuantity > 0 ? Math.min(100, (assignedQty(selectedBooking) / selectedBooking.totalQuantity) * 100) : 0}%` }}
+                />
+              </div>
+              <span className={styles.cargoDetailSep}>·</span>
+              <span>{selectedBooking.pol} → {selectedBooking.pod}</span>
+              <span className={styles.cargoDetailSep}>·</span>
+              <span>{selectedBooking.consignee}</span>
+            </div>
+          )}
+
+          {!isLocked && selectedBooking && (
+            <div className={styles.cargoBarActions}>
+              <button
+                className={styles.btnAssign}
+                onClick={() => {
+                  setAssigningBooking(selectedBooking);
+                  setSelectedCompartment('');
+                  setAssignQuantity(remainingQty(selectedBooking) || 1);
+                }}
+                disabled={remainingQty(selectedBooking) <= 0}
+              >
+                Assign to Compartment
+              </button>
               <button className={styles.btnAuto} onClick={handleAutoStow}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 2v12m4-8l-4-4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
                 Auto-Stow
               </button>
-            )}
+            </div>
+          )}
+        </div>
+
+        {/* Assignment tags for selected booking */}
+        {selectedBooking && selectedBooking.assignments.length > 0 && (
+          <div className={styles.assignmentTags}>
+            {selectedBooking.assignments.map(a => (
+              <span key={a.compartmentId} className={styles.assignmentTag}>
+                <span className={styles.compartmentTag}>{a.compartmentId}</span>
+                <span className={styles.assignmentQty}>{a.quantity} pal</span>
+                {!isLocked && (
+                  <button
+                    className={styles.btnRemoveSmall}
+                    onClick={() => handleRemoveAssignment(selectedBooking.bookingId, a.compartmentId)}
+                  >✕</button>
+                )}
+              </span>
+            ))}
           </div>
+        )}
+      </div>
 
-          {/* Tabs */}
-          <div className={styles.tabs}>
-            <button
-              className={`${styles.tab} ${activeTab === 'cargo' ? styles.active : ''}`}
-              onClick={() => setActiveTab('cargo')}
-            >
-              Cargo List ({shipments.length})
-            </button>
-            <button
-              className={`${styles.tab} ${activeTab === 'validation' ? styles.active : ''}`}
-              onClick={() => setActiveTab('validation')}
-            >
-              Validation
-              {(validation.temperatureConflicts.length + validation.overstowViolations.length + validation.capacityViolations.length) > 0 && (
-                <span className={styles.badge}>
-                  {validation.temperatureConflicts.length + validation.overstowViolations.length + validation.capacityViolations.length}
-                </span>
-              )}
-            </button>
-          </div>
+      {/* Vessel Profile SVG — full width */}
+      <div className={styles.svgContainer}>
+        <VesselProfile
+          vesselName={plan.vesselName}
+          voyageNumber={plan.voyageNumber}
+          tempAssignments={vesselProfileData}
+        />
+      </div>
 
-          {/* Tab Content */}
-          <div className={styles.tabContent}>
-            {activeTab === 'cargo' && (
-              <div className={styles.cargoList}>
-                {/* Unstowed Shipments */}
-                {unstowedShipments.length > 0 && (
-                  <div className={styles.cargoSection}>
-                    <h3>Unstowed Cargo ({unstowedShipments.length})</h3>
-                    {unstowedShipments.map(shipment => (
-                      <div key={shipment.shipmentId} className={styles.cargoCard}>
-                        <div className={styles.cargoHeader}>
-                          <div
-                            className={styles.cargoDot}
-                            style={{ backgroundColor: getCargoTypeColor(shipment.cargoType) }}
-                          />
-                          <span className={styles.cargoType}>
-                            {shipment.cargoType.replace('_', ' ')}
-                          </span>
-                          <span className={styles.shipmentNumber}>{shipment.shipmentNumber}</span>
-                        </div>
-                        <div className={styles.cargoDetails}>
-                          <div className={styles.cargoInfo}>
-                            <span className={styles.label}>Assigned:</span>
-                            <span className={styles.value}>
-                              {assignedQty(shipment)}/{shipment.totalQuantity} pallets
-                            </span>
-                          </div>
-                          <div className={styles.cargoInfo}>
-                            <span className={styles.label}>Route:</span>
-                            <span className={styles.value}>{shipment.pol} → {shipment.pod}</span>
-                          </div>
-                          <div className={styles.cargoInfo}>
-                            <span className={styles.label}>Consignee:</span>
-                            <span className={styles.value}>{shipment.consignee}</span>
-                          </div>
-                        </div>
-                        {!isLocked && (
-                          <button
-                            className={styles.btnAssign}
-                            onClick={() => {
-                              setAssigningShipment(shipment);
-                              setSelectedCompartment('');
-                              setAssignQuantity(remainingQty(shipment));
-                            }}
-                          >
-                            Assign to Compartment
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Stowed Shipments */}
-                {stowedShipments.length > 0 && (
-                  <div className={styles.cargoSection}>
-                    <h3>Stowed Cargo ({stowedShipments.length})</h3>
-                    {stowedShipments.map(shipment => (
-                      <div key={shipment.shipmentId} className={`${styles.cargoCard} ${remainingQty(shipment) === 0 ? styles.stowed : styles.partial}`}>
-                        <div className={styles.cargoHeader}>
-                          <div
-                            className={styles.cargoDot}
-                            style={{ backgroundColor: getCargoTypeColor(shipment.cargoType) }}
-                          />
-                          <span className={styles.cargoType}>
-                            {shipment.cargoType.replace('_', ' ')}
-                          </span>
-                          <span className={styles.shipmentNumber}>{shipment.shipmentNumber}</span>
-                        </div>
-                        <div className={styles.cargoDetails}>
-                          <div className={styles.cargoInfo}>
-                            <span className={styles.label}>Assigned:</span>
-                            <span className={styles.value}>
-                              {assignedQty(shipment)}/{shipment.totalQuantity} pallets
-                            </span>
-                          </div>
-                          {shipment.assignments.map(a => (
-                            <div key={a.compartmentId} className={styles.assignmentRow}>
-                              <span className={styles.compartmentTag}>{a.compartmentId}</span>
-                              <span className={styles.assignmentQty}>{a.quantity} pal.</span>
-                              {!isLocked && (
-                                <button
-                                  className={styles.btnRemoveSmall}
-                                  onClick={() => handleRemoveAssignment(shipment.shipmentId, a.compartmentId)}
-                                >✕</button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        {!isLocked && (
-                          <button
-                            className={styles.btnAssign}
-                            onClick={() => {
-                              setAssigningShipment(shipment);
-                              setSelectedCompartment('');
-                              setAssignQuantity(remainingQty(shipment) || 1);
-                            }}
-                          >
-                            + Add Compartment
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+      {/* Validation Panel — below SVG, collapsible sections */}
+      <div className={styles.validationCollapsible}>
+        {/* Temperature Conflicts */}
+        <div className={styles.validationSection}>
+          <button
+            className={styles.validationSectionHeader}
+            onClick={() => toggleValidationSection('temperature')}
+          >
+            <span>Temperature Conflicts</span>
+            {validation.temperatureConflicts.length > 0 && (
+              <span className={styles.badge}>{validation.temperatureConflicts.length}</span>
             )}
-
-            {activeTab === 'validation' && (
-              <div className={styles.validationPanel}>
-                <h3>Plan Validation</h3>
-
-                {/* Temperature Conflicts */}
-                {validation.temperatureConflicts.length > 0 && (
-                  <div className={styles.validationSection}>
-                    <h4>Temperature Conflicts ({validation.temperatureConflicts.length})</h4>
-                    {validation.temperatureConflicts.map((conflict, idx) => (
-                      <div key={idx} className={conflict.userConfirmed ? styles.conflictCardWarning : styles.conflictCard}>
-                        <div className={styles.conflictHeader}>
-                          {conflict.userConfirmed ? (
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                              <path d="M10 2l8 16H2l8-16z" stroke="#eab308" strokeWidth="1.5"/>
-                              <path d="M10 8v4m0 3h.01" stroke="#eab308" strokeWidth="2"/>
-                            </svg>
-                          ) : (
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                              <circle cx="10" cy="10" r="8" stroke="#ef4444" strokeWidth="2"/>
-                              <path d="M10 6v4m0 4h.01" stroke="#ef4444" strokeWidth="2"/>
-                            </svg>
-                          )}
-                          <span>{conflict.compartmentId}</span>
-                          {conflict.userConfirmed && <span className={styles.confirmedBadge}>user accepted</span>}
-                        </div>
-                        <p>{conflict.description}</p>
-                        <div className={styles.affectedShipments}>
-                          Affected: {conflict.affectedShipments.join(', ')}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Overstow Violations */}
-                {validation.overstowViolations.length > 0 && (
-                  <div className={styles.validationSection}>
-                    <h4>Overstow Violations ({validation.overstowViolations.length})</h4>
-                    {validation.overstowViolations.map((v, idx) => (
-                      <div key={idx} className={styles.conflictCard}>
-                        <div className={styles.conflictHeader}>
-                          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                            <circle cx="10" cy="10" r="8" stroke="#ef4444" strokeWidth="2"/>
-                            <path d="M10 6v4m0 4h.01" stroke="#ef4444" strokeWidth="2"/>
-                          </svg>
-                          <span>{v.compartmentId}</span>
-                        </div>
-                        <p>{v.description}</p>
-                        <div className={styles.affectedShipments}>
-                          Affected: {v.affectedShipments.join(', ')}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Capacity Violations */}
-                {validation.capacityViolations.length > 0 && (
-                  <div className={styles.validationSection}>
-                    <h4>Capacity Exceeded ({validation.capacityViolations.length})</h4>
-                    {validation.capacityViolations.map((v, idx) => (
-                      <div key={idx} className={styles.conflictCard}>
-                        <div className={styles.conflictHeader}>
-                          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                            <circle cx="10" cy="10" r="8" stroke="#ef4444" strokeWidth="2"/>
-                            <path d="M10 6v4m0 4h.01" stroke="#ef4444" strokeWidth="2"/>
-                          </svg>
-                          <span>{v.compartmentId}</span>
-                          <span className={styles.overCapacityBadge}>+{v.overBy} over</span>
-                        </div>
-                        <p>{v.description}</p>
-                        <div className={styles.affectedShipments}>
-                          Affected: {v.affectedShipments.join(', ')}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Weight Distribution Warnings */}
-                {validation.weightDistributionWarnings.length > 0 && (
-                  <div className={styles.validationSection}>
-                    <h4>Weight Distribution</h4>
-                    {validation.weightDistributionWarnings.map((warning, idx) => (
-                      <div key={idx} className={styles.warningCard}>
+            <svg
+              className={`${styles.chevron} ${expandedValidation.temperature ? styles.chevronOpen : ''}`}
+              width="16" height="16" viewBox="0 0 16 16" fill="none"
+            >
+              <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </button>
+          {expandedValidation.temperature && (
+            <div className={styles.validationSectionContent}>
+              {validation.temperatureConflicts.length === 0 ? (
+                <div className={styles.successBox}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="#22c55e" strokeWidth="2"/>
+                    <path d="M8 12l3 3 5-6" stroke="#22c55e" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  <span>No temperature conflicts</span>
+                </div>
+              ) : (
+                validation.temperatureConflicts.map((conflict, idx) => (
+                  <div key={idx} className={conflict.userConfirmed ? styles.conflictCardWarning : styles.conflictCard}>
+                    <div className={styles.conflictHeader}>
+                      {conflict.userConfirmed ? (
                         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                           <path d="M10 2l8 16H2l8-16z" stroke="#eab308" strokeWidth="1.5"/>
                           <path d="M10 8v4m0 3h.01" stroke="#eab308" strokeWidth="2"/>
                         </svg>
-                        <span>{warning}</span>
-                      </div>
-                    ))}
+                      ) : (
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                          <circle cx="10" cy="10" r="8" stroke="#ef4444" strokeWidth="2"/>
+                          <path d="M10 6v4m0 4h.01" stroke="#ef4444" strokeWidth="2"/>
+                        </svg>
+                      )}
+                      <span>{conflict.compartmentId}</span>
+                      {conflict.userConfirmed && <span className={styles.confirmedBadge}>user accepted</span>}
+                    </div>
+                    <p>{conflict.description}</p>
+                    <div className={styles.affectedShipments}>
+                      Affected: {conflict.affectedBookings.join(', ')}
+                    </div>
                   </div>
-                )}
+                ))
+              )}
+            </div>
+          )}
+        </div>
 
-                {validation.overstowViolations.length === 0 &&
-                 validation.temperatureConflicts.length === 0 &&
-                 validation.capacityViolations.length === 0 &&
-                 validation.weightDistributionWarnings.length === 0 && (
-                  <div className={styles.successBox}>
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="#22c55e" strokeWidth="2"/>
-                      <path d="M8 12l3 3 5-6" stroke="#22c55e" strokeWidth="2" strokeLinecap="round"/>
-                    </svg>
-                    <span>No validation issues found. Plan is ready for captain review.</span>
-                  </div>
-                )}
-              </div>
+        {/* Overstow Violations */}
+        <div className={styles.validationSection}>
+          <button
+            className={styles.validationSectionHeader}
+            onClick={() => toggleValidationSection('overstow')}
+          >
+            <span>Overstow Violations</span>
+            {validation.overstowViolations.length > 0 && (
+              <span className={styles.badge}>{validation.overstowViolations.length}</span>
             )}
-          </div>
+            <svg
+              className={`${styles.chevron} ${expandedValidation.overstow ? styles.chevronOpen : ''}`}
+              width="16" height="16" viewBox="0 0 16 16" fill="none"
+            >
+              <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </button>
+          {expandedValidation.overstow && (
+            <div className={styles.validationSectionContent}>
+              {validation.overstowViolations.length === 0 ? (
+                <div className={styles.successBox}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="#22c55e" strokeWidth="2"/>
+                    <path d="M8 12l3 3 5-6" stroke="#22c55e" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  <span>No overstow violations</span>
+                </div>
+              ) : (
+                validation.overstowViolations.map((v, idx) => (
+                  <div key={idx} className={styles.conflictCard}>
+                    <div className={styles.conflictHeader}>
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <circle cx="10" cy="10" r="8" stroke="#ef4444" strokeWidth="2"/>
+                        <path d="M10 6v4m0 4h.01" stroke="#ef4444" strokeWidth="2"/>
+                      </svg>
+                      <span>{v.compartmentId}</span>
+                    </div>
+                    <p>{v.description}</p>
+                    <div className={styles.affectedShipments}>
+                      Affected: {v.affectedBookings.join(', ')}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Right Panel - Vessel Visualization + Stability */}
-        <div className={styles.rightPanel}>
-          <div className={styles.panelHeader}>
-            <h2>Vessel Profile</h2>
-          </div>
-          <VesselProfile
-            vesselName={plan.vesselName}
-            voyageNumber={plan.voyageNumber}
-            tempAssignments={vesselProfileData}
-          />
-
-          {/* Stability card — below SVG, keeps left panel for cargo only */}
-          <div className={styles.stabilityCard}>
-            <div className={styles.stabilityCardHeader}>
-              <span className={styles.stabilityCardTitle}>Preliminary Stability</span>
-              <span className={styles.stabilityCardDisclaimer}>estimate only — verify onboard</span>
+        {/* Capacity Warnings */}
+        <div className={styles.validationSection}>
+          <button
+            className={styles.validationSectionHeader}
+            onClick={() => toggleValidationSection('capacity')}
+          >
+            <span>Capacity Warnings</span>
+            {validation.capacityViolations.length > 0 && (
+              <span className={styles.badge}>{validation.capacityViolations.length}</span>
+            )}
+            <svg
+              className={`${styles.chevron} ${expandedValidation.capacity ? styles.chevronOpen : ''}`}
+              width="16" height="16" viewBox="0 0 16 16" fill="none"
+            >
+              <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </button>
+          {expandedValidation.capacity && (
+            <div className={styles.validationSectionContent}>
+              {validation.capacityViolations.length === 0 ? (
+                <div className={styles.successBox}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="#22c55e" strokeWidth="2"/>
+                    <path d="M8 12l3 3 5-6" stroke="#22c55e" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  <span>All compartments within capacity</span>
+                </div>
+              ) : (
+                validation.capacityViolations.map((v, idx) => (
+                  <div key={idx} className={styles.conflictCard}>
+                    <div className={styles.conflictHeader}>
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <circle cx="10" cy="10" r="8" stroke="#ef4444" strokeWidth="2"/>
+                        <path d="M10 6v4m0 4h.01" stroke="#ef4444" strokeWidth="2"/>
+                      </svg>
+                      <span>{v.compartmentId}</span>
+                      <span className={styles.overCapacityBadge}>+{v.overBy} over</span>
+                    </div>
+                    <p>{v.description}</p>
+                    <div className={styles.affectedShipments}>
+                      Affected: {v.affectedBookings.join(', ')}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-            <div className={styles.stabilityInlineGrid}>
-              <div className={styles.stabilityInlineItem}>
-                <span className={styles.stabilityInlineLabel}>Displacement</span>
-                <span className={styles.stabilityInlineValue}>{stability.displacement} MT</span>
-              </div>
-              <div className={styles.stabilityInlineItem}>
-                <span className={styles.stabilityInlineLabel}>GM</span>
-                <span className={styles.stabilityInlineValue}>{stability.estimatedGM} m</span>
-              </div>
-              <div className={styles.stabilityInlineItem}>
-                <span className={styles.stabilityInlineLabel}>Trim</span>
-                <span className={styles.stabilityInlineValue}>{stability.estimatedTrim > 0 ? '+' : ''}{stability.estimatedTrim} m</span>
-              </div>
-              <div className={styles.stabilityInlineItem}>
-                <span className={styles.stabilityInlineLabel}>List</span>
-                <span className={styles.stabilityInlineValue}>{stability.estimatedList}°</span>
-              </div>
-              <div className={styles.stabilityInlineItem}>
-                <span className={styles.stabilityInlineLabel}>Fwd Draft</span>
-                <span className={styles.stabilityInlineValue}>{stability.estimatedDrafts.forward} m</span>
-              </div>
-              <div className={styles.stabilityInlineItem}>
-                <span className={styles.stabilityInlineLabel}>Aft Draft</span>
-                <span className={styles.stabilityInlineValue}>{stability.estimatedDrafts.aft} m</span>
-              </div>
-            </div>
-            {stability.preliminaryCheck.warnings.map((w, i) => (
-              <div key={i} className={styles.stabilityWarningRow}>
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                  <path d="M10 2l8 16H2l8-16z" stroke="#eab308" strokeWidth="1.5" strokeLinejoin="round"/>
-                  <path d="M10 8v4m0 3h.01" stroke="#eab308" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-                <span>{w}</span>
-              </div>
-            ))}
-          </div>
+          )}
         </div>
+
+        {/* Weight Distribution */}
+        <div className={styles.validationSection}>
+          <button
+            className={styles.validationSectionHeader}
+            onClick={() => toggleValidationSection('weight')}
+          >
+            <span>Weight Distribution</span>
+            {validation.weightDistributionWarnings.length > 0 && (
+              <span className={styles.badgeWarning}>{validation.weightDistributionWarnings.length}</span>
+            )}
+            <svg
+              className={`${styles.chevron} ${expandedValidation.weight ? styles.chevronOpen : ''}`}
+              width="16" height="16" viewBox="0 0 16 16" fill="none"
+            >
+              <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </button>
+          {expandedValidation.weight && (
+            <div className={styles.validationSectionContent}>
+              {validation.weightDistributionWarnings.map((warning, idx) => (
+                <div key={idx} className={styles.warningCard}>
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <path d="M10 2l8 16H2l8-16z" stroke="#eab308" strokeWidth="1.5"/>
+                    <path d="M10 8v4m0 3h.01" stroke="#eab308" strokeWidth="2"/>
+                  </svg>
+                  <span>{warning}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {totalViolations === 0 && validation.weightDistributionWarnings.length === 0 && (
+          <div className={styles.successBox}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="#22c55e" strokeWidth="2"/>
+              <path d="M8 12l3 3 5-6" stroke="#22c55e" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            <span>No validation issues found. Plan is ready for captain review.</span>
+          </div>
+        )}
       </div>
 
       {/* Assign to Compartment Modal */}
-      {assigningShipment && (
+      {assigningBooking && (
         <div className={styles.modalOverlay} onClick={handleCancelAssign}>
           <div className={styles.modal} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <h3>Assign {assigningShipment.shipmentNumber}</h3>
+              <h3>Assign {assigningBooking.bookingNumber}</h3>
               <button className={styles.modalClose} onClick={handleCancelAssign}>✕</button>
             </div>
 
             <div className={styles.modalMeta}>
               <span
                 className={styles.cargoDot}
-                style={{ backgroundColor: getCargoTypeColor(assigningShipment.cargoType) }}
+                style={{ backgroundColor: getCargoTypeColor(assigningBooking.cargoType) }}
               />
-              <span>{assigningShipment.cargoType.replace('_', ' ')}</span>
+              <span>{assigningBooking.cargoType.replace('_', ' ')}</span>
               <span className={styles.separator}>·</span>
-              <span>{assignedQty(assigningShipment)}/{assigningShipment.totalQuantity} pallets assigned</span>
+              <span>{assignedQty(assigningBooking)}/{assigningBooking.totalQuantity} pallets assigned</span>
               <span className={styles.separator}>·</span>
-              <span>{assigningShipment.consignee}</span>
+              <span>{assigningBooking.consignee}</span>
             </div>
 
             <div className={styles.compartmentList}>
@@ -959,15 +1006,15 @@ export default function StowagePlanDetailPage() {
                 className={styles.quantityInput}
                 value={assignQuantity}
                 min={1}
-                max={remainingQty(assigningShipment)}
+                max={remainingQty(assigningBooking)}
                 onChange={e => { setAssignQuantity(parseInt(e.target.value) || 0); setShowConflictWarning(false); }}
               />
-              <span className={styles.quantityMax}>/ {remainingQty(assigningShipment)} remaining</span>
+              <span className={styles.quantityMax}>/ {remainingQty(assigningBooking)} remaining</span>
             </div>
 
             {showConflictWarning && selectedCompartment && (() => {
               const section = compartmentToSection[selectedCompartment];
-              const req = cargoTempRequirements[assigningShipment.cargoType];
+              const req = cargoTempRequirements[assigningBooking.cargoType];
               return (
                 <div className={styles.conflictWarning}>
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -977,7 +1024,7 @@ export default function StowagePlanDetailPage() {
                   <div>
                     <strong>Temperature Conflict</strong>
                     <p>
-                      {assigningShipment.cargoType.replace('_', ' ')} requires {req?.min}–{req?.max}°C<br />
+                      {assigningBooking.cargoType.replace('_', ' ')} requires {req?.min}–{req?.max}°C<br />
                       {selectedCompartment} (section {section?.sectionId}) is set to {section?.temp > 0 ? '+' : ''}{section?.temp}°C
                     </p>
                     <p>Assigning here may damage the product.</p>
@@ -1026,16 +1073,16 @@ export default function StowagePlanDetailPage() {
       )}
       {/* Configure Zones Modal */}
       {showZoneModal && (() => {
-        // Build cargo summary per zone from current shipment assignments
+        // Build cargo summary per zone from current booking assignments
         const cargoByZone: Record<string, { cargoType: string; palletsLoaded: number }> = {};
         for (const zone of tempZoneConfig) {
           let totalPalletsInZone = 0;
           let dominantCargo = '';
-          for (const s of shipments) {
-            for (const a of s.assignments) {
+          for (const b of bookings) {
+            for (const a of b.assignments) {
               if (zone.compartments.includes(a.compartmentId)) {
                 totalPalletsInZone += a.quantity;
-                if (!dominantCargo) dominantCargo = s.cargoType;
+                if (!dominantCargo) dominantCargo = b.cargoType;
               }
             }
           }
@@ -1076,7 +1123,6 @@ export default function StowagePlanDetailPage() {
           />
         );
       })()}
-      </div>
 
       {/* Mark as Sent Modal */}
       {showSentModal && (
@@ -1143,12 +1189,13 @@ export default function StowagePlanDetailPage() {
                   border: 'none', background: 'var(--color-danger)', color: 'white', fontSize: '0.875rem',
                 }}
               >
-                {isDeleting ? 'Deleting…' : 'Delete Plan'}
+                {isDeleting ? 'Deleting...' : 'Delete Plan'}
               </button>
             </div>
           </div>
         </div>
       )}
+      </div>
     </AppShell>
   );
 }
