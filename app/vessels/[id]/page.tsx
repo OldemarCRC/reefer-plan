@@ -19,11 +19,15 @@ const ZONE_COLORS = [
 ];
 
 // Build a zone-lookup map from vessel.temperatureZones
-// Returns: sectionId → { zoneId, zoneName, zoneColor, palletsCapacity }
+// Returns: sectionId → { zoneId, zoneName, zoneColor, palletsCapacity, sqm, designStowageFactor, historicalStowageFactor }
 function buildZoneMap(temperatureZones: any[]): Map<string, {
   zoneId: string; zoneName: string; zoneColor: string; palletsCapacity: number;
+  sqm: number; designStowageFactor: number; historicalStowageFactor?: number;
 }> {
-  const map = new Map<string, { zoneId: string; zoneName: string; zoneColor: string; palletsCapacity: number }>();
+  const map = new Map<string, {
+    zoneId: string; zoneName: string; zoneColor: string; palletsCapacity: number;
+    sqm: number; designStowageFactor: number; historicalStowageFactor?: number;
+  }>();
   temperatureZones.forEach((zone, zi) => {
     const color = ZONE_COLORS[zi % ZONE_COLORS.length];
     // Build a human-readable zone name from the coolingSectionIds
@@ -31,12 +35,16 @@ function buildZoneMap(temperatureZones: any[]): Map<string, {
     const holdNum = zone.coolingSections[0]?.sectionId[0] ?? '?';
     const zoneName = `Hold ${holdNum} ${levels}`;
     for (const section of zone.coolingSections) {
-      const pallets = Math.round(section.sqm * (section.designStowageFactor ?? 1.32));
+      const designFactor = section.designStowageFactor ?? 1.32;
+      const pallets = Math.round(section.sqm * designFactor);
       map.set(section.sectionId, {
         zoneId: zone.zoneId,
         zoneName,
         zoneColor: color,
         palletsCapacity: pallets,
+        sqm: section.sqm ?? 0,
+        designStowageFactor: designFactor,
+        historicalStowageFactor: section.historicalStowageFactor ?? undefined,
       });
     }
   });
@@ -59,6 +67,9 @@ function buildEmptyAssignments(temperatureZones: any[]): VoyageTempAssignment[] 
       palletsLoaded: 0,
       palletsCapacity: info.palletsCapacity,
       shipments: [],
+      sqm: info.sqm,
+      designStowageFactor: info.designStowageFactor,
+      historicalStowageFactor: info.historicalStowageFactor,
     });
   }
   return assignments;
@@ -114,6 +125,9 @@ function buildTempAssignments(plan: any, temperatureZones: any[]): VoyageTempAss
       palletsLoaded: cargo?.palletsLoaded || 0,
       palletsCapacity: info.palletsCapacity,
       shipments: cargo?.shipments || [],
+      sqm: info.sqm,
+      designStowageFactor: info.designStowageFactor,
+      historicalStowageFactor: info.historicalStowageFactor,
     });
   }
   return assignments;
