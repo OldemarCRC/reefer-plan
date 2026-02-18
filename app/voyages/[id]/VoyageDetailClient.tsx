@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { deleteVoyage, updatePortRotation } from '@/app/actions/voyage';
+import { deleteVoyage, updatePortRotation, resequencePortCallsByEta } from '@/app/actions/voyage';
 import { deleteStowagePlan } from '@/app/actions/stowage-plan';
 import styles from './page.module.css';
 import clientStyles from './VoyageDetailClient.module.css';
@@ -177,27 +177,60 @@ export function DeletePlanButton({ planId, planNumber, voyageId }: {
 // Port Calls Editor
 // ---------------------------------------------------------------------------
 
+// Sort port calls by ETA ascending (CANCELLED go last, preserving their order)
+function sortByEta(pcs: PortCallRow[]): PortCallRow[] {
+  const scheduled = pcs
+    .filter(p => p.status !== 'CANCELLED')
+    .slice()
+    .sort((a, b) => {
+      const ta = a.eta ? new Date(a.eta).getTime() : Infinity;
+      const tb = b.eta ? new Date(b.eta).getTime() : Infinity;
+      if (ta !== tb) return ta - tb;
+      return (a.sequence ?? 0) - (b.sequence ?? 0);
+    });
+  const cancelled = pcs
+    .filter(p => p.status === 'CANCELLED')
+    .slice()
+    .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+  return [...scheduled, ...cancelled];
+}
+
 export function PortCallsEditor({ voyageId, portCalls: initialPortCalls }: {
   voyageId: string;
   portCalls: PortCallRow[];
 }) {
   const router = useRouter();
   const [portCalls, setPortCalls] = useState<PortCallRow[]>(initialPortCalls);
+
+  // Inline edit state
   const [editingPort, setEditingPort] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<EditMode>(null);
-
-  // Dates edit state
   const [editEta, setEditEta] = useState('');
   const [editEtd, setEditEtd] = useState('');
-
-  // Change port state
   const [editPortCode, setEditPortCode] = useState('');
   const [editPortName, setEditPortName] = useState('');
   const [editPortCountry, setEditPortCountry] = useState('');
 
+  // Cancel port call modal
+  const [showCancelModal, setShowCancelModal] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+
+  // Add port call form
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addPortCode, setAddPortCode] = useState('');
+  const [addPortName, setAddPortName] = useState('');
+  const [addPortCountry, setAddPortCountry] = useState('');
+  const [addEta, setAddEta] = useState('');
+  const [addEtd, setAddEtd] = useState('');
+  const [addOperations, setAddOperations] = useState<('LOAD' | 'DISCHARGE')[]>(['LOAD']);
+
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
 
   const toDateStr = (d: string | null | undefined) => {
     if (!d) return '';
@@ -213,6 +246,25 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls }: {
   const clearFeedback = () => {
     setTimeout(() => { setError(null); setSuccessMsg(null); }, 4000);
   };
+
+  const resetAddForm = () => {
+    setAddPortCode('');
+    setAddPortName('');
+    setAddPortCountry('');
+    setAddEta('');
+    setAddEtd('');
+    setAddOperations(['LOAD']);
+  };
+
+  // After any mutation that may affect order, re-fetch sequences from server
+  const applyResequenced = async (fallback: PortCallRow[]) => {
+    const r = await resequencePortCallsByEta(voyageId);
+    setPortCalls(r.success ? r.portCalls : fallback);
+  };
+
+  // ---------------------------------------------------------------------------
+  // Inline edit handlers
+  // ---------------------------------------------------------------------------
 
   const startEditDates = (pc: PortCallRow) => {
     setEditingPort(pc.portCode);
@@ -234,6 +286,7 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls }: {
     setEditMode(null);
   };
 
+  // Save date change then resequence by ETA
   const saveDates = (portCode: string) => {
     startTransition(async () => {
       const result = await updatePortRotation(voyageId, [{
@@ -243,9 +296,9 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls }: {
         etd: editEtd || undefined,
       }]);
       if (result.success) {
-        setPortCalls(result.portCalls);
         setEditingPort(null);
         setEditMode(null);
+        await applyResequenced(result.portCalls);
         setSuccessMsg('Dates updated');
         clearFeedback();
         router.refresh();
@@ -284,6 +337,103 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls }: {
     });
   };
 
+  // ---------------------------------------------------------------------------
+  // Cancel / Restore
+  // ---------------------------------------------------------------------------
+
+  const cancelPort = (portCode: string) => {
+    startTransition(async () => {
+      const result = await updatePortRotation(voyageId, [{
+        action: 'CANCEL',
+        portCode,
+        reason: cancelReason || undefined,
+      }]);
+      if (result.success) {
+        setPortCalls(result.portCalls);
+        setShowCancelModal(null);
+        setCancelReason('');
+        setSuccessMsg('Port call cancelled');
+        clearFeedback();
+        router.refresh();
+      } else {
+        setError(result.error ?? 'Failed to cancel port call');
+        setShowCancelModal(null);
+        clearFeedback();
+      }
+    });
+  };
+
+  const restorePort = (portCode: string) => {
+    startTransition(async () => {
+      const result = await updatePortRotation(voyageId, [{
+        action: 'RESTORE',
+        portCode,
+      }]);
+      if (result.success) {
+        await applyResequenced(result.portCalls);
+        setSuccessMsg('Port call restored');
+        clearFeedback();
+        router.refresh();
+      } else {
+        setError(result.error ?? 'Failed to restore port call');
+        clearFeedback();
+      }
+    });
+  };
+
+  // ---------------------------------------------------------------------------
+  // Add Port Call
+  // ---------------------------------------------------------------------------
+
+  const addPort = () => {
+    if (!addPortCode.trim()) {
+      setError('Port code is required');
+      clearFeedback();
+      return;
+    }
+    if (addOperations.length === 0) {
+      setError('Select at least one operation (LOAD or DISCHARGE)');
+      clearFeedback();
+      return;
+    }
+    startTransition(async () => {
+      const result = await updatePortRotation(voyageId, [{
+        action: 'ADD',
+        portCode: addPortCode.toUpperCase().trim(),
+        portName: addPortName.trim() || addPortCode.toUpperCase().trim(),
+        country: addPortCountry.trim(),
+        eta: addEta || undefined,
+        etd: addEtd || undefined,
+        operations: addOperations,
+      }]);
+      if (result.success) {
+        setShowAddForm(false);
+        resetAddForm();
+        await applyResequenced(result.portCalls);
+        setSuccessMsg('Port call added');
+        clearFeedback();
+        router.refresh();
+      } else {
+        setError(result.error ?? 'Failed to add port call');
+        clearFeedback();
+      }
+    });
+  };
+
+  const toggleOperation = (op: 'LOAD' | 'DISCHARGE') => {
+    setAddOperations(prev =>
+      prev.includes(op) ? prev.filter(o => o !== op) : [...prev, op]
+    );
+  };
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+
+  // Display order: ETA ascending, CANCELLED last
+  const sortedPCs = sortByEta(portCalls);
+  const isAnyEditing = editingPort !== null;
+
   return (
     <div>
       {(error || successMsg) && (
@@ -307,161 +457,296 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls }: {
             </tr>
           </thead>
           <tbody>
-            {portCalls
-              .slice()
-              .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
-              .map((pc) => {
-                const isCancelled = pc.status === 'CANCELLED';
-                const isEditing = editingPort === pc.portCode;
-                const isLocked = pc.locked;
+            {sortedPCs.map((pc, idx) => {
+              const isCancelled = pc.status === 'CANCELLED';
+              const isEditing = editingPort === pc.portCode;
+              const isLocked = pc.locked;
 
-                return (
-                  <tr key={pc.portCode} className={isCancelled ? clientStyles.rowCancelled : ''}>
-                    <td className={styles.cellMono}>{pc.sequence}</td>
+              return (
+                <tr key={pc.portCode} className={isCancelled ? clientStyles.rowCancelled : ''}>
 
-                    {/* Port Code — editable in CHANGE_PORT mode */}
-                    <td className={styles.cellMono}>
-                      {isEditing && editMode === 'port' ? (
-                        <input
-                          className={clientStyles.portCodeInput}
-                          value={editPortCode}
-                          onChange={e => setEditPortCode(e.target.value.toUpperCase())}
-                          maxLength={6}
-                          placeholder="XXXXX"
-                        />
-                      ) : (
-                        pc.portCode
-                      )}
-                    </td>
+                  {/* Sequence */}
+                  <td className={styles.cellMono}>{pc.sequence}</td>
 
-                    {/* Port Name + Country — editable in CHANGE_PORT mode */}
-                    <td>
-                      {isEditing && editMode === 'port' ? (
-                        <div className={clientStyles.portEditFields}>
-                          <input
-                            className={clientStyles.portNameInput}
-                            value={editPortName}
-                            onChange={e => setEditPortName(e.target.value)}
-                            placeholder="Port name"
-                          />
-                          <input
-                            className={clientStyles.portCountryInput}
-                            value={editPortCountry}
-                            onChange={e => setEditPortCountry(e.target.value.toUpperCase())}
-                            maxLength={2}
-                            placeholder="CC"
-                          />
-                        </div>
-                      ) : (
-                        <div className={styles.portCell}>
-                          <span>{pc.portName}</span>
-                          {pc.country && <span className={styles.countryCode}>{pc.country}</span>}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* ETA / ETD — editable in dates mode */}
-                    {isEditing && editMode === 'dates' ? (
-                      <>
-                        <td>
-                          <input
-                            type="date"
-                            className={clientStyles.dateInput}
-                            value={editEta}
-                            onChange={e => setEditEta(e.target.value)}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="date"
-                            className={clientStyles.dateInput}
-                            value={editEtd}
-                            onChange={e => setEditEtd(e.target.value)}
-                          />
-                        </td>
-                      </>
+                  {/* Port Code */}
+                  <td className={styles.cellMono}>
+                    {isEditing && editMode === 'port' ? (
+                      <input
+                        className={clientStyles.portCodeInput}
+                        value={editPortCode}
+                        onChange={e => setEditPortCode(e.target.value.toUpperCase())}
+                        maxLength={6}
+                        placeholder="XXXXX"
+                      />
                     ) : (
-                      <>
-                        <td className={styles.cellMono}>{formatDate(pc.eta)}</td>
-                        <td className={styles.cellMono}>{formatDate(pc.etd)}</td>
-                      </>
+                      pc.portCode
                     )}
+                  </td>
 
-                    <td>
-                      <div className={styles.opTags}>
-                        {pc.operations.map((op: any) => (
-                          <span key={op} className={styles.opTag} data-op={op}>
-                            {op === 'LOAD' ? '▲' : '▼'} {op}
-                          </span>
-                        ))}
+                  {/* Port Name + Country */}
+                  <td>
+                    {isEditing && editMode === 'port' ? (
+                      <div className={clientStyles.portEditFields}>
+                        <input
+                          className={clientStyles.portNameInput}
+                          value={editPortName}
+                          onChange={e => setEditPortName(e.target.value)}
+                          placeholder="Port name"
+                        />
+                        <input
+                          className={clientStyles.portCountryInput}
+                          value={editPortCountry}
+                          onChange={e => setEditPortCountry(e.target.value.toUpperCase())}
+                          maxLength={2}
+                          placeholder="CC"
+                        />
                       </div>
-                    </td>
+                    ) : (
+                      <div className={styles.portCell}>
+                        <span>{pc.portName}</span>
+                        {pc.country && <span className={styles.countryCode}>{pc.country}</span>}
+                      </div>
+                    )}
+                  </td>
 
-                    <td>
-                      {isCancelled ? (
-                        <span className={clientStyles.cancelledBadge}>CANCELLED</span>
-                      ) : isLocked ? (
-                        <span className={styles.lockedBadge}>Locked</span>
-                      ) : (
-                        <span className={styles.cellMuted}>Scheduled</span>
-                      )}
-                    </td>
+                  {/* ETA / ETD */}
+                  {isEditing && editMode === 'dates' ? (
+                    <>
+                      <td>
+                        <input
+                          type="date"
+                          className={clientStyles.dateInput}
+                          value={editEta}
+                          onChange={e => setEditEta(e.target.value)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="date"
+                          className={clientStyles.dateInput}
+                          value={editEtd}
+                          onChange={e => setEditEtd(e.target.value)}
+                        />
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className={styles.cellMono}>{formatDate(pc.eta)}</td>
+                      <td className={styles.cellMono}>{formatDate(pc.etd)}</td>
+                    </>
+                  )}
 
-                    <td>
-                      {!isLocked && (
-                        <div className={clientStyles.rowActions}>
-                          {isEditing ? (
-                            /* Save / cancel edit */
-                            <>
-                              <button
-                                className={clientStyles.btnSave}
-                                onClick={() => editMode === 'dates' ? saveDates(pc.portCode) : savePortChange(pc.portCode)}
-                                disabled={isPending}
-                              >
-                                Save
-                              </button>
-                              <button
-                                className={clientStyles.btnCancelEdit}
-                                onClick={cancelEdit}
-                                disabled={isPending}
-                              >
-                                ×
-                              </button>
-                            </>
-                          ) : (
-                            /* Normal action buttons */
-                            <>
-                              {!isCancelled && (
-                                <>
-                                  <button
-                                    className={clientStyles.btnEdit}
-                                    onClick={() => startEditDates(pc)}
-                                    disabled={isPending}
-                                    title="Edit ETA/ETD"
-                                  >
-                                    📅
-                                  </button>
-                                  <button
-                                    className={clientStyles.btnEdit}
-                                    onClick={() => startEditPort(pc)}
-                                    disabled={isPending}
-                                    title="Change port"
-                                  >
-                                    ✎
-                                  </button>
-                                </>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+                  {/* Operations */}
+                  <td>
+                    <div className={styles.opTags}>
+                      {pc.operations.map((op: any) => (
+                        <span key={op} className={styles.opTag} data-op={op}>
+                          {op === 'LOAD' ? '▲' : '▼'} {op}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+
+                  {/* Status */}
+                  <td>
+                    {isCancelled ? (
+                      <span className={clientStyles.cancelledBadge}>CANCELLED</span>
+                    ) : isLocked ? (
+                      <span className={styles.lockedBadge}>Locked</span>
+                    ) : (
+                      <span className={styles.cellMuted}>Scheduled</span>
+                    )}
+                  </td>
+
+                  {/* Actions */}
+                  <td>
+                    {!isLocked && (
+                      <div className={clientStyles.rowActions}>
+                        {isEditing ? (
+                          <>
+                            <button
+                              className={clientStyles.btnSave}
+                              onClick={() => editMode === 'dates' ? saveDates(pc.portCode) : savePortChange(pc.portCode)}
+                              disabled={isPending}
+                            >
+                              Save
+                            </button>
+                            <button
+                              className={clientStyles.btnCancelEdit}
+                              onClick={cancelEdit}
+                              disabled={isPending}
+                            >
+                              ×
+                            </button>
+                          </>
+                        ) : isCancelled ? (
+                          <button
+                            className={clientStyles.btnRestore}
+                            onClick={() => restorePort(pc.portCode)}
+                            disabled={isPending}
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              className={clientStyles.btnEdit}
+                              onClick={() => startEditDates(pc)}
+                              disabled={isPending}
+                              title="Edit ETA/ETD"
+                            >
+                              📅
+                            </button>
+                            <button
+                              className={clientStyles.btnEdit}
+                              onClick={() => startEditPort(pc)}
+                              disabled={isPending}
+                              title="Change port"
+                            >
+                              ✎
+                            </button>
+                            <button
+                              className={clientStyles.btnCancelPort}
+                              onClick={() => setShowCancelModal(pc.portCode)}
+                              disabled={isPending || isAnyEditing}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
+
+      {/* Add Port Call section */}
+      <div className={clientStyles.addPortSection}>
+        {showAddForm ? (
+          <div className={clientStyles.addPortForm}>
+            <div className={clientStyles.addPortRow}>
+              <input
+                className={clientStyles.portCodeInput}
+                value={addPortCode}
+                onChange={e => setAddPortCode(e.target.value.toUpperCase())}
+                placeholder="CODE"
+                maxLength={6}
+              />
+              <input
+                className={clientStyles.portNameInput}
+                value={addPortName}
+                onChange={e => setAddPortName(e.target.value)}
+                placeholder="Port name"
+              />
+              <input
+                className={clientStyles.portCountryInput}
+                value={addPortCountry}
+                onChange={e => setAddPortCountry(e.target.value.toUpperCase())}
+                placeholder="CC"
+                maxLength={2}
+              />
+              <input
+                type="date"
+                className={clientStyles.dateInput}
+                value={addEta}
+                onChange={e => setAddEta(e.target.value)}
+                title="ETA"
+              />
+              <input
+                type="date"
+                className={clientStyles.dateInput}
+                value={addEtd}
+                onChange={e => setAddEtd(e.target.value)}
+                title="ETD"
+              />
+              <div className={clientStyles.opToggles}>
+                <button
+                  type="button"
+                  className={addOperations.includes('LOAD') ? clientStyles.opToggleActive : clientStyles.opToggle}
+                  onClick={() => toggleOperation('LOAD')}
+                >
+                  ▲ LOAD
+                </button>
+                <button
+                  type="button"
+                  className={addOperations.includes('DISCHARGE') ? clientStyles.opToggleActive : clientStyles.opToggle}
+                  onClick={() => toggleOperation('DISCHARGE')}
+                >
+                  ▼ DISCH
+                </button>
+              </div>
+            </div>
+            <div className={clientStyles.addPortActions}>
+              <button
+                className={clientStyles.btnSave}
+                onClick={addPort}
+                disabled={isPending || !addPortCode.trim()}
+              >
+                {isPending ? 'Adding…' : 'Add Port Call'}
+              </button>
+              <button
+                className={clientStyles.btnCancelEdit}
+                onClick={() => { setShowAddForm(false); resetAddForm(); }}
+                disabled={isPending}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            className={clientStyles.btnAddPort}
+            onClick={() => setShowAddForm(true)}
+            disabled={isAnyEditing}
+          >
+            + Add Port Call
+          </button>
+        )}
+      </div>
+
+      {/* Cancel Port Call confirmation modal */}
+      {showCancelModal && (
+        <div className={clientStyles.modalOverlay} onClick={() => { if (!isPending) { setShowCancelModal(null); setCancelReason(''); } }}>
+          <div className={clientStyles.modal} onClick={e => e.stopPropagation()}>
+            <h3 className={clientStyles.modalTitle}>Cancel Port Call</h3>
+            <p className={clientStyles.modalBody}>
+              Remove <strong>{showCancelModal}</strong> from this voyage&apos;s rotation?
+              The port call will be kept for audit and shown as cancelled.
+            </p>
+            <div className={clientStyles.reasonRow}>
+              <label className={clientStyles.reasonLabel}>Reason (optional)</label>
+              <input
+                type="text"
+                className={clientStyles.reasonInput}
+                value={cancelReason}
+                onChange={e => setCancelReason(e.target.value)}
+                placeholder="e.g. Port strike, bad weather, commercial change"
+                onKeyDown={e => { if (e.key === 'Enter') cancelPort(showCancelModal); }}
+              />
+            </div>
+            <div className={clientStyles.modalActions}>
+              <button
+                className={clientStyles.btnModalCancel}
+                onClick={() => { setShowCancelModal(null); setCancelReason(''); }}
+                disabled={isPending}
+              >
+                Keep Port
+              </button>
+              <button
+                className={clientStyles.btnModalConfirm}
+                onClick={() => cancelPort(showCancelModal)}
+                disabled={isPending}
+              >
+                {isPending ? 'Cancelling…' : 'Cancel Port Call'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

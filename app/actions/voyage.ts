@@ -724,6 +724,55 @@ export async function updatePortRotation(
 }
 
 // ----------------------------------------------------------------------------
+// RESEQUENCE PORT CALLS BY ETA
+// Sorts SCHEDULED port calls by ETA ascending and assigns sequence 1, 2, 3…
+// CANCELLED port calls are placed after scheduled ones, preserving their
+// relative order. Called after any date change or new port addition so that
+// the sequence field in the DB always reflects ETA order.
+// ----------------------------------------------------------------------------
+
+export async function resequencePortCallsByEta(voyageId: unknown) {
+  try {
+    const id = z.string().min(1).parse(voyageId);
+    await connectDB();
+
+    const voyage = await VoyageModel.findById(id).lean();
+    if (!voyage) return { success: false, error: 'Voyage not found' };
+
+    const portCalls: any[] = [...((voyage.portCalls as any[]) ?? [])];
+
+    const scheduled = portCalls
+      .filter((p: any) => p.status !== 'CANCELLED')
+      .sort((a: any, b: any) => {
+        const ta = a.eta ? new Date(a.eta).getTime() : Infinity;
+        const tb = b.eta ? new Date(b.eta).getTime() : Infinity;
+        if (ta !== tb) return ta - tb;
+        return (a.sequence ?? 0) - (b.sequence ?? 0); // tie-break by old sequence
+      });
+
+    const cancelled = portCalls
+      .filter((p: any) => p.status === 'CANCELLED')
+      .sort((a: any, b: any) => (a.sequence ?? 0) - (b.sequence ?? 0));
+
+    const resequenced = [
+      ...scheduled.map((p: any, i: number) => ({ ...p, sequence: i + 1 })),
+      ...cancelled.map((p: any, i: number) => ({ ...p, sequence: scheduled.length + i + 1 })),
+    ];
+
+    await VoyageModel.updateOne({ _id: id }, { $set: { portCalls: resequenced } });
+
+    return {
+      success: true,
+      portCalls: JSON.parse(JSON.stringify(resequenced)),
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Error resequencing port calls:', msg);
+    return { success: false, error: `Failed to resequence: ${msg}` };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // GET ALL VOYAGES
 // ----------------------------------------------------------------------------
 

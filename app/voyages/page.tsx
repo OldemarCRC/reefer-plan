@@ -50,6 +50,7 @@ export default async function VoyagesPage() {
     serviceCode: v.serviceId?.serviceCode || 'N/A',
     startDate: v.departureDate ? new Date(v.departureDate).toLocaleDateString() : 'TBD',
     portCalls: (v.portCalls || [])
+      .filter((pc: any) => pc.status !== 'CANCELLED')
       .slice()
       .sort((a: any, b: any) => {
         const ta = a.eta ? new Date(a.eta).getTime() : (a.sequence ?? 0) * 1e10;
