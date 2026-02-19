@@ -23,6 +23,12 @@ interface PortCallRow {
   status?: string;
 }
 
+interface ServicePort {
+  portCode: string;
+  portName: string;
+  country: string;
+}
+
 type EditMode = 'dates' | 'port' | null;
 
 // ---------------------------------------------------------------------------
@@ -195,9 +201,10 @@ function sortByEta(pcs: PortCallRow[]): PortCallRow[] {
   return [...scheduled, ...cancelled];
 }
 
-export function PortCallsEditor({ voyageId, portCalls: initialPortCalls }: {
+export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, servicePortRotation = [] }: {
   voyageId: string;
   portCalls: PortCallRow[];
+  servicePortRotation?: ServicePort[];
 }) {
   const router = useRouter();
   const [portCalls, setPortCalls] = useState<PortCallRow[]>(initialPortCalls);
@@ -276,9 +283,18 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls }: {
   const startEditPort = (pc: PortCallRow) => {
     setEditingPort(pc.portCode);
     setEditMode('port');
-    setEditPortCode(pc.portCode);
-    setEditPortName(pc.portName);
-    setEditPortCountry(pc.country);
+    if (servicePortRotation.length > 0 &&
+        servicePortRotation.some(sp => sp.portCode === pc.portCode)) {
+      // Pre-select the matching service port
+      setEditPortCode(pc.portCode);
+      setEditPortName(pc.portName);
+      setEditPortCountry(pc.country);
+    } else {
+      // Port not in service rotation — start unselected, user must pick
+      setEditPortCode('');
+      setEditPortName('');
+      setEditPortCountry('');
+    }
   };
 
   const cancelEdit = () => {
@@ -288,6 +304,11 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls }: {
 
   // Save date change then resequence by ETA
   const saveDates = (portCode: string) => {
+    if (editEta && editEtd && editEta >= editEtd) {
+      setError('ETA must be before ETD — vessel cannot depart before arriving');
+      clearFeedback();
+      return;
+    }
     startTransition(async () => {
       const result = await updatePortRotation(voyageId, [{
         action: 'DATE_CHANGED',
@@ -396,6 +417,11 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls }: {
       clearFeedback();
       return;
     }
+    if (addEta && addEtd && addEta >= addEtd) {
+      setError('ETA must be before ETD — vessel cannot depart before arriving');
+      clearFeedback();
+      return;
+    }
     startTransition(async () => {
       const result = await updatePortRotation(voyageId, [{
         action: 'ADD',
@@ -471,13 +497,9 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls }: {
                   {/* Port Code */}
                   <td className={styles.cellMono}>
                     {isEditing && editMode === 'port' ? (
-                      <input
-                        className={clientStyles.portCodeInput}
-                        value={editPortCode}
-                        onChange={e => setEditPortCode(e.target.value.toUpperCase())}
-                        maxLength={6}
-                        placeholder="XXXXX"
-                      />
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: 600, opacity: editPortCode ? 1 : 0.4 }}>
+                        {editPortCode || '—'}
+                      </span>
                     ) : (
                       pc.portCode
                     )}
@@ -486,21 +508,50 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls }: {
                   {/* Port Name + Country */}
                   <td>
                     {isEditing && editMode === 'port' ? (
-                      <div className={clientStyles.portEditFields}>
-                        <input
-                          className={clientStyles.portNameInput}
-                          value={editPortName}
-                          onChange={e => setEditPortName(e.target.value)}
-                          placeholder="Port name"
-                        />
-                        <input
-                          className={clientStyles.portCountryInput}
-                          value={editPortCountry}
-                          onChange={e => setEditPortCountry(e.target.value.toUpperCase())}
-                          maxLength={2}
-                          placeholder="CC"
-                        />
-                      </div>
+                      servicePortRotation.length > 0 ? (
+                        <div className={clientStyles.portSelectWrapper}>
+                          <select
+                            className={clientStyles.portSelect}
+                            value={editPortCode}
+                            onChange={e => {
+                              const sp = servicePortRotation.find(p => p.portCode === e.target.value);
+                              if (sp) {
+                                setEditPortCode(sp.portCode);
+                                setEditPortName(sp.portName);
+                                setEditPortCountry(sp.country);
+                              }
+                            }}
+                          >
+                            {!editPortCode && <option value="">— pick a port —</option>}
+                            {servicePortRotation.map(sp => (
+                              <option key={sp.portCode} value={sp.portCode}>
+                                {sp.portCode} — {sp.portName}
+                              </option>
+                            ))}
+                          </select>
+                          {!editPortCode && (
+                            <span className={clientStyles.portCustomHint}>
+                              Port not in service rotation — go to Admin › Services to add it
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className={clientStyles.portEditFields}>
+                          <input
+                            className={clientStyles.portNameInput}
+                            value={editPortName}
+                            onChange={e => setEditPortName(e.target.value)}
+                            placeholder="Port name"
+                          />
+                          <input
+                            className={clientStyles.portCountryInput}
+                            value={editPortCountry}
+                            onChange={e => setEditPortCountry(e.target.value.toUpperCase())}
+                            maxLength={2}
+                            placeholder="CC"
+                          />
+                        </div>
+                      )
                     ) : (
                       <div className={styles.portCell}>
                         <span>{pc.portName}</span>
@@ -629,26 +680,54 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls }: {
         {showAddForm ? (
           <div className={clientStyles.addPortForm}>
             <div className={clientStyles.addPortRow}>
-              <input
-                className={clientStyles.portCodeInput}
-                value={addPortCode}
-                onChange={e => setAddPortCode(e.target.value.toUpperCase())}
-                placeholder="CODE"
-                maxLength={6}
-              />
-              <input
-                className={clientStyles.portNameInput}
-                value={addPortName}
-                onChange={e => setAddPortName(e.target.value)}
-                placeholder="Port name"
-              />
-              <input
-                className={clientStyles.portCountryInput}
-                value={addPortCountry}
-                onChange={e => setAddPortCountry(e.target.value.toUpperCase())}
-                placeholder="CC"
-                maxLength={2}
-              />
+              {servicePortRotation.length > 0 ? (
+                <select
+                  className={clientStyles.portSelect}
+                  value={addPortCode}
+                  onChange={e => {
+                    const sp = servicePortRotation.find(p => p.portCode === e.target.value);
+                    if (sp) {
+                      setAddPortCode(sp.portCode);
+                      setAddPortName(sp.portName);
+                      setAddPortCountry(sp.country);
+                    } else {
+                      setAddPortCode('');
+                      setAddPortName('');
+                      setAddPortCountry('');
+                    }
+                  }}
+                >
+                  <option value="">— Select port —</option>
+                  {servicePortRotation.map(sp => (
+                    <option key={sp.portCode} value={sp.portCode}>
+                      {sp.portCode} — {sp.portName}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <>
+                  <input
+                    className={clientStyles.portCodeInput}
+                    value={addPortCode}
+                    onChange={e => setAddPortCode(e.target.value.toUpperCase())}
+                    placeholder="CODE"
+                    maxLength={6}
+                  />
+                  <input
+                    className={clientStyles.portNameInput}
+                    value={addPortName}
+                    onChange={e => setAddPortName(e.target.value)}
+                    placeholder="Port name"
+                  />
+                  <input
+                    className={clientStyles.portCountryInput}
+                    value={addPortCountry}
+                    onChange={e => setAddPortCountry(e.target.value.toUpperCase())}
+                    placeholder="CC"
+                    maxLength={2}
+                  />
+                </>
+              )}
               <input
                 type="date"
                 className={clientStyles.dateInput}

@@ -426,6 +426,40 @@
   color: var(--color-blue-light);
 }
 
+/* --- Port selector (service rotation dropdown) --- */
+
+.portSelectWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.portSelect {
+  padding: 3px 8px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-cyan);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: 11px;
+  min-width: 200px;
+  cursor: pointer;
+}
+
+.portSelect:focus {
+  outline: none;
+}
+
+.portCustomHint {
+  font-size: 10px;
+  color: var(--color-warning);
+}
+
+.portCustomFields {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 /* --- Cancel reason input --- */
 
 .reasonRow {

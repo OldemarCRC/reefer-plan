@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { cancelVoyage, hardDeleteVoyage } from '@/app/actions/voyage';
 import { deleteStowagePlan } from '@/app/actions/stowage-plan';
 import { deleteVessel } from '@/app/actions/vessel';
-import { deleteService } from '@/app/actions/service';
+import { deleteService, createService, updateService } from '@/app/actions/service';
 import ContractsClient from '@/app/contracts/ContractsClient';
 import type { DisplayContract } from '@/app/contracts/ContractsClient';
 import styles from './page.module.css';
@@ -51,11 +51,27 @@ interface AdminVessel {
 interface AdminService {
   _id: string;
   serviceCode: string;
-  serviceName: string;
   shortCode?: string;
+  serviceName: string;
   frequency?: string;
+  cycleDurationWeeks?: number;
   active: boolean;
-  portRotation: Array<{ portCode: string; portName: string; operations: string[] }>;
+  portRotation: Array<{
+    portCode: string;
+    portName: string;
+    country: string;
+    sequence: number;
+    weeksFromStart: number;
+    operations: string[];
+  }>;
+}
+
+interface PortEntry {
+  portCode: string;
+  portName: string;
+  country: string;
+  operations: ('LOAD' | 'DISCHARGE')[];
+  weeksFromStart: number;
 }
 
 type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users';
@@ -605,6 +621,386 @@ function VesselsTab({ initialVessels }: { initialVessels: AdminVessel[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// Port Rotation Editor — shared by Create and Edit service modals
+// ---------------------------------------------------------------------------
+
+function PortRotationEditor({ ports, onChange }: {
+  ports: PortEntry[];
+  onChange: (ports: PortEntry[]) => void;
+}) {
+  const [newCode, setNewCode] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newCountry, setNewCountry] = useState('');
+  const [newOps, setNewOps] = useState<('LOAD' | 'DISCHARGE')[]>(['LOAD']);
+  const [addErr, setAddErr] = useState('');
+
+  const toggleOp = (op: 'LOAD' | 'DISCHARGE') =>
+    setNewOps(prev => prev.includes(op) ? prev.filter(o => o !== op) : [...prev, op]);
+
+  const addPort = () => {
+    if (!newCode.trim() || !newName.trim() || !newCountry.trim()) {
+      setAddErr('Port code, name and country are required');
+      return;
+    }
+    if (newOps.length === 0) { setAddErr('Select at least one operation'); return; }
+    const code = newCode.toUpperCase().trim();
+    if (ports.some(p => p.portCode === code)) { setAddErr('Port already in list'); return; }
+    onChange([...ports, { portCode: code, portName: newName.trim(), country: newCountry.toUpperCase().trim(), operations: newOps, weeksFromStart: ports.length }]);
+    setNewCode(''); setNewName(''); setNewCountry(''); setNewOps(['LOAD']); setAddErr('');
+  };
+
+  return (
+    <div>
+      {ports.length === 0 ? (
+        <p className={styles.portEmptyHint}>No ports yet — add at least 2 below.</p>
+      ) : (
+        <div className={styles.portList}>
+          {ports.map((p, i) => (
+            <div key={p.portCode} className={styles.portListItem}>
+              <span className={styles.portListSeq}>{i + 1}</span>
+              <span className={styles.portListCode}>{p.portCode}</span>
+              <span className={styles.portListName}>{p.portName}</span>
+              <span className={styles.portListCountry}>{p.country}</span>
+              <div className={styles.portListOps}>
+                {p.operations.map(op => (
+                  <span
+                    key={op}
+                    className={`${styles.portListOp} ${op === 'LOAD' ? styles.portListOpLoad : styles.portListOpDischarge}`}
+                  >
+                    {op === 'LOAD' ? '▲ L' : '▼ D'}
+                  </span>
+                ))}
+              </div>
+              <button
+                type="button"
+                className={styles.btnRemovePort}
+                onClick={() => onChange(ports.filter(x => x.portCode !== p.portCode))}
+                title="Remove port"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className={styles.portAddForm}>
+        <div className={styles.portAddRow}>
+          <input
+            className={`${styles.portAddInput} ${styles.portAddInputCode}`}
+            value={newCode}
+            onChange={e => { setNewCode(e.target.value.toUpperCase()); setAddErr(''); }}
+            placeholder="CODE"
+            maxLength={6}
+          />
+          <input
+            className={`${styles.portAddInput} ${styles.portAddInputName}`}
+            value={newName}
+            onChange={e => { setNewName(e.target.value); setAddErr(''); }}
+            placeholder="Port name"
+          />
+          <input
+            className={`${styles.portAddInput} ${styles.portAddInputCC}`}
+            value={newCountry}
+            onChange={e => { setNewCountry(e.target.value.toUpperCase()); setAddErr(''); }}
+            placeholder="CC"
+            maxLength={2}
+          />
+          <div className={styles.opToggles}>
+            {(['LOAD', 'DISCHARGE'] as const).map(op => (
+              <button
+                key={op}
+                type="button"
+                className={newOps.includes(op) ? styles.opToggleActive : styles.opToggle}
+                onClick={() => toggleOp(op)}
+              >
+                {op === 'LOAD' ? '▲ L' : '▼ D'}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className={styles.btnSm}
+            onClick={addPort}
+            disabled={!newCode.trim()}
+          >
+            + Add
+          </button>
+        </div>
+        {addErr && <span className={styles.portAddError}>{addErr}</span>}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Create Service Modal
+// ---------------------------------------------------------------------------
+
+function CreateServiceModal({ onClose, onCreated }: {
+  onClose: () => void;
+  onCreated: (s: AdminService) => void;
+}) {
+  const [serviceCode, setServiceCode] = useState('');
+  const [shortCode, setShortCode] = useState('');
+  const [serviceName, setServiceName] = useState('');
+  const [frequency, setFrequency] = useState<'WEEKLY' | 'BIWEEKLY' | 'MONTHLY'>('WEEKLY');
+  const [cycleDurationWeeks, setCycleDurationWeeks] = useState(4);
+  const [ports, setPorts] = useState<PortEntry[]>([]);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = () => {
+    if (!serviceCode.trim() || !serviceName.trim()) {
+      setError('Service code and name are required');
+      return;
+    }
+    if (ports.length < 2) {
+      setError('At least 2 ports are required');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const portRotation = ports.map((p, i) => ({
+        portCode: p.portCode,
+        portName: p.portName,
+        country: p.country,
+        sequence: i + 1,
+        weeksFromStart: p.weeksFromStart,
+        operations: p.operations,
+      }));
+      const result = await createService({
+        serviceCode: serviceCode.toUpperCase().trim(),
+        shortCode: shortCode.toUpperCase().trim() || undefined,
+        serviceName: serviceName.trim(),
+        frequency,
+        cycleDurationWeeks,
+        portRotation,
+      });
+      if (result.success) {
+        onCreated(result.data as AdminService);
+      } else {
+        setError(result.error ?? 'Failed to create service');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={`${styles.modal} ${styles.modalWide}`}>
+        <h3 className={styles.modalTitle}>New Service</h3>
+
+        <div className={styles.formGrid}>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Service Code *</label>
+            <input
+              className={`${styles.formInput} ${styles.formInputMono}`}
+              value={serviceCode}
+              onChange={e => setServiceCode(e.target.value.toUpperCase())}
+              placeholder="SEABAN"
+              maxLength={10}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Short Code</label>
+            <input
+              className={`${styles.formInput} ${styles.formInputMono}`}
+              value={shortCode}
+              onChange={e => setShortCode(e.target.value.toUpperCase())}
+              placeholder="CBX"
+              maxLength={5}
+            />
+          </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Service Name *</label>
+            <input
+              className={styles.formInput}
+              value={serviceName}
+              onChange={e => setServiceName(e.target.value)}
+              placeholder="South America Banana Express"
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Frequency</label>
+            <select
+              className={styles.formSelect}
+              value={frequency}
+              onChange={e => setFrequency(e.target.value as any)}
+            >
+              <option value="WEEKLY">Weekly</option>
+              <option value="BIWEEKLY">Biweekly</option>
+              <option value="MONTHLY">Monthly</option>
+            </select>
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Cycle Duration (weeks)</label>
+            <input
+              type="number"
+              className={styles.formInput}
+              value={cycleDurationWeeks}
+              onChange={e => setCycleDurationWeeks(Number(e.target.value))}
+              min={1}
+              max={52}
+            />
+          </div>
+        </div>
+
+        <div>
+          <p className={styles.sectionHeader}>Port Rotation</p>
+          <PortRotationEditor ports={ports} onChange={setPorts} />
+        </div>
+
+        {error && <div className={styles.modalError}>{error}</div>}
+
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>
+            Cancel
+          </button>
+          <button
+            className={styles.btnPrimary}
+            onClick={handleSubmit}
+            disabled={isPending || !serviceCode.trim() || !serviceName.trim() || ports.length < 2}
+          >
+            {isPending ? 'Creating…' : 'Create Service'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Edit Service Modal
+// ---------------------------------------------------------------------------
+
+function EditServiceModal({ service, onClose, onUpdated }: {
+  service: AdminService;
+  onClose: () => void;
+  onUpdated: (s: AdminService) => void;
+}) {
+  const [shortCode, setShortCode] = useState(service.shortCode ?? '');
+  const [serviceName, setServiceName] = useState(service.serviceName);
+  const [frequency, setFrequency] = useState<'WEEKLY' | 'BIWEEKLY' | 'MONTHLY'>(
+    (service.frequency as any) ?? 'WEEKLY'
+  );
+  const [cycleDurationWeeks, setCycleDurationWeeks] = useState(service.cycleDurationWeeks ?? 4);
+  const [ports, setPorts] = useState<PortEntry[]>(
+    service.portRotation
+      .slice()
+      .sort((a: any, b: any) => a.sequence - b.sequence)
+      .map(p => ({
+        portCode: p.portCode,
+        portName: p.portName,
+        country: p.country,
+        operations: p.operations as ('LOAD' | 'DISCHARGE')[],
+        weeksFromStart: p.weeksFromStart,
+      }))
+  );
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = () => {
+    if (!serviceName.trim()) { setError('Service name is required'); return; }
+    if (ports.length < 2) { setError('At least 2 ports are required'); return; }
+    setError(null);
+    startTransition(async () => {
+      const portRotation = ports.map((p, i) => ({
+        portCode: p.portCode,
+        portName: p.portName,
+        country: p.country,
+        sequence: i + 1,
+        weeksFromStart: p.weeksFromStart,
+        operations: p.operations,
+      }));
+      const result = await updateService(service._id, {
+        shortCode: shortCode.toUpperCase().trim() || undefined,
+        serviceName: serviceName.trim(),
+        frequency,
+        cycleDurationWeeks,
+        portRotation,
+      });
+      if (result.success) {
+        onUpdated(result.data as AdminService);
+      } else {
+        setError(result.error ?? 'Failed to save service');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={`${styles.modal} ${styles.modalWide}`}>
+        <h3 className={styles.modalTitle}>Edit Service — {service.serviceCode}</h3>
+
+        <div className={styles.formGrid}>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Short Code</label>
+            <input
+              className={`${styles.formInput} ${styles.formInputMono}`}
+              value={shortCode}
+              onChange={e => setShortCode(e.target.value.toUpperCase())}
+              placeholder="CBX"
+              maxLength={5}
+            />
+          </div>
+          <div className={styles.formGroupFull} style={{ gridColumn: undefined }}>
+            <label className={styles.formLabel}>Service Name *</label>
+            <input
+              className={styles.formInput}
+              value={serviceName}
+              onChange={e => setServiceName(e.target.value)}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Frequency</label>
+            <select
+              className={styles.formSelect}
+              value={frequency}
+              onChange={e => setFrequency(e.target.value as any)}
+            >
+              <option value="WEEKLY">Weekly</option>
+              <option value="BIWEEKLY">Biweekly</option>
+              <option value="MONTHLY">Monthly</option>
+            </select>
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Cycle Duration (weeks)</label>
+            <input
+              type="number"
+              className={styles.formInput}
+              value={cycleDurationWeeks}
+              onChange={e => setCycleDurationWeeks(Number(e.target.value))}
+              min={1}
+              max={52}
+            />
+          </div>
+        </div>
+
+        <div>
+          <p className={styles.sectionHeader}>Port Rotation</p>
+          <PortRotationEditor ports={ports} onChange={setPorts} />
+        </div>
+
+        {error && <div className={styles.modalError}>{error}</div>}
+
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>
+            Cancel
+          </button>
+          <button
+            className={styles.btnPrimary}
+            onClick={handleSave}
+            disabled={isPending || !serviceName.trim() || ports.length < 2}
+          >
+            {isPending ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Services Tab
 // ---------------------------------------------------------------------------
 
@@ -612,6 +1008,8 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
   const router = useRouter();
   const [services, setServices] = useState<AdminService[]>(initialServices);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editingService, setEditingService] = useState<AdminService | null>(null);
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -623,9 +1021,7 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
     startTransition(async () => {
       const result = await deleteService(confirmId);
       if (result.success) {
-        setServices(prev =>
-          prev.map(s => s._id === confirmId ? { ...s, active: false } : s)
-        );
+        setServices(prev => prev.map(s => s._id === confirmId ? { ...s, active: false } : s));
         setConfirmId(null);
         router.refresh();
       } else {
@@ -634,17 +1030,22 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
     });
   };
 
-  const loadPorts = (svc: AdminService) =>
-    svc.portRotation
-      .filter(p => p.operations.includes('LOAD'))
-      .map(p => p.portCode)
-      .join(', ');
+  const handleActivate = (id: string) => {
+    startTransition(async () => {
+      const result = await updateService(id, { active: true });
+      if (result.success) {
+        setServices(prev => prev.map(s => s._id === id ? { ...s, active: true } : s));
+        router.refresh();
+      }
+    });
+  };
 
-  const dischargePorts = (svc: AdminService) =>
+  const portSummary = (svc: AdminService) =>
     svc.portRotation
-      .filter(p => p.operations.includes('DISCHARGE'))
+      .slice()
+      .sort((a: any, b: any) => a.sequence - b.sequence)
       .map(p => p.portCode)
-      .join(', ');
+      .join(' → ');
 
   return (
     <div className={styles.tabContent}>
@@ -652,6 +1053,9 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
         <div className={styles.toolbarLeft}>
           <span className={styles.toolbarCount}>{services.length} services</span>
         </div>
+        <button className={styles.btnPrimary} onClick={() => setShowCreate(true)}>
+          + New Service
+        </button>
       </div>
 
       <div className={styles.tableWrap}>
@@ -660,8 +1064,7 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
             <tr>
               <th>Code</th>
               <th>Name</th>
-              <th>Load Ports</th>
-              <th>Discharge Ports</th>
+              <th>Port Rotation</th>
               <th>Frequency</th>
               <th>Status</th>
               <th className={styles.thActions}>Actions</th>
@@ -669,7 +1072,7 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
           </thead>
           <tbody>
             {services.length === 0 ? (
-              <tr><td colSpan={7} className={styles.emptyCell}>No services found.</td></tr>
+              <tr><td colSpan={6} className={styles.emptyCell}>No services found.</td></tr>
             ) : (
               services.map(s => {
                 const isActive = s.active !== false;
@@ -677,10 +1080,14 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
                   <tr key={s._id} className={!isActive ? styles.rowCancelled : ''}>
                     <td>
                       <span className={styles.modalVoyageNumber}>{s.serviceCode}</span>
+                      {s.shortCode && (
+                        <span className={styles.wkBadge}>{s.shortCode}</span>
+                      )}
                     </td>
                     <td>{s.serviceName}</td>
-                    <td className={styles.cellSecondary}>{loadPorts(s) || '—'}</td>
-                    <td className={styles.cellSecondary}>{dischargePorts(s) || '—'}</td>
+                    <td className={styles.cellSecondary} style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }}>
+                      {portSummary(s) || '—'}
+                    </td>
                     <td className={styles.cellSecondary}>{s.frequency ?? '—'}</td>
                     <td>
                       <span
@@ -693,12 +1100,26 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
                       </span>
                     </td>
                     <td className={styles.cellActions}>
-                      {isActive && (
+                      <button
+                        className={styles.btnSm}
+                        onClick={() => setEditingService(s)}
+                      >
+                        Edit
+                      </button>
+                      {isActive ? (
                         <button
                           className={styles.btnWarn}
                           onClick={() => { setConfirmId(s._id); setErrorMsg(null); }}
                         >
                           Deactivate
+                        </button>
+                      ) : (
+                        <button
+                          className={styles.btnSuccess}
+                          onClick={() => handleActivate(s._id)}
+                          disabled={isPending}
+                        >
+                          Activate
                         </button>
                       )}
                     </td>
@@ -720,7 +1141,7 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
             <p className={styles.modalBody}>
               Deactivating <strong>{confirmService.serviceName}</strong> hides it from voyage creation
               and booking workflows. Existing voyages and bookings are not affected.
-              The service can be reactivated later.
+              The service can be reactivated at any time.
             </p>
             {errorMsg && <div className={styles.modalError}>{errorMsg}</div>}
             <div className={styles.modalActions}>
@@ -733,6 +1154,29 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
             </div>
           </div>
         </div>
+      )}
+
+      {showCreate && (
+        <CreateServiceModal
+          onClose={() => setShowCreate(false)}
+          onCreated={svc => {
+            setServices(prev => [svc, ...prev]);
+            setShowCreate(false);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {editingService && (
+        <EditServiceModal
+          service={editingService}
+          onClose={() => setEditingService(null)}
+          onUpdated={svc => {
+            setServices(prev => prev.map(s => s._id === svc._id ? svc : s));
+            setEditingService(null);
+            router.refresh();
+          }}
+        />
       )}
     </div>
   );

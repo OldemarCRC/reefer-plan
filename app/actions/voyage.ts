@@ -631,6 +631,14 @@ export async function updatePortRotation(
       } else if (change.action === 'DATE_CHANGED') {
         const pc = portCalls.find((p: any) => p.portCode === change.portCode);
         if (!pc) continue;
+
+        // Validate: ETA must be before ETD
+        const effectiveEta = change.eta !== undefined ? (change.eta ? new Date(change.eta) : undefined) : pc.eta;
+        const effectiveEtd = change.etd !== undefined ? (change.etd ? new Date(change.etd) : undefined) : pc.etd;
+        if (effectiveEta && effectiveEtd && effectiveEta >= effectiveEtd) {
+          return { success: false, error: 'ETA must be before ETD — vessel cannot depart before arriving' };
+        }
+
         const etaStr = pc.eta ? new Date(pc.eta).toISOString().slice(0, 10) : '';
         const etdStr = pc.etd ? new Date(pc.etd).toISOString().slice(0, 10) : '';
         const prev = `ETA:${etaStr},ETD:${etdStr}`;
@@ -677,6 +685,10 @@ export async function updatePortRotation(
         });
 
       } else if (change.action === 'ADD') {
+        // Validate: ETA must be before ETD
+        if (change.eta && change.etd && new Date(change.eta) >= new Date(change.etd)) {
+          return { success: false, error: 'ETA must be before ETD — vessel cannot depart before arriving' };
+        }
         const maxSeq = Math.max(0, ...portCalls.map((p: any) => p.sequence));
         const newSeq = change.sequence ?? maxSeq + 1;
         portCalls.forEach((p: any) => { if (p.sequence >= newSeq) p.sequence++; });

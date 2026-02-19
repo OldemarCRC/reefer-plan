@@ -35,10 +35,12 @@ const RoutePortSchema = z.object({
 
 const CreateServiceSchema = z.object({
   serviceCode: ServiceCodeSchema,
+  shortCode: z.string().min(2).max(5).regex(/^[A-Z0-9]+$/, 'Short code must be uppercase alphanumeric').optional(),
   serviceName: z.string().min(1).max(200),
   description: z.string().max(1000).optional(),
   frequency: z.enum(['WEEKLY', 'BIWEEKLY', 'MONTHLY']),
-  route: z.array(RoutePortSchema).min(2, 'Route must have at least 2 ports'),
+  cycleDurationWeeks: z.number().int().positive().default(4),
+  portRotation: z.array(RoutePortSchema).min(2, 'Port rotation must have at least 2 ports'),
   vessels: z.array(z.string()).optional().default([]),
   active: z.boolean().optional().default(true),
 });
@@ -70,7 +72,7 @@ export async function createService(data: unknown) {
     }
     
     // Validate port sequence (must be consecutive)
-    const sequences = validated.route.map(p => p.sequence).sort((a, b) => a - b);
+    const sequences = validated.portRotation.map(p => p.sequence).sort((a, b) => a - b);
     for (let i = 0; i < sequences.length; i++) {
       if (sequences[i] !== i + 1) {
         return {
@@ -133,9 +135,9 @@ export async function updateService(
       }
     }
     
-    // If updating route, validate sequence
-    if (validated.route) {
-      const sequences = validated.route.map(p => p.sequence).sort((a, b) => a - b);
+    // If updating portRotation, validate sequence
+    if (validated.portRotation) {
+      const sequences = validated.portRotation.map(p => p.sequence).sort((a, b) => a - b);
       for (let i = 0; i < sequences.length; i++) {
         if (sequences[i] !== i + 1) {
           return {
