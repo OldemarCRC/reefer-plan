@@ -167,6 +167,7 @@ interface VesselProfileProps {
   onCompartmentClick?: (compartmentId: string) => void;
   tempAssignments?: VoyageTempAssignment[];
   vesselLayout?: VesselLayout;
+  conflictCompartmentIds?: string[];
 }
 
 export default function VesselProfile({
@@ -175,6 +176,7 @@ export default function VesselProfile({
   onCompartmentClick,
   tempAssignments = defaultAssignments,
   vesselLayout,
+  conflictCompartmentIds,
 }: VesselProfileProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -379,6 +381,7 @@ export default function VesselProfile({
             const isHovered = hoveredId === comp.id;
             const isSelected = selectedId === comp.id;
             const inZone = highlightZone && comp.assignment?.zoneId === highlightZone;
+            const isConflict = !isSelected && !isHovered && !!conflictCompartmentIds?.includes(comp.id);
             const zoneColor = comp.assignment?.zoneColor || '#1E3A5F';
             // Capacity switches based on factor toggle
             const displayCapacity = (() => {
@@ -414,15 +417,28 @@ export default function VesselProfile({
                   opacity={
                     isSelected ? 0.5 :
                     isHovered ? 0.4 :
+                    isConflict ? 0.35 :
                     inZone ? 0.25 : 0.15
                   }
                   stroke={
                     isSelected ? '#FCD34D' :
                     isHovered ? '#fff' :
+                    isConflict ? '#ef4444' :
                     inZone ? zoneColor : '#1E3A5F'
                   }
-                  strokeWidth={isSelected ? 2 : isHovered ? 1.5 : 0.8}
+                  strokeWidth={isSelected ? 2 : isHovered ? 1.5 : isConflict ? 1.5 : 0.8}
                 />
+
+                {/* Conflict indicator — small red dot top-right */}
+                {isConflict && (
+                  <circle
+                    cx={comp.x + comp.w - 4}
+                    cy={comp.y + 4}
+                    r={3}
+                    fill="#ef4444"
+                    opacity={0.9}
+                  />
+                )}
 
                 {/* Cargo fill bar (from bottom) */}
                 {fillPct > 0 && (

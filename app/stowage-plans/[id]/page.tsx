@@ -198,7 +198,7 @@ export default function StowagePlanDetailPage() {
 
   // Compute validation dynamically from current assignments
   const validation = useMemo(() => {
-    const temperatureConflicts: { compartmentId: string; coolingSectionId: string; description: string; affectedBookings: string[]; userConfirmed: boolean }[] = [];
+    const temperatureConflicts: { compartmentId: string; coolingSectionId: string; description: string; affectedBookings: string[]; userConfirmed: boolean; cargoType: string; bookingId: string; quantity: number }[] = [];
     const overstowViolations: { compartmentId: string; description: string; affectedBookings: string[] }[] = [];
     const capacityViolations: { compartmentId: string; description: string; affectedBookings: string[]; overBy: number }[] = [];
 
@@ -226,6 +226,9 @@ export default function StowagePlanDetailPage() {
             description: `${booking.cargoType.replace('_', ' ')} (${quantity} pallets) requires ${req.min}–${req.max}°C but ${section.sectionId} is set to ${section.temp > 0 ? '+' : ''}${section.temp}°C`,
             affectedBookings: [booking.bookingNumber],
             userConfirmed,
+            cargoType: booking.cargoType,
+            bookingId: booking.bookingId,
+            quantity,
           });
         }
       }
@@ -319,6 +322,45 @@ export default function StowagePlanDetailPage() {
 
     return result;
   }, [bookings, tempZoneConfig, sectionFactors]);
+
+  // Compartment IDs with temperature conflicts — passed to SVG for red highlighting
+  const conflictCompartmentIds = useMemo(
+    () => [...new Set(validation.temperatureConflicts.map(c => c.compartmentId))],
+    [validation.temperatureConflicts]
+  );
+
+  // For each conflict, find compartments in zones with compatible temperature
+  const conflictSuggestions = useMemo(() => {
+    return validation.temperatureConflicts.map(conflict => {
+      const req = cargoTempRequirements[conflict.cargoType];
+      if (!req) return { ...conflict, suggestions: [] };
+
+      // Compute how many pallets are already in each compartment
+      const loadedByComp: Record<string, number> = {};
+      for (const b of bookings) {
+        for (const a of b.assignments) {
+          loadedByComp[a.compartmentId] = (loadedByComp[a.compartmentId] ?? 0) + a.quantity;
+        }
+      }
+
+      const suggestions: { compartmentId: string; sectionId: string; temp: number; free: number }[] = [];
+      for (const zone of tempZoneConfig) {
+        if (zone.temp < req.min || zone.temp > req.max) continue;
+        for (const compId of zone.compartments) {
+          if (compId === conflict.compartmentId) continue;
+          const capacity = compartmentCapacities[compId] ?? 0;
+          const loaded = loadedByComp[compId] ?? 0;
+          const free = capacity - loaded;
+          if (free > 0) {
+            suggestions.push({ compartmentId: compId, sectionId: zone.sectionId, temp: zone.temp, free });
+          }
+        }
+      }
+      // Sort by most free space first, cap at 4
+      suggestions.sort((a, b) => b.free - a.free);
+      return { ...conflict, suggestions: suggestions.slice(0, 4) };
+    });
+  }, [validation.temperatureConflicts, bookings, tempZoneConfig]);
 
   const stability = {
     displacement: 8450,
@@ -736,6 +778,7 @@ export default function StowagePlanDetailPage() {
           vesselName={plan.vesselName}
           voyageNumber={plan.voyageNumber}
           tempAssignments={vesselProfileData}
+          conflictCompartmentIds={conflictCompartmentIds}
         />
       </div>
 
@@ -760,7 +803,7 @@ export default function StowagePlanDetailPage() {
           </button>
           {expandedValidation.temperature && (
             <div className={styles.validationSectionContent}>
-              {validation.temperatureConflicts.length === 0 ? (
+              {conflictSuggestions.length === 0 ? (
                 <div className={styles.successBox}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                     <circle cx="12" cy="12" r="10" stroke="#22c55e" strokeWidth="2"/>
@@ -769,7 +812,7 @@ export default function StowagePlanDetailPage() {
                   <span>No temperature conflicts</span>
                 </div>
               ) : (
-                validation.temperatureConflicts.map((conflict, idx) => (
+                conflictSuggestions.map((conflict, idx) => (
                   <div key={idx} className={conflict.userConfirmed ? styles.conflictCardWarning : styles.conflictCard}>
                     <div className={styles.conflictHeader}>
                       {conflict.userConfirmed ? (
@@ -790,6 +833,24 @@ export default function StowagePlanDetailPage() {
                     <div className={styles.affectedShipments}>
                       Affected: {conflict.affectedBookings.join(', ')}
                     </div>
+                    {conflict.suggestions.length > 0 && (
+                      <div className={styles.conflictSuggestions}>
+                        <span className={styles.conflictSuggestLabel}>Move to:</span>
+                        {conflict.suggestions.map(s => (
+                          <span key={s.compartmentId} className={styles.conflictSuggestChip} title={`${s.free} pallets free`}>
+                            {s.compartmentId}
+                            <span className={styles.conflictSuggestMeta}>
+                              {s.sectionId} · {s.temp > 0 ? '+' : ''}{s.temp}°C · {s.free}↑
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {conflict.suggestions.length === 0 && !conflict.userConfirmed && (
+                      <div className={styles.conflictNoAlt}>
+                        No compatible compartments with free capacity — reassign cargo or adjust zone temperature.
+                      </div>
+                    )}
                   </div>
                 ))
               )}
