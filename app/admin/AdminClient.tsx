@@ -4,6 +4,9 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { cancelVoyage, hardDeleteVoyage } from '@/app/actions/voyage';
+import { deleteStowagePlan } from '@/app/actions/stowage-plan';
+import { deleteVessel } from '@/app/actions/vessel';
+import { deleteService } from '@/app/actions/service';
 import ContractsClient from '@/app/contracts/ContractsClient';
 import type { DisplayContract } from '@/app/contracts/ContractsClient';
 import styles from './page.module.css';
@@ -23,6 +26,36 @@ interface AdminVoyage {
   bookingCount: number;
   vesselId?: { name?: string; imoNumber?: string };
   serviceId?: { serviceCode?: string; serviceName?: string };
+}
+
+interface AdminPlan {
+  _id: string;
+  planNumber: string;
+  status: string;
+  createdAt?: string;
+  cargoPositionCount: number;
+  vesselId?: { name?: string };
+  voyageId?: { voyageNumber?: string; departureDate?: string; weekNumber?: number };
+}
+
+interface AdminVessel {
+  _id: string;
+  name: string;
+  imoNumber?: string;
+  flag?: string;
+  capacity?: { totalPallets?: number };
+  active?: boolean;
+  voyageCount: number;
+}
+
+interface AdminService {
+  _id: string;
+  serviceCode: string;
+  serviceName: string;
+  shortCode?: string;
+  frequency?: string;
+  active: boolean;
+  portRotation: Array<{ portCode: string; portName: string; operations: string[] }>;
 }
 
 type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users';
@@ -308,7 +341,405 @@ function VoyagesTab({ initialVoyages }: { initialVoyages: AdminVoyage[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Stub tabs (future)
+// Plans Tab
+// ---------------------------------------------------------------------------
+
+const PLAN_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
+  ESTIMATED:           { bg: 'var(--color-blue-muted)',    color: 'var(--color-blue-light)' },
+  DRAFT:               { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)' },
+  READY_FOR_CAPTAIN:   { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)' },
+  EMAIL_SENT:          { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
+  CAPTAIN_APPROVED:    { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
+  CAPTAIN_REJECTED:    { bg: 'var(--color-danger-muted)',  color: 'var(--color-danger)' },
+  IN_REVISION:         { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)' },
+  READY_FOR_EXECUTION: { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
+  IN_EXECUTION:        { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
+  COMPLETED:           { bg: 'var(--color-bg-tertiary)',   color: 'var(--color-text-tertiary)' },
+  CANCELLED:           { bg: 'var(--color-danger-muted)',  color: 'var(--color-danger)' },
+};
+
+function PlansTab({ initialPlans }: { initialPlans: AdminPlan[] }) {
+  const router = useRouter();
+  const [plans, setPlans] = useState<AdminPlan[]>(initialPlans);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const confirmPlan = plans.find(p => p._id === confirmId);
+
+  const handleDelete = () => {
+    if (!confirmId) return;
+    setErrorMsg(null);
+    startTransition(async () => {
+      const result = await deleteStowagePlan(confirmId);
+      if (result.success) {
+        setPlans(prev => prev.filter(p => p._id !== confirmId));
+        setConfirmId(null);
+        router.refresh();
+      } else {
+        setErrorMsg(result.error ?? 'Delete failed');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.tabContent}>
+      <div className={styles.toolbar}>
+        <div className={styles.toolbarLeft}>
+          <span className={styles.toolbarCount}>{plans.length} stowage plans</span>
+        </div>
+      </div>
+
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Plan Number</th>
+              <th>Vessel</th>
+              <th>Voyage</th>
+              <th>Status</th>
+              <th className={styles.thNum}>Cargo Positions</th>
+              <th>Created</th>
+              <th className={styles.thActions}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {plans.length === 0 ? (
+              <tr><td colSpan={7} className={styles.emptyCell}>No stowage plans found.</td></tr>
+            ) : (
+              plans.map(p => {
+                const sc = PLAN_STATUS_COLORS[p.status] ?? { bg: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' };
+                const wk = p.voyageId?.weekNumber != null
+                  ? `WK${String(p.voyageId.weekNumber).padStart(2, '0')} · `
+                  : '';
+                return (
+                  <tr key={p._id}>
+                    <td>
+                      <Link href={`/stowage-plans/${p._id}`} className={styles.voyageLink}>
+                        {p.planNumber}
+                      </Link>
+                    </td>
+                    <td className={styles.cellSecondary}>{p.vesselId?.name ?? '—'}</td>
+                    <td className={styles.cellSecondary}>
+                      {wk}{p.voyageId?.voyageNumber ?? '—'}
+                    </td>
+                    <td>
+                      <span className={styles.badge} style={{ background: sc.bg, color: sc.color }}>
+                        {p.status.replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                    <td className={`${styles.cellNum} ${p.cargoPositionCount > 0 ? styles.countNonZero : styles.countZero}`}>
+                      {p.cargoPositionCount}
+                    </td>
+                    <td className={styles.cellMono}>{fmtDate(p.createdAt)}</td>
+                    <td className={styles.cellActions}>
+                      <button
+                        className={styles.btnDanger}
+                        onClick={() => { setConfirmId(p._id); setErrorMsg(null); }}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {confirmPlan && (
+        <div className={styles.overlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>⚠ Delete Stowage Plan</h3>
+            <div className={styles.modalVoyageInfo}>
+              <span className={styles.modalVoyageNumber}>{confirmPlan.planNumber}</span>
+            </div>
+            <p className={styles.modalBody}>
+              This will <strong>permanently remove</strong> the plan from the database.
+              This action cannot be undone.
+            </p>
+            {errorMsg && <div className={styles.modalError}>{errorMsg}</div>}
+            <div className={styles.modalActions}>
+              <button className={styles.btnModalCancel} onClick={() => setConfirmId(null)} disabled={isPending}>
+                Cancel
+              </button>
+              <button className={styles.btnModalDanger} onClick={handleDelete} disabled={isPending}>
+                {isPending ? 'Deleting…' : 'Yes, Delete Permanently'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Vessels Tab
+// ---------------------------------------------------------------------------
+
+function VesselsTab({ initialVessels }: { initialVessels: AdminVessel[] }) {
+  const router = useRouter();
+  const [vessels, setVessels] = useState<AdminVessel[]>(initialVessels);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const confirmVessel = vessels.find(v => v._id === confirmId);
+
+  const handleDelete = () => {
+    if (!confirmId) return;
+    setErrorMsg(null);
+    startTransition(async () => {
+      const result = await deleteVessel(confirmId);
+      if (result.success) {
+        setVessels(prev => prev.filter(v => v._id !== confirmId));
+        setConfirmId(null);
+        router.refresh();
+      } else {
+        setErrorMsg(result.error ?? 'Delete failed');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.tabContent}>
+      <div className={styles.toolbar}>
+        <div className={styles.toolbarLeft}>
+          <span className={styles.toolbarCount}>{vessels.length} vessels</span>
+        </div>
+      </div>
+
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Vessel Name</th>
+              <th>IMO</th>
+              <th>Flag</th>
+              <th className={styles.thNum}>Pallets</th>
+              <th className={styles.thNum}>Voyages</th>
+              <th className={styles.thActions}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {vessels.length === 0 ? (
+              <tr><td colSpan={6} className={styles.emptyCell}>No vessels found.</td></tr>
+            ) : (
+              vessels.map(v => {
+                const canDelete = v.voyageCount === 0;
+                return (
+                  <tr key={v._id}>
+                    <td>
+                      <Link href={`/vessels/${v._id}`} className={styles.voyageLink}>
+                        {v.name}
+                      </Link>
+                    </td>
+                    <td className={styles.cellMono}>{v.imoNumber ?? '—'}</td>
+                    <td className={styles.cellSecondary}>{v.flag ?? '—'}</td>
+                    <td className={`${styles.cellNum} ${styles.countNonZero}`}>
+                      {v.capacity?.totalPallets?.toLocaleString() ?? '—'}
+                    </td>
+                    <td className={`${styles.cellNum} ${v.voyageCount > 0 ? styles.countNonZero : styles.countZero}`}>
+                      {v.voyageCount}
+                    </td>
+                    <td className={styles.cellActions}>
+                      <button
+                        className={`${styles.btnDanger} ${!canDelete ? styles.btnBlocked : ''}`}
+                        onClick={() => { setConfirmId(v._id); setErrorMsg(null); }}
+                        title={canDelete
+                          ? 'Permanently remove vessel from database'
+                          : `Blocked: ${v.voyageCount} voyage${v.voyageCount > 1 ? 's' : ''} must be removed first`}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {confirmVessel && (
+        <div className={styles.overlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>⚠ Delete Vessel</h3>
+            <div className={styles.modalVoyageInfo}>
+              <span className={styles.modalVoyageNumber}>{confirmVessel.name}</span>
+              {confirmVessel.imoNumber && (
+                <span className={styles.cellMono} style={{ fontSize: '0.8em', opacity: 0.7 }}>
+                  IMO {confirmVessel.imoNumber}
+                </span>
+              )}
+            </div>
+            {confirmVessel.voyageCount > 0 ? (
+              <div className={styles.modalBlocker}>
+                <strong>Cannot delete:</strong>{' '}
+                {confirmVessel.voyageCount} voyage{confirmVessel.voyageCount > 1 ? 's' : ''} must be removed first.
+              </div>
+            ) : (
+              <p className={styles.modalBody}>
+                This will <strong>permanently remove</strong> the vessel from the database.
+                This action cannot be undone.
+              </p>
+            )}
+            {errorMsg && <div className={styles.modalError}>{errorMsg}</div>}
+            <div className={styles.modalActions}>
+              <button className={styles.btnModalCancel} onClick={() => setConfirmId(null)} disabled={isPending}>
+                Cancel
+              </button>
+              {confirmVessel.voyageCount === 0 && (
+                <button className={styles.btnModalDanger} onClick={handleDelete} disabled={isPending}>
+                  {isPending ? 'Deleting…' : 'Yes, Delete Permanently'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Services Tab
+// ---------------------------------------------------------------------------
+
+function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
+  const router = useRouter();
+  const [services, setServices] = useState<AdminService[]>(initialServices);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const confirmService = services.find(s => s._id === confirmId);
+
+  const handleDeactivate = () => {
+    if (!confirmId) return;
+    setErrorMsg(null);
+    startTransition(async () => {
+      const result = await deleteService(confirmId);
+      if (result.success) {
+        setServices(prev =>
+          prev.map(s => s._id === confirmId ? { ...s, active: false } : s)
+        );
+        setConfirmId(null);
+        router.refresh();
+      } else {
+        setErrorMsg(result.error ?? 'Deactivation failed');
+      }
+    });
+  };
+
+  const loadPorts = (svc: AdminService) =>
+    svc.portRotation
+      .filter(p => p.operations.includes('LOAD'))
+      .map(p => p.portCode)
+      .join(', ');
+
+  const dischargePorts = (svc: AdminService) =>
+    svc.portRotation
+      .filter(p => p.operations.includes('DISCHARGE'))
+      .map(p => p.portCode)
+      .join(', ');
+
+  return (
+    <div className={styles.tabContent}>
+      <div className={styles.toolbar}>
+        <div className={styles.toolbarLeft}>
+          <span className={styles.toolbarCount}>{services.length} services</span>
+        </div>
+      </div>
+
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Name</th>
+              <th>Load Ports</th>
+              <th>Discharge Ports</th>
+              <th>Frequency</th>
+              <th>Status</th>
+              <th className={styles.thActions}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {services.length === 0 ? (
+              <tr><td colSpan={7} className={styles.emptyCell}>No services found.</td></tr>
+            ) : (
+              services.map(s => {
+                const isActive = s.active !== false;
+                return (
+                  <tr key={s._id} className={!isActive ? styles.rowCancelled : ''}>
+                    <td>
+                      <span className={styles.modalVoyageNumber}>{s.serviceCode}</span>
+                    </td>
+                    <td>{s.serviceName}</td>
+                    <td className={styles.cellSecondary}>{loadPorts(s) || '—'}</td>
+                    <td className={styles.cellSecondary}>{dischargePorts(s) || '—'}</td>
+                    <td className={styles.cellSecondary}>{s.frequency ?? '—'}</td>
+                    <td>
+                      <span
+                        className={styles.badge}
+                        style={isActive
+                          ? { background: 'var(--color-success-muted)', color: 'var(--color-success)' }
+                          : { background: 'var(--color-danger-muted)', color: 'var(--color-danger)' }}
+                      >
+                        {isActive ? 'ACTIVE' : 'INACTIVE'}
+                      </span>
+                    </td>
+                    <td className={styles.cellActions}>
+                      {isActive && (
+                        <button
+                          className={styles.btnWarn}
+                          onClick={() => { setConfirmId(s._id); setErrorMsg(null); }}
+                        >
+                          Deactivate
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {confirmService && (
+        <div className={styles.overlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Deactivate Service</h3>
+            <div className={styles.modalVoyageInfo}>
+              <span className={styles.modalVoyageNumber}>{confirmService.serviceCode}</span>
+            </div>
+            <p className={styles.modalBody}>
+              Deactivating <strong>{confirmService.serviceName}</strong> hides it from voyage creation
+              and booking workflows. Existing voyages and bookings are not affected.
+              The service can be reactivated later.
+            </p>
+            {errorMsg && <div className={styles.modalError}>{errorMsg}</div>}
+            <div className={styles.modalActions}>
+              <button className={styles.btnModalCancel} onClick={() => setConfirmId(null)} disabled={isPending}>
+                Cancel
+              </button>
+              <button className={styles.btnModalWarn} onClick={handleDeactivate} disabled={isPending}>
+                {isPending ? 'Deactivating…' : 'Yes, Deactivate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Stub tab (users only)
 // ---------------------------------------------------------------------------
 
 function StubTab({ label }: { label: string }) {
@@ -340,9 +771,11 @@ interface AdminClientProps {
   contracts: DisplayContract[];
   offices: any[];
   services: any[];
+  plans: AdminPlan[];
+  vessels: AdminVessel[];
 }
 
-export default function AdminClient({ voyages, contracts, offices, services }: AdminClientProps) {
+export default function AdminClient({ voyages, contracts, offices, services, plans, vessels }: AdminClientProps) {
   const [activeTab, setActiveTab] = useState<Tab>('voyages');
 
   return (
@@ -377,10 +810,10 @@ export default function AdminClient({ voyages, contracts, offices, services }: A
           <ContractsClient contracts={contracts} offices={offices} services={services} />
         </div>
       )}
-      {activeTab === 'plans'     && <StubTab label="Stowage Plans" />}
-      {activeTab === 'vessels'   && <StubTab label="Vessels" />}
-      {activeTab === 'services'  && <StubTab label="Services" />}
-      {activeTab === 'users'     && <StubTab label="Users" />}
+      {activeTab === 'plans'    && <PlansTab initialPlans={plans} />}
+      {activeTab === 'vessels'  && <VesselsTab initialVessels={vessels} />}
+      {activeTab === 'services' && <ServicesTab initialServices={services as AdminService[]} />}
+      {activeTab === 'users'    && <StubTab label="Users" />}
     </div>
   );
 }

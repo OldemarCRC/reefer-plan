@@ -437,3 +437,41 @@ export async function recalculateHistoricalFactors(voyageId: unknown) {
     return { success: false, error: 'Failed to recalculate historical stowage factors' };
   }
 }
+
+// ----------------------------------------------------------------------------
+// GET ADMIN VESSELS — full list with voyage counts (for /admin Vessels tab)
+// ----------------------------------------------------------------------------
+
+export async function getAdminVessels() {
+  try {
+    await connectDB();
+
+    const vessels = await VesselModel.find()
+      .sort({ name: 1 })
+      .lean();
+
+    const ids = vessels.map((v: any) => v._id);
+    const voyageCounts = await VoyageModel.aggregate([
+      { $match: { vesselId: { $in: ids } } },
+      { $group: { _id: '$vesselId', count: { $sum: 1 } } },
+    ]);
+    const countMap = Object.fromEntries(
+      voyageCounts.map((r: any) => [r._id.toString(), r.count])
+    );
+
+    const data = vessels.map((v: any) => ({
+      _id: v._id.toString(),
+      name: v.name,
+      imoNumber: v.imoNumber,
+      flag: v.flag,
+      capacity: { totalPallets: v.capacity?.totalPallets },
+      active: v.active !== false,
+      voyageCount: countMap[v._id.toString()] ?? 0,
+    }));
+
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error fetching admin vessels:', error);
+    return { success: false, data: [], error: 'Failed to fetch vessels' };
+  }
+}
