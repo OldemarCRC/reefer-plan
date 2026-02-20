@@ -1,7 +1,9 @@
 'use client';
 
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { logoutAction } from '@/app/actions/auth';
 import styles from './Header.module.css';
 
 // --- Breadcrumb generation from pathname ---
@@ -39,11 +41,9 @@ function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
 }
 
 function formatSegment(segment: string): string {
-  // Handle IDs (MongoDB ObjectIds or custom IDs)
   if (segment.length === 24 && /^[a-f0-9]+$/.test(segment)) {
     return segment.slice(0, 8) + '…';
   }
-  // Handle voyage/booking numbers
   if (segment.includes('-')) {
     return segment.toUpperCase();
   }
@@ -57,16 +57,47 @@ interface HeaderProps {
   activeVessel?: string;
   activeVoyage?: string;
   userName?: string;
+  userRole?: string;
 }
 
 export default function Header({
   sidebarCollapsed,
   activeVessel,
   activeVoyage,
-  userName = 'SP',
+  userName = '?',
+  userRole,
 }: HeaderProps) {
   const pathname = usePathname();
   const breadcrumbs = generateBreadcrumbs(pathname);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    if (menuOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
+
+  const initials = userName
+    .split(' ')
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
+  const roleLabel: Record<string, string> = {
+    ADMIN: 'Administrator',
+    SHIPPING_PLANNER: 'Shipping Planner',
+    STEVEDORE: 'Stevedore',
+    CHECKER: 'Checker',
+    EXPORTER: 'Exporter',
+    VIEWER: 'Viewer',
+  };
 
   return (
     <header className={`${styles.header} ${sidebarCollapsed ? styles['header--collapsed'] : ''}`}>
@@ -123,10 +154,39 @@ export default function Header({
           )}
         </div>
 
-        {/* User */}
-        <button className={styles.userButton} title={`User: ${userName}`}>
-          {userName.slice(0, 2).toUpperCase()}
-        </button>
+        {/* User avatar + dropdown */}
+        <div className={styles.userMenu} ref={menuRef}>
+          <button
+            className={styles.userButton}
+            onClick={() => setMenuOpen((o) => !o)}
+            title={userName}
+            aria-expanded={menuOpen}
+          >
+            {initials}
+          </button>
+
+          {menuOpen && (
+            <div className={styles.userDropdown}>
+              <div className={styles.userInfo}>
+                <span className={styles.userInfoName}>{userName}</span>
+                {userRole && (
+                  <span className={styles.userInfoRole}>{roleLabel[userRole] || userRole}</span>
+                )}
+              </div>
+              <div className={styles.userDropdownDivider} />
+              <form action={logoutAction}>
+                <button type="submit" className={styles.logoutBtn}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
+                  Sign out
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );
