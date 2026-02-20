@@ -617,9 +617,15 @@ const UserSchema = new Schema({
     required: true,
     enum: ['ADMIN', 'SHIPPING_PLANNER', 'STEVEDORE', 'CHECKER', 'EXPORTER', 'VIEWER'],
   },
+  passwordHash: { type: String, select: false },
   company: { type: String },
   port: { type: String },
   canSendEmailsToCaptains: { type: Boolean, default: false },
+  // Session management
+  isOnline: { type: Boolean, default: false },
+  sessionToken: { type: String, select: false },
+  lastLogin: { type: Date },
+  lastActivity: { type: Date },
 }, {
   timestamps: true,
 });

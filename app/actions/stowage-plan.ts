@@ -736,15 +736,37 @@ export async function deleteStowagePlan(planId: unknown) {
 
     await connectDB();
 
-    const plan = await StowagePlanModel.findByIdAndDelete(id);
-
+    const plan = await StowagePlanModel.findById(id).select('planNumber voyageId').lean();
     if (!plan) {
       return { success: false, error: 'Stowage plan not found' };
     }
 
+    // Guard: only the most recent plan for a voyage can be deleted to prevent gaps
+    // in the sequential numbering (WK-VESSEL-VOYAGE-0001, 0002, 0003 …)
+    const voyageId = (plan as any).voyageId;
+    if (voyageId) {
+      const sibling = await StowagePlanModel.find({ voyageId })
+        .select('_id planNumber')
+        .sort({ planNumber: -1, createdAt: -1 })
+        .lean();
+
+      if (sibling.length > 1) {
+        const latestId = String((sibling[0] as any)._id);
+        if (latestId !== String(id)) {
+          const latestNumber = (sibling[0] as any).planNumber ?? 'the most recent plan';
+          return {
+            success: false,
+            error: `Can only delete the most recent plan (${latestNumber}). Delete newer plans first.`,
+          };
+        }
+      }
+    }
+
+    await StowagePlanModel.findByIdAndDelete(id);
+
     return {
       success: true,
-      message: `Stowage plan ${plan.planNumber} deleted successfully`,
+      message: `Stowage plan ${(plan as any).planNumber} deleted successfully`,
     };
   } catch (error) {
     console.error('Error deleting stowage plan:', error);
@@ -1108,6 +1130,7 @@ export async function getAdminPlans() {
       status: p.status ?? 'DRAFT',
       createdAt: p.createdAt,
       cargoPositionCount: (p.cargoPositions ?? []).length,
+      voyageRawId: p.voyageId ? (p.voyageId as any)._id?.toString() ?? null : null,
       vesselId: p.vesselId
         ? { name: (p.vesselId as any).name }
         : undefined,
