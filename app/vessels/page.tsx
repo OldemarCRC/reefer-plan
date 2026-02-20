@@ -33,7 +33,7 @@ export default async function VesselsPage() {
 
         {/* Vessel grid */}
         <div className={styles.vesselGrid}>
-          {displayVessels.map((v) => (
+          {displayVessels.map((v: any) => (
             <div key={v._id} className={styles.vesselCard}>
               {/* Ship icon header */}
               <div className={styles.cardTop}>

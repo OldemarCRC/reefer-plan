@@ -167,6 +167,7 @@ interface VesselProfileProps {
   onCompartmentClick?: (compartmentId: string) => void;
   tempAssignments?: VoyageTempAssignment[];
   vesselLayout?: VesselLayout;
+  conflictCompartmentIds?: string[];
 }
 
 export default function VesselProfile({
@@ -175,9 +176,14 @@ export default function VesselProfile({
   onCompartmentClick,
   tempAssignments = defaultAssignments,
   vesselLayout,
+  conflictCompartmentIds,
 }: VesselProfileProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [factorMode, setFactorMode] = useState<'design' | 'historical'>('design');
+
+  // Show the factor toggle only when at least one compartment has a historical factor
+  const hasHistorical = tempAssignments.some(a => a.historicalStowageFactor != null);
 
   const layout = vesselLayout ?? buildDefaultLayout();
   const holdPositions = computeHoldPositions(layout);
@@ -201,19 +207,38 @@ export default function VesselProfile({
             {vesselName} · {voyageNumber}
           </span>
         </div>
-        <div className={styles.legend}>
-          {getUniqueZones(tempAssignments).map((z) => (
-            <div key={z.zoneId} className={styles.legendItem}>
-              <span
-                className={styles.legendDot}
-                style={{ background: z.zoneColor }}
-              />
-              <span className={styles.legendLabel}>{z.zoneName}</span>
-              <span className={styles.legendTemp}>
-                {z.setTemperature !== 0 ? `${z.setTemperature > 0 ? '+' : ''}${z.setTemperature}°C` : '—'}
-              </span>
+        <div className={styles.headerRight}>
+          {hasHistorical && (
+            <div className={styles.factorToggle}>
+              <span className={styles.factorLabel}>Capacity factor:</span>
+              <button
+                className={factorMode === 'design' ? styles.factorBtnActive : styles.factorBtn}
+                onClick={() => setFactorMode('design')}
+              >
+                Design
+              </button>
+              <button
+                className={factorMode === 'historical' ? styles.factorBtnActive : styles.factorBtn}
+                onClick={() => setFactorMode('historical')}
+              >
+                Historical
+              </button>
             </div>
-          ))}
+          )}
+          <div className={styles.legend}>
+            {getUniqueZones(tempAssignments).map((z) => (
+              <div key={z.zoneId} className={styles.legendItem}>
+                <span
+                  className={styles.legendDot}
+                  style={{ background: z.zoneColor }}
+                />
+                <span className={styles.legendLabel}>{z.zoneName}</span>
+                <span className={styles.legendTemp}>
+                  {z.setTemperature !== 0 ? `${z.setTemperature > 0 ? '+' : ''}${z.setTemperature}°C` : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -356,9 +381,18 @@ export default function VesselProfile({
             const isHovered = hoveredId === comp.id;
             const isSelected = selectedId === comp.id;
             const inZone = highlightZone && comp.assignment?.zoneId === highlightZone;
+            const isConflict = !isSelected && !isHovered && !!conflictCompartmentIds?.includes(comp.id);
             const zoneColor = comp.assignment?.zoneColor || '#1E3A5F';
-            const fillPct = comp.assignment
-              ? comp.assignment.palletsLoaded / comp.assignment.palletsCapacity
+            // Capacity switches based on factor toggle
+            const displayCapacity = (() => {
+              if (!comp.assignment) return 0;
+              if (factorMode === 'historical' && comp.assignment.historicalStowageFactor && comp.assignment.sqm) {
+                return Math.round(comp.assignment.sqm * comp.assignment.historicalStowageFactor);
+              }
+              return comp.assignment.palletsCapacity;
+            })();
+            const fillPct = displayCapacity > 0
+              ? comp.assignment!.palletsLoaded / displayCapacity
               : 0;
 
             return (
@@ -383,15 +417,28 @@ export default function VesselProfile({
                   opacity={
                     isSelected ? 0.5 :
                     isHovered ? 0.4 :
+                    isConflict ? 0.35 :
                     inZone ? 0.25 : 0.15
                   }
                   stroke={
                     isSelected ? '#FCD34D' :
                     isHovered ? '#fff' :
+                    isConflict ? '#ef4444' :
                     inZone ? zoneColor : '#1E3A5F'
                   }
-                  strokeWidth={isSelected ? 2 : isHovered ? 1.5 : 0.8}
+                  strokeWidth={isSelected ? 2 : isHovered ? 1.5 : isConflict ? 1.5 : 0.8}
                 />
+
+                {/* Conflict indicator — small red dot top-right */}
+                {isConflict && (
+                  <circle
+                    cx={comp.x + comp.w - 4}
+                    cy={comp.y + 4}
+                    r={3}
+                    fill="#ef4444"
+                    opacity={0.9}
+                  />
+                )}
 
                 {/* Cargo fill bar (from bottom) */}
                 {fillPct > 0 && (
@@ -426,7 +473,7 @@ export default function VesselProfile({
                     textAnchor="middle"
                     className={styles.compCount}
                   >
-                    {comp.assignment.palletsLoaded}/{comp.assignment.palletsCapacity}
+                    {comp.assignment.palletsLoaded}/{displayCapacity}
                   </text>
                 )}
               </g>
@@ -496,18 +543,55 @@ export default function VesselProfile({
               <div className={styles.detailItem}>
                 <span className={styles.detailLabel}>Loaded</span>
                 <span className={styles.detailValue}>
-                  {detail.assignment.palletsLoaded} / {detail.assignment.palletsCapacity} plt
+                  {detail.assignment.palletsLoaded} / {(() => {
+                    if (factorMode === 'historical' && detail.assignment.historicalStowageFactor && detail.assignment.sqm) {
+                      return Math.round(detail.assignment.sqm * detail.assignment.historicalStowageFactor);
+                    }
+                    return detail.assignment.palletsCapacity;
+                  })()} plt
                 </span>
               </div>
               <div className={styles.detailItem}>
                 <span className={styles.detailLabel}>Utilization</span>
                 <span className={styles.detailValue}>
-                  {detail.assignment.palletsCapacity > 0
-                    ? `${Math.round((detail.assignment.palletsLoaded / detail.assignment.palletsCapacity) * 100)}%`
-                    : '0%'}
+                  {(() => {
+                    const cap = factorMode === 'historical' && detail.assignment.historicalStowageFactor && detail.assignment.sqm
+                      ? Math.round(detail.assignment.sqm * detail.assignment.historicalStowageFactor)
+                      : detail.assignment.palletsCapacity;
+                    return cap > 0 ? `${Math.round((detail.assignment.palletsLoaded / cap) * 100)}%` : '0%';
+                  })()}
                 </span>
               </div>
             </div>
+            {/* Stowage factor section */}
+            {detail.assignment.sqm != null && (
+              <div className={styles.detailFactors}>
+                <div className={styles.detailFactorRow}>
+                  <span className={styles.detailFactorLabel}>Floor area</span>
+                  <span className={styles.detailFactorValue}>{detail.assignment.sqm.toFixed(1)} m²</span>
+                </div>
+                <div className={styles.detailFactorRow}>
+                  <span className={styles.detailFactorLabel}>Design factor</span>
+                  <span className={styles.detailFactorValue}>{(detail.assignment.designStowageFactor ?? 1.32).toFixed(2)}</span>
+                </div>
+                <div className={styles.detailFactorRow}>
+                  <span className={styles.detailFactorLabel}>Historical avg</span>
+                  <span className={styles.detailFactorValue}>
+                    {detail.assignment.historicalStowageFactor != null
+                      ? detail.assignment.historicalStowageFactor.toFixed(2)
+                      : '—'}
+                  </span>
+                </div>
+                {detail.assignment.palletsLoaded > 0 && detail.assignment.sqm > 0 && (
+                  <div className={styles.detailFactorRow}>
+                    <span className={styles.detailFactorLabel}>This voyage</span>
+                    <span className={styles.detailFactorValue}>
+                      {(detail.assignment.palletsLoaded / detail.assignment.sqm).toFixed(2)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
             {detail.assignment.shipments.length > 0 && (
               <div className={styles.detailShipments}>
                 Shipments: {detail.assignment.shipments.join(', ')}

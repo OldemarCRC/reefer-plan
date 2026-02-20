@@ -128,3 +128,78 @@
   background: var(--color-bg-hover);
   border-color: var(--color-blue);
 }
+
+/* --- User menu wrapper --- */
+
+.userMenu {
+  position: relative;
+}
+
+/* --- User dropdown --- */
+
+.userDropdown {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  min-width: 180px;
+  background: var(--color-bg-elevated);
+  border: var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: calc(var(--z-header) + 10);
+  overflow: hidden;
+}
+
+.userInfo {
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.userInfoName {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userInfoRole {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+.userDropdownDivider {
+  height: 1px;
+  background: var(--color-surface-border);
+  margin: 0;
+}
+
+.logoutBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-family: var(--font-body);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.logoutBtn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.logoutBtn:hover {
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
+}

@@ -83,7 +83,7 @@ export async function createVoyageFromWizard(data: unknown) {
     }
 
     // Build portCalls with Date objects
-    const portCalls = validated.portCalls.map(pc => ({
+    const portCalls = validated.portCalls.map((pc: any) => ({
       portCode: pc.portCode,
       portName: pc.portName,
       country: pc.country,
@@ -152,7 +152,7 @@ export async function createVoyage(data: unknown) {
     }
     
     // Validate port sequence (must be consecutive)
-    const sequences = validated.portCalls.map(p => p.sequence).sort((a, b) => a - b);
+    const sequences = validated.portCalls.map((p: any) => p.sequence).sort((a: any, b: any) => a - b);
     for (let i = 0; i < sequences.length; i++) {
       if (sequences[i] !== i + 1) {
         return {
@@ -171,7 +171,7 @@ export async function createVoyage(data: unknown) {
     }
     
     // IMPORTANT: All ports start unlocked
-    const portCallsWithDefaults = validated.portCalls.map(pc => ({
+    const portCallsWithDefaults = validated.portCalls.map((pc: any) => ({
       ...pc,
       locked: false,
     }));
@@ -190,7 +190,7 @@ export async function createVoyage(data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error creating voyage:', error);
@@ -224,7 +224,7 @@ export async function lockPort(
     }
     
     // Find the port in portCalls array
-    const portCall = voyage.portCalls.find(p => p.portCode === code);
+    const portCall = voyage.portCalls.find((p: any) => p.portCode === code);
     
     if (!portCall) {
       return {
@@ -282,15 +282,15 @@ export async function unlockPort(
       return { success: false, error: 'Voyage not found' };
     }
     
-    const portCall = voyage.portCalls.find(p => p.portCode === code);
-    
+    const portCall = voyage.portCalls.find((p: any) => p.portCode === code);
+
     if (!portCall) {
       return {
         success: false,
         error: `Port ${code} not found in voyage`,
       };
     }
-    
+
     if (!portCall.locked) {
       return {
         success: false,
@@ -338,8 +338,8 @@ export async function getLockedPorts(voyageId: unknown) {
     }
     
     const lockedPorts = voyage.portCalls
-      .filter(pc => pc.locked)
-      .map(pc => ({
+      .filter((pc: any) => pc.locked)
+      .map((pc: any) => ({
         portCode: pc.portCode,
         portName: pc.portName,
         sequence: pc.sequence,
@@ -387,12 +387,12 @@ export async function isPortLocked(
       return { success: false, error: 'Voyage not found' };
     }
     
-    const portCall = voyage.portCalls.find(p => p.portCode === code);
-    
+    const portCall = voyage.portCalls.find((p: any) => p.portCode === code);
+
     if (!portCall) {
       return { success: false, error: 'Port not found in voyage' };
     }
-    
+
     return {
       success: true,
       locked: portCall.locked || false,
@@ -454,7 +454,7 @@ export async function updateVoyage(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error updating voyage:', error);
@@ -631,6 +631,14 @@ export async function updatePortRotation(
       } else if (change.action === 'DATE_CHANGED') {
         const pc = portCalls.find((p: any) => p.portCode === change.portCode);
         if (!pc) continue;
+
+        // Validate: ETA must be before ETD
+        const effectiveEta = change.eta !== undefined ? (change.eta ? new Date(change.eta) : undefined) : pc.eta;
+        const effectiveEtd = change.etd !== undefined ? (change.etd ? new Date(change.etd) : undefined) : pc.etd;
+        if (effectiveEta && effectiveEtd && effectiveEta >= effectiveEtd) {
+          return { success: false, error: 'ETA must be before ETD — vessel cannot depart before arriving' };
+        }
+
         const etaStr = pc.eta ? new Date(pc.eta).toISOString().slice(0, 10) : '';
         const etdStr = pc.etd ? new Date(pc.etd).toISOString().slice(0, 10) : '';
         const prev = `ETA:${etaStr},ETD:${etdStr}`;
@@ -677,6 +685,10 @@ export async function updatePortRotation(
         });
 
       } else if (change.action === 'ADD') {
+        // Validate: ETA must be before ETD
+        if (change.eta && change.etd && new Date(change.eta) >= new Date(change.etd)) {
+          return { success: false, error: 'ETA must be before ETD — vessel cannot depart before arriving' };
+        }
         const maxSeq = Math.max(0, ...portCalls.map((p: any) => p.sequence));
         const newSeq = change.sequence ?? maxSeq + 1;
         portCalls.forEach((p: any) => { if (p.sequence >= newSeq) p.sequence++; });
@@ -720,6 +732,55 @@ export async function updatePortRotation(
     const msg = error instanceof Error ? error.message : String(error);
     console.error('Error updating port rotation:', msg);
     return { success: false, error: `Failed to update port rotation: ${msg}` };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// RESEQUENCE PORT CALLS BY ETA
+// Sorts SCHEDULED port calls by ETA ascending and assigns sequence 1, 2, 3…
+// CANCELLED port calls are placed after scheduled ones, preserving their
+// relative order. Called after any date change or new port addition so that
+// the sequence field in the DB always reflects ETA order.
+// ----------------------------------------------------------------------------
+
+export async function resequencePortCallsByEta(voyageId: unknown) {
+  try {
+    const id = z.string().min(1).parse(voyageId);
+    await connectDB();
+
+    const voyage = await VoyageModel.findById(id).lean();
+    if (!voyage) return { success: false, error: 'Voyage not found' };
+
+    const portCalls: any[] = [...((voyage.portCalls as any[]) ?? [])];
+
+    const scheduled = portCalls
+      .filter((p: any) => p.status !== 'CANCELLED')
+      .sort((a: any, b: any) => {
+        const ta = a.eta ? new Date(a.eta).getTime() : Infinity;
+        const tb = b.eta ? new Date(b.eta).getTime() : Infinity;
+        if (ta !== tb) return ta - tb;
+        return (a.sequence ?? 0) - (b.sequence ?? 0); // tie-break by old sequence
+      });
+
+    const cancelled = portCalls
+      .filter((p: any) => p.status === 'CANCELLED')
+      .sort((a: any, b: any) => (a.sequence ?? 0) - (b.sequence ?? 0));
+
+    const resequenced = [
+      ...scheduled.map((p: any, i: number) => ({ ...p, sequence: i + 1 })),
+      ...cancelled.map((p: any, i: number) => ({ ...p, sequence: scheduled.length + i + 1 })),
+    ];
+
+    await VoyageModel.updateOne({ _id: id }, { $set: { portCalls: resequenced } });
+
+    return {
+      success: true,
+      portCalls: JSON.parse(JSON.stringify(resequenced)),
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Error resequencing port calls:', msg);
+    return { success: false, error: `Failed to resequence: ${msg}` };
   }
 }
 
@@ -950,8 +1011,8 @@ export async function getVoyagePortSequence(voyageId: unknown) {
     }
     
     const sortedPorts = voyage.portCalls
-      .sort((a, b) => a.sequence - b.sequence)
-      .map(pc => ({
+      .sort((a: any, b: any) => a.sequence - b.sequence)
+      .map((pc: any) => ({
         sequence: pc.sequence,
         portCode: pc.portCode,
         portName: pc.portName,

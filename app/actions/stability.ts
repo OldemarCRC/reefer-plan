@@ -43,8 +43,8 @@ export async function calculatePreliminaryStability(planId: unknown) {
     }
     
     // Calculate total weight
-    const totalCargoWeight = plan.palletPositions.reduce(
-      (sum, pos) => sum + pos.weight,
+    const totalCargoWeight = plan.cargoPositions.reduce(
+      (sum: number, pos: any) => sum + (pos.weight ?? 0),
       0
     );
     
@@ -140,7 +140,7 @@ export async function calculatePreliminaryStability(planId: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error calculating stability:', error);
@@ -275,7 +275,7 @@ function calculateWeightedLCG(plan: any, vessel: any): number {
   let totalMoment = 0;
   let totalWeight = 0;
   
-  for (const position of plan.palletPositions) {
+  for (const position of plan.cargoPositions) {
     // Find compartment in vessel
     const compartment = findCompartment(vessel, position.compartment.id);
     if (compartment) {
@@ -296,7 +296,7 @@ function calculateWeightedVCG(plan: any, vessel: any): number {
   let totalMoment = 0;
   let totalWeight = 0;
   
-  for (const position of plan.palletPositions) {
+  for (const position of plan.cargoPositions) {
     const compartment = findCompartment(vessel, position.compartment.id);
     if (compartment) {
       totalMoment += position.weight * compartment.position.vcg;
@@ -316,7 +316,7 @@ function calculateWeightedTCG(plan: any, vessel: any): number {
   let totalMoment = 0;
   let totalWeight = 0;
   
-  for (const position of plan.palletPositions) {
+  for (const position of plan.cargoPositions) {
     const compartment = findCompartment(vessel, position.compartment.id);
     if (compartment) {
       totalMoment += position.weight * compartment.position.tcg;
@@ -333,7 +333,7 @@ function calculateWeightedTCG(plan: any, vessel: any): number {
 
 function findCompartment(vessel: any, compartmentId: string): any {
   for (const hold of vessel.holds) {
-    const comp = hold.compartments.find((c: any) => c.id === compartmentId);
+    const comp = hold.compartments.find((c: any) => (c as any).id === compartmentId);
     if (comp) return comp;
   }
   return null;

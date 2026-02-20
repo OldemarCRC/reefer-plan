@@ -47,6 +47,7 @@ export interface PortRotation {
 export interface Service {
   _id: string;
   serviceCode: string; // "SEABAN", "SEAMED", "CARIBANEX"
+  shortCode: string;   // "CBX", "RAY", "ANX" — used in contract/booking numbers
   serviceName: string;
   description: string;
   active: boolean;
@@ -128,49 +129,49 @@ export interface Voyage {
 }
 
 // ----------------------------------------------------------------------------
+// OFFICE (Oficina de operaciones)
+// ----------------------------------------------------------------------------
+
+export interface Office {
+  _id: string;
+  code: string;       // "RTM", "SMR", "GYE" — 3-letter unique
+  name: string;       // "Rotterdam", "Santa Marta"
+  country: string;
+  active: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ----------------------------------------------------------------------------
 // CONTRACT (Contrato Anual)
 // ----------------------------------------------------------------------------
 
+export interface ContractCounterparty {
+  name: string;
+  code: string;
+  weeklyEstimate: number;
+  cargoTypes: CargoType[];
+}
+
 export interface Contract {
   _id: string;
-  contractNumber: string;
-  
+  contractNumber: string;  // "RTMCBX2026C012001"
+  officeId: string;
+  officeCode: string;
   client: {
+    type: 'SHIPPER' | 'CONSIGNEE';
     name: string;
-    type: 'IMPORTER' | 'EXPORTER';
+    clientNumber: string;  // "C001"
     contact: string;
     email: string;
     country: string;
   };
-  
-  // CAMBIO #5: Consignee (cliente final)
-  consignee: {
-    name: string; // COBANA, FYFFES, Del Monte
-    code: string;
-    country: string;
-  };
-  
+  shippers: ContractCounterparty[];   // populated when client.type === 'CONSIGNEE'
+  consignees: ContractCounterparty[]; // populated when client.type === 'SHIPPER'
   serviceId: string;
   serviceCode: string;
-  cargoType: CargoType;
-  
-  contractedSpace: {
-    pallets?: number;
-    containers?: number;
-    frequency: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
-  };
-  
-  origin: {
-    portCode: string;
-    portName: string;
-    country: string;
-  };
-  destination: {
-    portCode: string;
-    portName: string;
-    country: string;
-  };
-  
+  originPort: { portCode: string; portName: string; country: string };
+  destinationPort: { portCode: string; portName: string; country: string };
   validFrom: Date;
   validTo: Date;
   active: boolean;
@@ -192,52 +193,27 @@ export type BookingStatus =
 
 export interface Booking {
   _id: string;
-  bookingNumber: string;
+  bookingNumber: string;  // "RTMCBXACON062026001"
+  contractId: string;     // required
   voyageId: string;
   voyageNumber: string;
-  contractId: string;
-  
-  client: {
-    name: string;
-    contact: string;
-    email: string;
-  };
-  
-  // CAMBIO #5: Consignee
-  consignee: {
-    name: string;
-    code: string;
-  };
-  
+  officeCode: string;
+  serviceCode: string;
+  client: { name: string; clientNumber: string; contact: string; email: string };
+  shipper: { name: string; code: string };
+  consignee: { name: string; code: string };
   cargoType: CargoType;
-  
-  // CAMBIO #3: Cantidades solicitadas vs confirmadas
   requestedQuantity: number;
   confirmedQuantity: number;
   standbyQuantity?: number;
   rejectedQuantity?: number;
-  
-  // CAMBIO #5: POL/POD
-  pol: {
-    portCode: string;
-    portName: string;
-    country: string;
-  };
-  pod: {
-    portCode: string;
-    portName: string;
-    country: string;
-  };
-  
+  requestedTemperature?: number;
+  pol: { portCode: string; portName: string; country: string };
+  pod: { portCode: string; portName: string; country: string };
+  estimateSource: 'CONTRACT_DEFAULT' | 'SHIPPER_CONFIRMED';
   status: BookingStatus;
   requestedDate: Date;
   confirmedDate?: Date;
-  
-  // Email de confirmación
-  confirmationEmailSent?: boolean;
-  confirmationEmailSentAt?: Date;
-  confirmationNotes?: string;
-  
   approvedBy?: string;
   rejectionReason?: string;
   createdAt: Date;

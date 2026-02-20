@@ -1,5 +1,6 @@
 import AppShell from '@/components/layout/AppShell';
 import { getStowagePlans } from '@/app/actions/stowage-plan';
+import AutoGenerateButton from './AutoGenerateButton';
 import styles from './page.module.css';
 import Link from 'next/link';
 
@@ -53,13 +54,14 @@ export default async function StowagePlansPage() {
             <h1 className={styles.pageTitle}>Stowage Plans</h1>
             <p className={styles.pageSubtitle}>{displayPlans.length} plans</p>
           </div>
+          <AutoGenerateButton />
           <Link href={`/stowage-plans/new/`} className={styles.btnGhost}>
             + New Plan
           </Link>
         </div>
 
         <div className={styles.planList}>
-          {displayPlans.map((p) => {
+          {displayPlans.map((p: any) => {
             const pct = Math.round((p.palletsAssigned / p.palletsTotal) * 100);
             const hasIssues = p.overstowViolations > 0 || p.temperatureConflicts > 0;
             const barColor = pct >= 90 ? 'var(--color-danger)' : pct >= 70 ? 'var(--color-warning)' : 'var(--color-cyan)';

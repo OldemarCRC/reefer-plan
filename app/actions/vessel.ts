@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { VesselModel, VoyageModel } from '@/lib/db/schemas';
+import { VesselModel, VoyageModel, StowagePlanModel } from '@/lib/db/schemas';
 import type { Vessel } from '@/types/models';
 
 // ----------------------------------------------------------------------------
@@ -60,7 +60,7 @@ export async function getVesselById(id: unknown): Promise<Vessel | null> {
     return JSON.parse(JSON.stringify(vessel));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation error: ${error.errors[0].message}`);
+      throw new Error(`Validation error: ${error.issues[0].message}`);
     }
     console.error('Error fetching vessel by ID:', error);
     throw new Error('Failed to fetch vessel');
@@ -89,7 +89,7 @@ export async function getVesselByName(name: unknown): Promise<Vessel | null> {
     return JSON.parse(JSON.stringify(vessel));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation error: ${error.errors[0].message}`);
+      throw new Error(`Validation error: ${error.issues[0].message}`);
     }
     console.error('Error fetching vessel by name:', error);
     throw new Error('Failed to fetch vessel');
@@ -117,7 +117,7 @@ export async function getVesselByImo(imoNumber: unknown): Promise<Vessel | null>
     return JSON.parse(JSON.stringify(vessel));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation error: ${error.errors[0].message}`);
+      throw new Error(`Validation error: ${error.issues[0].message}`);
     }
     console.error('Error fetching vessel by IMO:', error);
     throw new Error('Failed to fetch vessel');
@@ -169,7 +169,7 @@ export async function getVesselCoolingSections(vesselId: unknown) {
     }));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation error: ${error.errors[0].message}`);
+      throw new Error(`Validation error: ${error.issues[0].message}`);
     }
     console.error('Error fetching cooling sections:', error);
     throw new Error('Failed to fetch cooling sections');
@@ -196,11 +196,11 @@ export async function getVesselCompartments(vesselId: unknown) {
     }
 
     // Flatten all compartments from all holds
-    const compartments = vessel.holds.flatMap(hold =>
-      hold.compartments.map(comp => ({
+    const compartments = vessel.holds.flatMap((hold: any) =>
+      hold.compartments.map((comp: any) => ({
         ...comp,
         holdNumber: hold.holdNumber,
-        coolingSectionId: vessel.temperatureZones.find(cs =>
+        coolingSectionId: vessel.temperatureZones.find((cs: any) =>
           cs.coolingSections.some((s: any) => s.sectionId === comp.id)
         )?.zoneId || null,
       }))
@@ -209,7 +209,7 @@ export async function getVesselCompartments(vesselId: unknown) {
     return JSON.parse(JSON.stringify(compartments));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation error: ${error.errors[0].message}`);
+      throw new Error(`Validation error: ${error.issues[0].message}`);
     }
     console.error('Error fetching compartments:', error);
     throw new Error('Failed to fetch compartments');
@@ -238,7 +238,7 @@ export async function getVesselDeckCapacity(vesselId: unknown) {
     return JSON.parse(JSON.stringify(vessel.deckContainerCapacity));
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation error: ${error.errors[0].message}`);
+      throw new Error(`Validation error: ${error.issues[0].message}`);
     }
     console.error('Error fetching deck capacity:', error);
     throw new Error('Failed to fetch deck capacity');
@@ -271,7 +271,7 @@ export async function validateCoolingSectionTemperature(
     }
 
     const coolingSection = vessel.temperatureZones.find(
-      cs => cs.zoneId === zoneId
+      (cs: any) => cs.zoneId === zoneId
     );
 
     if (!coolingSection) {
@@ -300,7 +300,7 @@ export async function validateCoolingSectionTemperature(
     return { valid: true };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation error: ${error.errors[0].message}`);
+      throw new Error(`Validation error: ${error.issues[0].message}`);
     }
     console.error('Error validating cooling section temperature:', error);
     throw error;
@@ -345,5 +345,133 @@ export async function deleteVessel(vesselId: unknown) {
       success: false,
       error: 'Failed to delete vessel',
     };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// RECALCULATE HISTORICAL STOWAGE FACTORS
+// Called when a voyage is marked COMPLETED.
+// For each compartment in the voyage's stowage plan, computes actualFactor =
+// palletsLoaded / sqm and updates the vessel's historicalStowageFactor using
+// a weighted rolling average: newAvg = (oldAvg * n + actual) / (n + 1)
+// ----------------------------------------------------------------------------
+
+export async function recalculateHistoricalFactors(voyageId: unknown) {
+  try {
+    const id = z.string().min(1).parse(voyageId);
+    await connectDB();
+
+    // Fetch the voyage to get vesselId
+    const voyage = await VoyageModel.findById(id).lean() as any;
+    if (!voyage) return { success: false, error: 'Voyage not found' };
+
+    const vesselId = voyage.vesselId?.toString();
+    if (!vesselId) return { success: false, error: 'Voyage has no vessel' };
+
+    // Fetch the vessel
+    const vessel = await VesselModel.findById(vesselId).lean() as any;
+    if (!vessel) return { success: false, error: 'Vessel not found' };
+
+    // Fetch the most recent stowage plan for this voyage
+    const plan = await StowagePlanModel.findOne({ voyageId: id })
+      .sort({ createdAt: -1 })
+      .lean() as any;
+    if (!plan) return { success: false, error: 'No stowage plan found for this voyage' };
+
+    // Build a map of compartmentId → palletsLoaded from cargoPositions
+    const loadedBySection = new Map<string, number>();
+    for (const pos of plan.cargoPositions ?? []) {
+      const compId = pos.compartment?.id;
+      if (!compId) continue;
+      loadedBySection.set(compId, (loadedBySection.get(compId) ?? 0) + (pos.quantity ?? 0));
+    }
+
+    // Build a map of sectionId → { sqm, designStowageFactor, historicalStowageFactor, historicalVoyageCount }
+    // from vessel.temperatureZones[].coolingSections[]
+    const sectionData = new Map<string, {
+      zoneIdx: number; sectionIdx: number;
+      sqm: number; historicalStowageFactor?: number; historicalVoyageCount: number;
+    }>();
+    for (let zi = 0; zi < (vessel.temperatureZones ?? []).length; zi++) {
+      const zone = vessel.temperatureZones[zi];
+      for (let si = 0; si < (zone.coolingSections ?? []).length; si++) {
+        const sec = zone.coolingSections[si];
+        sectionData.set(sec.sectionId, {
+          zoneIdx: zi,
+          sectionIdx: si,
+          sqm: sec.sqm ?? 0,
+          historicalStowageFactor: sec.historicalStowageFactor ?? undefined,
+          historicalVoyageCount: sec.historicalVoyageCount ?? 0,
+        });
+      }
+    }
+
+    // Compute updates
+    const updates: { path: string; value: number }[] = [];
+    for (const [sectionId, loaded] of loadedBySection) {
+      const sec = sectionData.get(sectionId);
+      if (!sec || sec.sqm <= 0 || loaded <= 0) continue;
+
+      const actualFactor = loaded / sec.sqm;
+      const n = sec.historicalVoyageCount;
+      const oldAvg = sec.historicalStowageFactor ?? actualFactor;
+      const newAvg = n > 0 ? (oldAvg * n + actualFactor) / (n + 1) : actualFactor;
+
+      const basePath = `temperatureZones.${sec.zoneIdx}.coolingSections.${sec.sectionIdx}`;
+      updates.push({ path: `${basePath}.historicalStowageFactor`, value: Math.round(newAvg * 10000) / 10000 });
+      updates.push({ path: `${basePath}.historicalVoyageCount`, value: n + 1 });
+    }
+
+    if (updates.length === 0) {
+      return { success: true, updated: 0, message: 'No loaded compartments — nothing to update' };
+    }
+
+    // Apply all updates in a single $set
+    const $set: Record<string, number> = {};
+    for (const u of updates) $set[u.path] = u.value;
+    await VesselModel.updateOne({ _id: vesselId }, { $set });
+
+    return { success: true, updated: updates.length / 2 };
+  } catch (error) {
+    console.error('Error recalculating historical stowage factors:', error);
+    return { success: false, error: 'Failed to recalculate historical stowage factors' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// GET ADMIN VESSELS — full list with voyage counts (for /admin Vessels tab)
+// ----------------------------------------------------------------------------
+
+export async function getAdminVessels() {
+  try {
+    await connectDB();
+
+    const vessels = await VesselModel.find()
+      .sort({ name: 1 })
+      .lean();
+
+    const ids = vessels.map((v: any) => v._id);
+    const voyageCounts = await VoyageModel.aggregate([
+      { $match: { vesselId: { $in: ids } } },
+      { $group: { _id: '$vesselId', count: { $sum: 1 } } },
+    ]);
+    const countMap = Object.fromEntries(
+      voyageCounts.map((r: any) => [r._id.toString(), r.count])
+    );
+
+    const data = vessels.map((v: any) => ({
+      _id: v._id.toString(),
+      name: v.name,
+      imoNumber: v.imoNumber,
+      flag: v.flag,
+      capacity: { totalPallets: v.capacity?.totalPallets },
+      active: v.active !== false,
+      voyageCount: countMap[v._id.toString()] ?? 0,
+    }));
+
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error fetching admin vessels:', error);
+    return { success: false, data: [], error: 'Failed to fetch vessels' };
   }
 }

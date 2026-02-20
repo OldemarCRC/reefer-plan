@@ -3,17 +3,7 @@
 // ============================================================================
 
 import mongoose, { Schema, Model } from 'mongoose';
-import type {
-  Vessel,
-  Service,
-  Voyage,
-  Contract,
-  Booking,
-  Shipment,
-  StowagePlan,
-  User,
-  CaptainContact,
-} from '@/types/models';
+// Type imports no longer needed for Schema generics — type safety lives in server actions
 
 // ============================================================================
 // SERVICE SCHEMA
@@ -28,8 +18,9 @@ const PortRotationSchema = new Schema({
   operations: [{ type: String, enum: ['LOAD', 'DISCHARGE'], required: true }],
 }, { _id: false });
 
-const ServiceSchema = new Schema<Service>({
+const ServiceSchema = new Schema({
   serviceCode: { type: String, required: true, unique: true },
+  shortCode: { type: String, unique: true, sparse: true },
   serviceName: { type: String, required: true },
   description: { type: String },
   active: { type: Boolean, default: true },
@@ -83,7 +74,7 @@ const PortCallChangelogEntrySchema = new Schema({
   reason: { type: String },
 }, { _id: false });
 
-const VoyageSchema = new Schema<Voyage>({
+const VoyageSchema = new Schema({
   voyageNumber: { type: String, required: true, unique: true },
   vesselId: { type: Schema.Types.ObjectId, ref: 'Vessel' },
   vesselName: { type: String, required: true },
@@ -120,37 +111,53 @@ VoyageSchema.index({ status: 1 });
 VoyageSchema.index({ weekNumber: 1, year: 1 });
 
 // ============================================================================
+// OFFICE SCHEMA
+// ============================================================================
+
+const OfficeSchema = new Schema({
+  code: { type: String, required: true, unique: true, uppercase: true, minlength: 3, maxlength: 3 },
+  name: { type: String, required: true },
+  country: { type: String, required: true },
+  active: { type: Boolean, default: true },
+}, {
+  timestamps: true,
+});
+
+OfficeSchema.index({ active: 1 });
+
+// ============================================================================
 // CONTRACT SCHEMA
 // ============================================================================
 
-const ContractSchema = new Schema<Contract>({
+const CounterpartySchema = new Schema({
+  name: { type: String, required: true },
+  code: { type: String, required: true },
+  weeklyEstimate: { type: Number, required: true, min: 0 },
+  cargoTypes: [{ type: String }],
+}, { _id: false });
+
+const ContractSchema = new Schema({
   contractNumber: { type: String, required: true, unique: true },
+  officeId: { type: Schema.Types.ObjectId, ref: 'Office', required: true },
+  officeCode: { type: String, required: true },
   client: {
+    type: { type: String, enum: ['SHIPPER', 'CONSIGNEE'], required: true },
     name: { type: String, required: true },
-    type: { type: String, enum: ['IMPORTER', 'EXPORTER'], required: true },
+    clientNumber: { type: String, required: true },
     contact: { type: String, required: true },
     email: { type: String, required: true },
     country: { type: String, required: true },
   },
-  consignee: {
-    name: { type: String },
-    code: { type: String },
-    country: { type: String },
-  },
+  shippers: [CounterpartySchema],
+  consignees: [CounterpartySchema],
   serviceId: { type: Schema.Types.ObjectId, ref: 'Service', required: true },
   serviceCode: { type: String, required: true },
-  cargoType: { type: String, required: true },
-  contractedSpace: {
-    pallets: { type: Number },
-    containers: { type: Number },
-    frequency: { type: String, enum: ['WEEKLY', 'BIWEEKLY', 'MONTHLY'], required: true },
-  },
-  origin: {
+  originPort: {
     portCode: { type: String, required: true },
     portName: { type: String, required: true },
     country: { type: String, required: true },
   },
-  destination: {
+  destinationPort: {
     portCode: { type: String, required: true },
     portName: { type: String, required: true },
     country: { type: String, required: true },
@@ -162,46 +169,57 @@ const ContractSchema = new Schema<Contract>({
   timestamps: true,
 });
 
+ContractSchema.index({ officeId: 1 });
 ContractSchema.index({ serviceId: 1 });
 ContractSchema.index({ active: 1 });
+ContractSchema.index({ 'client.clientNumber': 1 });
 
 // ============================================================================
 // BOOKING SCHEMA
 // ============================================================================
 
-const BookingSchema = new Schema<Booking>({
+const BookingSchema = new Schema({
   bookingNumber: { type: String, required: true, unique: true },
+  contractId: { type: Schema.Types.ObjectId, ref: 'Contract', required: true },
   voyageId: { type: Schema.Types.ObjectId, ref: 'Voyage', required: true },
   voyageNumber: { type: String, required: true },
-  contractId: { type: Schema.Types.ObjectId, ref: 'Contract' },
-  clientName: { type: String },
+  officeCode: { type: String, required: true },
+  serviceCode: { type: String, required: true },
   client: {
-    name: { type: String },
+    name: { type: String, required: true },
+    clientNumber: { type: String, required: true },
     contact: { type: String },
     email: { type: String },
   },
+  shipper: {
+    name: { type: String, required: true },
+    code: { type: String, required: true },
+  },
   consignee: {
-    name: { type: String },
-    code: { type: String },
+    name: { type: String, required: true },
+    code: { type: String, required: true },
   },
   cargoType: { type: String, required: true },
   requestedQuantity: { type: Number, required: true, min: 1 },
   confirmedQuantity: { type: Number, default: 0, min: 0 },
   standbyQuantity: { type: Number, default: 0, min: 0 },
   rejectedQuantity: { type: Number, default: 0, min: 0 },
-  polCode: { type: String },
-  podCode: { type: String },
+  requestedTemperature: { type: Number },
   pol: {
-    portCode: { type: String },
-    portName: { type: String },
-    country: { type: String },
+    portCode: { type: String, required: true },
+    portName: { type: String, required: true },
+    country: { type: String, required: true },
   },
   pod: {
-    portCode: { type: String },
-    portName: { type: String },
-    country: { type: String },
+    portCode: { type: String, required: true },
+    portName: { type: String, required: true },
+    country: { type: String, required: true },
   },
-  requestedTemperature: { type: Number },
+  estimateSource: {
+    type: String,
+    enum: ['CONTRACT_DEFAULT', 'SHIPPER_CONFIRMED'],
+    default: 'CONTRACT_DEFAULT',
+  },
   status: {
     type: String,
     required: true,
@@ -210,10 +228,7 @@ const BookingSchema = new Schema<Booking>({
   },
   requestedDate: { type: Date },
   confirmedDate: { type: Date },
-  confirmationEmailSent: { type: Boolean, default: false },
-  confirmationEmailSentAt: { type: Date },
-  confirmationNotes: { type: String },
-  approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  approvedBy: { type: String },
   rejectionReason: { type: String },
 }, {
   timestamps: true,
@@ -222,6 +237,7 @@ const BookingSchema = new Schema<Booking>({
 BookingSchema.index({ voyageId: 1 });
 BookingSchema.index({ contractId: 1 });
 BookingSchema.index({ status: 1 });
+BookingSchema.index({ officeCode: 1 });
 
 // ============================================================================
 // SHIPMENT SCHEMA
@@ -247,7 +263,7 @@ const CargoUnitSchema = new Schema({
   containerType: { type: String, enum: ['20FT', '40FT', '40HC'] },
 }, { _id: false });
 
-const ShipmentSchema = new Schema<Shipment>({
+const ShipmentSchema = new Schema({
   shipmentNumber: { type: String, required: true, unique: true },
   voyageId: { type: Schema.Types.ObjectId, ref: 'Voyage', required: true },
   voyageNumber: { type: String, required: true },
@@ -357,7 +373,7 @@ const HoldSchema = new Schema({
   totalCapacitySqm: { type: Number },
 }, { _id: false });
 
-const VesselSchema = new Schema<Vessel>({
+const VesselSchema = new Schema({
   name: { type: String, required: true, unique: true },
   imoNumber: { type: String, required: true, unique: true },
   flag: { type: String, required: true },
@@ -470,7 +486,7 @@ const PreliminaryStabilitySchema = new Schema({
   },
 }, { _id: false });
 
-const StowagePlanSchema = new Schema<StowagePlan>({
+const StowagePlanSchema = new Schema({
   planNumber: { type: String, required: true, unique: true },
   voyageId: { type: Schema.Types.ObjectId, ref: 'Voyage', required: true },
   voyageNumber: { type: String, required: true },
@@ -568,7 +584,7 @@ StowagePlanSchema.index({ status: 1 });
 // CAPTAIN CONTACT SCHEMA
 // ============================================================================
 
-const CaptainContactSchema = new Schema<CaptainContact>({
+const CaptainContactSchema = new Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   phone: { type: String },
@@ -593,7 +609,7 @@ CaptainContactSchema.index({ active: 1 });
 // USER SCHEMA
 // ============================================================================
 
-const UserSchema = new Schema<User>({
+const UserSchema = new Schema({
   email: { type: String, required: true, unique: true },
   name: { type: String, required: true },
   role: {
@@ -601,9 +617,15 @@ const UserSchema = new Schema<User>({
     required: true,
     enum: ['ADMIN', 'SHIPPING_PLANNER', 'STEVEDORE', 'CHECKER', 'EXPORTER', 'VIEWER'],
   },
+  passwordHash: { type: String, select: false },
   company: { type: String },
   port: { type: String },
   canSendEmailsToCaptains: { type: Boolean, default: false },
+  // Session management
+  isOnline: { type: Boolean, default: false },
+  sessionToken: { type: String, select: false },
+  lastLogin: { type: Date },
+  lastActivity: { type: Date },
 }, {
   timestamps: true,
 });
@@ -615,38 +637,36 @@ UserSchema.index({ role: 1 });
 // MODELS EXPORT
 // ============================================================================
 
-export const ServiceModel = 
-  (mongoose.models.Service as Model<Service>) || 
-  mongoose.model<Service>('Service', ServiceSchema);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mongoose schemas are untyped; type safety lives in server actions
+type AnyModel = Model<any>;
 
-export const VoyageModel = 
-  (mongoose.models.Voyage as Model<Voyage>) || 
-  mongoose.model<Voyage>('Voyage', VoyageSchema);
+export const OfficeModel: AnyModel =
+  mongoose.models.Office || mongoose.model('Office', OfficeSchema);
 
-export const ContractModel = 
-  (mongoose.models.Contract as Model<Contract>) || 
-  mongoose.model<Contract>('Contract', ContractSchema);
+export const ServiceModel: AnyModel =
+  mongoose.models.Service || mongoose.model('Service', ServiceSchema);
 
-export const BookingModel = 
-  (mongoose.models.Booking as Model<Booking>) || 
-  mongoose.model<Booking>('Booking', BookingSchema);
+export const VoyageModel: AnyModel =
+  mongoose.models.Voyage || mongoose.model('Voyage', VoyageSchema);
 
-export const ShipmentModel = 
-  (mongoose.models.Shipment as Model<Shipment>) || 
-  mongoose.model<Shipment>('Shipment', ShipmentSchema);
+export const ContractModel: AnyModel =
+  mongoose.models.Contract || mongoose.model('Contract', ContractSchema);
 
-export const VesselModel = 
-  (mongoose.models.Vessel as Model<Vessel>) || 
-  mongoose.model<Vessel>('Vessel', VesselSchema);
+export const BookingModel: AnyModel =
+  mongoose.models.Booking || mongoose.model('Booking', BookingSchema);
+
+export const ShipmentModel: AnyModel =
+  mongoose.models.Shipment || mongoose.model('Shipment', ShipmentSchema);
+
+export const VesselModel: AnyModel =
+  mongoose.models.Vessel || mongoose.model('Vessel', VesselSchema);
 
 // Delete cached model so schema changes take effect without server restart
 delete mongoose.models.StowagePlan;
-export const StowagePlanModel = mongoose.model<StowagePlan>('StowagePlan', StowagePlanSchema);
+export const StowagePlanModel: AnyModel = mongoose.model('StowagePlan', StowagePlanSchema);
 
-export const CaptainContactModel = 
-  (mongoose.models.CaptainContact as Model<CaptainContact>) || 
-  mongoose.model<CaptainContact>('CaptainContact', CaptainContactSchema);
+export const CaptainContactModel: AnyModel =
+  mongoose.models.CaptainContact || mongoose.model('CaptainContact', CaptainContactSchema);
 
-export const UserModel = 
-  (mongoose.models.User as Model<User>) || 
-  mongoose.model<User>('User', UserSchema);
+export const UserModel: AnyModel =
+  mongoose.models.User || mongoose.model('User', UserSchema);

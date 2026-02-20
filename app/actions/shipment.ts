@@ -134,7 +134,7 @@ export async function createShipment(data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error creating shipment:', error);
@@ -188,7 +188,7 @@ export async function updateShipment(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error updating shipment:', error);

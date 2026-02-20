@@ -12,8 +12,12 @@ export interface VoyageTempAssignment {
   setTemperature: number;  // °C
   cargoType: string;
   palletsLoaded: number;
-  palletsCapacity: number;
-  shipments: string[];     // shipment IDs
+  palletsCapacity: number;    // computed: Math.round(sqm * designStowageFactor)
+  shipments: string[];        // shipment IDs
+  // Stowage factor fields (populated from vessel spec when available)
+  sqm?: number;               // floor area in sqm
+  designStowageFactor?: number;    // from vessel spec sheet (e.g. 1.32)
+  historicalStowageFactor?: number; // rolling average across completed voyages
 }
 
 export const voyageTempAssignments: VoyageTempAssignment[] = [

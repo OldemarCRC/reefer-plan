@@ -71,6 +71,11 @@ export default async function VoyageDetailPage({
   const vesselName = voyage.vesselId?.name || voyage.vesselName || '—';
   const vesselImo = (voyage.vesselId as any)?.imoNumber ?? null;
   const serviceCode = voyage.serviceId?.serviceCode || 'N/A';
+  const servicePortRotation = ((voyage.serviceId as any)?.portRotation ?? []).map((p: any) => ({
+    portCode: p.portCode as string,
+    portName: p.portName as string,
+    country: (p.country ?? '') as string,
+  }));
 
   return (
     <AppShell>
@@ -140,6 +145,7 @@ export default async function VoyageDetailPage({
                 locked: pc.locked ?? false,
                 status: pc.status ?? 'SCHEDULED',
               }))}
+              servicePortRotation={servicePortRotation}
             />
           )}
         </div>

@@ -54,6 +54,126 @@
   background: var(--color-blue-muted);
 }
 
+/* --- Auto-Generate Plans button + result toast --- */
+
+.autoGenWrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.btnAutoGen {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  border: 1px dashed var(--color-cyan);
+  background: var(--color-blue-muted);
+  color: var(--color-cyan-light);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btnAutoGen:hover:not(:disabled) {
+  background: var(--color-cyan-muted, rgba(6,182,212,0.12));
+  border-style: solid;
+}
+
+.btnAutoGen:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.autoGenToast {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 50;
+  min-width: 280px;
+  max-width: 420px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.autoGenToastSuccess {
+  border-color: var(--color-success);
+}
+
+.autoGenToastNeutral {
+  border-color: var(--color-border);
+}
+
+.autoGenToastError {
+  border-color: var(--color-danger);
+}
+
+.autoGenToastMsg {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-2);
+  padding-right: var(--space-5);
+}
+
+.autoGenList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.autoGenCreated,
+.autoGenSkipped {
+  display: flex;
+  gap: var(--space-2);
+  font-size: 11px;
+  align-items: baseline;
+}
+
+.autoGenCreated {
+  color: var(--color-success);
+}
+
+.autoGenSkipped {
+  color: var(--color-text-muted);
+}
+
+.autoGenVoyage {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-semibold);
+  flex-shrink: 0;
+}
+
+.autoGenReason {
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+.autoGenDismiss {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.autoGenDismiss:hover {
+  color: var(--color-text-primary);
+}
+
 /* --- Plan list --- */
 
 .planList {

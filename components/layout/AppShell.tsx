@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 
@@ -12,6 +13,7 @@ interface AppShellProps {
 
 export default function AppShell({ children, activeVessel, activeVoyage }: AppShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { data: session } = useSession();
 
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => !prev);
@@ -26,6 +28,8 @@ export default function AppShell({ children, activeVessel, activeVoyage }: AppSh
           sidebarCollapsed={sidebarCollapsed}
           activeVessel={activeVessel}
           activeVoyage={activeVoyage}
+          userName={session?.user?.name || session?.user?.email || '?'}
+          userRole={(session?.user as any)?.role}
         />
         <div className="app-content">
           {children}

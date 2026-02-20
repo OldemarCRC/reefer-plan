@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { StowagePlanModel, VesselModel, VoyageModel } from '@/lib/db/schemas';
+import { StowagePlanModel, VesselModel, VoyageModel, BookingModel } from '@/lib/db/schemas';
 import type { StowagePlan, StowagePlanStatus } from '@/types/models';
 
 // ISO week number from a date (1–53)
@@ -121,9 +121,8 @@ export async function createStowagePlan(data: unknown) {
       vesselId: validated.vesselId,
       voyageId: validated.voyageId,
       status: initialStatus,
-      palletPositions: [],
-      containerPositions: [],
-      coolingSectionStatus: vessel.temperatureZones.map(cs => ({
+      cargoPositions: [],
+      coolingSectionStatus: vessel.temperatureZones.map((cs: any) => ({
         zoneId: cs.zoneId,
         coolingSectionIds: cs.coolingSections.map((s: any) => s.sectionId),
         assignedTemperature: undefined,
@@ -147,7 +146,7 @@ export async function createStowagePlan(data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error creating stowage plan:', error);
@@ -231,7 +230,7 @@ export async function createStowagePlanFromWizard(data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     const msg = error instanceof Error ? error.message : String(error);
@@ -265,7 +264,7 @@ export async function assignCargoToCompartment(data: unknown) {
     }
     
     // CRITICAL: Find cooling section for this compartment
-    const coolingSection = vessel.temperatureZones.find(cs =>
+    const coolingSection = vessel.temperatureZones.find((cs: any) =>
       cs.coolingSections.some((s: any) => s.sectionId === validated.compartmentId)
     );
 
@@ -278,7 +277,7 @@ export async function assignCargoToCompartment(data: unknown) {
 
     // CRITICAL: Validate temperature compatibility
     const sectionStatus = plan.coolingSectionStatus?.find(
-      cs => cs.zoneId === coolingSection.zoneId
+      (cs: any) => cs.zoneId === coolingSection.zoneId
     );
 
     if (sectionStatus) {
@@ -308,7 +307,7 @@ export async function assignCargoToCompartment(data: unknown) {
     }
     
     // Add cargo to plan
-    plan.palletPositions.push({
+    plan.cargoPositions.push({
       bookingId: validated.bookingId,
       cargoUnitId: `UNIT-${Date.now()}`, // Generate unique ID
       compartment: {
@@ -335,7 +334,7 @@ export async function assignCargoToCompartment(data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error assigning cargo:', error);
@@ -368,20 +367,21 @@ export async function assignContainersToDeck(data: unknown) {
     }
     
     // CRITICAL: Check reefer plug limit
-    const currentDeckContainers = plan.containerPositions?.length || 0;
+    const currentDeckContainers = plan.cargoPositions.filter(
+      (p: any) => p.compartment.level === 'DECK'
+    ).length;
     const maxReeferPlugs = vessel.deckContainerCapacity?.maxReeferPlugs || 0;
-    
+
     if (currentDeckContainers + validated.quantity > maxReeferPlugs) {
       return {
         success: false,
         error: `Reefer plug limit exceeded: ${currentDeckContainers} + ${validated.quantity} > ${maxReeferPlugs} max plugs`,
       };
     }
-    
+
     // Add containers to deck
     for (let i = 0; i < validated.quantity; i++) {
-      plan.containerPositions = plan.containerPositions || [];
-      plan.containerPositions.push({
+      plan.cargoPositions.push({
         bookingId: validated.bookingId,
         cargoUnitId: `DECK-${Date.now()}-${i}`,
         compartment: {
@@ -405,7 +405,7 @@ export async function assignContainersToDeck(data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error assigning deck containers:', error);
@@ -441,7 +441,7 @@ export async function validateCoolingSections(planId: unknown) {
     
     // Check each cooling section
     for (const coolingSection of vessel.temperatureZones) {
-      const compartmentsInSection = plan.palletPositions.filter(pos =>
+      const compartmentsInSection = plan.cargoPositions.filter((pos: any) =>
         coolingSection.coolingSections.some((s: any) => s.sectionId === pos.compartment.id)
       );
 
@@ -449,7 +449,7 @@ export async function validateCoolingSections(planId: unknown) {
 
       // Get unique temperatures in this section
       const temperatures = new Set(
-        compartmentsInSection.map(pos => {
+        compartmentsInSection.map((pos: any) => {
           // TODO: Get actual temperature from cargo data
           return 0; // Placeholder
         })
@@ -714,7 +714,7 @@ export async function updateZoneTemperatures(data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     const msg = error instanceof Error ? error.message : String(error);
@@ -736,15 +736,37 @@ export async function deleteStowagePlan(planId: unknown) {
 
     await connectDB();
 
-    const plan = await StowagePlanModel.findByIdAndDelete(id);
-
+    const plan = await StowagePlanModel.findById(id).select('planNumber voyageId').lean();
     if (!plan) {
       return { success: false, error: 'Stowage plan not found' };
     }
 
+    // Guard: only the most recent plan for a voyage can be deleted to prevent gaps
+    // in the sequential numbering (WK-VESSEL-VOYAGE-0001, 0002, 0003 …)
+    const voyageId = (plan as any).voyageId;
+    if (voyageId) {
+      const sibling = await StowagePlanModel.find({ voyageId })
+        .select('_id planNumber')
+        .sort({ planNumber: -1, createdAt: -1 })
+        .lean();
+
+      if (sibling.length > 1) {
+        const latestId = String((sibling[0] as any)._id);
+        if (latestId !== String(id)) {
+          const latestNumber = (sibling[0] as any).planNumber ?? 'the most recent plan';
+          return {
+            success: false,
+            error: `Can only delete the most recent plan (${latestNumber}). Delete newer plans first.`,
+          };
+        }
+      }
+    }
+
+    await StowagePlanModel.findByIdAndDelete(id);
+
     return {
       success: true,
-      message: `Stowage plan ${plan.planNumber} deleted successfully`,
+      message: `Stowage plan ${(plan as any).planNumber} deleted successfully`,
     };
   } catch (error) {
     console.error('Error deleting stowage plan:', error);
@@ -788,7 +810,7 @@ export async function markPlanSent(data: unknown) {
 
     const recipients: { name?: string; email: string; role: 'CAPTAIN' | 'CC' }[] = [
       { name: validated.captainName, email: validated.captainEmail, role: 'CAPTAIN' },
-      ...(validated.ccEmails ?? []).map(email => ({ email, role: 'CC' as const })),
+      ...(validated.ccEmails ?? []).map((email: any) => ({ email, role: 'CC' as const })),
     ];
 
     plan.status = 'EMAIL_SENT';
@@ -821,7 +843,7 @@ export async function markPlanSent(data: unknown) {
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0]?.message ?? 'Validation error' };
+      return { success: false, error: error.issues[0]?.message ?? 'Validation error' };
     }
     const msg = error instanceof Error ? error.message : String(error);
     console.error('Error marking plan as sent:', msg);
@@ -897,7 +919,8 @@ export async function copyStowagePlan(sourcePlanId: unknown) {
 const SaveCargoAssignmentsSchema = z.object({
   planId: z.string().min(1),
   assignments: z.array(z.object({
-    shipmentId: z.string(),
+    shipmentId: z.string().optional(),
+    bookingId: z.string().optional(),
     cargoType: z.string(),
     quantity: z.number().int().nonnegative(),
     compartmentId: z.string().min(1),
@@ -915,8 +938,9 @@ export async function saveCargoAssignments(data: unknown) {
       return { success: false, error: 'Plan not found' };
     }
 
-    plan.cargoPositions = validated.assignments.map(a => ({
+    plan.cargoPositions = validated.assignments.map((a: any) => ({
       shipmentId: a.shipmentId || undefined,
+      bookingId: a.bookingId || undefined,
       cargoType: a.cargoType,
       quantity: a.quantity,
       compartment: {
@@ -937,7 +961,7 @@ export async function saveCargoAssignments(data: unknown) {
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { success: false, error: `Validation error: ${error.errors[0].message}` };
+      return { success: false, error: `Validation error: ${error.issues[0].message}` };
     }
     const msg = error instanceof Error ? error.message : String(error);
     console.error('Error saving cargo assignments:', msg);
@@ -959,4 +983,169 @@ function getLevel(compartmentId: string): string {
   // Extract level from compartment ID (e.g., "2UPD" -> "UPD", "1A" -> "A")
   const match = compartmentId.match(/^\d+(.*)/);
   return match ? match[1] : '';
+}
+
+// ----------------------------------------------------------------------------
+// AUTO-GENERATE DRAFT PLANS
+// Scans all non-cancelled voyages departing within the next 28 days.
+// For each voyage that has ≥1 CONFIRMED or PARTIAL booking and no existing
+// non-cancelled stowage plan, creates a new DRAFT plan.
+// Returns a summary so the UI can display what was created / skipped.
+// ----------------------------------------------------------------------------
+
+export async function autoGenerateDraftPlans() {
+  try {
+    await connectDB();
+
+    const now = new Date();
+    const cutoff = new Date(now.getTime() + 28 * 24 * 60 * 60 * 1000);
+
+    // Voyages departing in the next 28 days, not cancelled
+    const voyages = await VoyageModel.find({
+      departureDate: { $gte: now, $lte: cutoff },
+      status: { $ne: 'CANCELLED' },
+    }).lean();
+
+    const results: {
+      voyageNumber: string;
+      action: 'created' | 'skipped';
+      reason?: string;
+      planNumber?: string;
+    }[] = [];
+
+    for (const voyage of voyages as any[]) {
+      const voyageId = voyage._id.toString();
+
+      // Check for existing non-cancelled plans
+      const existingPlan = await StowagePlanModel.findOne({
+        voyageId: voyage._id,
+        status: { $nin: ['CANCELLED'] },
+      }).lean();
+
+      if (existingPlan) {
+        results.push({
+          voyageNumber: voyage.voyageNumber,
+          action: 'skipped',
+          reason: `Plan ${(existingPlan as any).planNumber || existingPlan._id} already exists`,
+        });
+        continue;
+      }
+
+      // Check for CONFIRMED / PARTIAL bookings
+      const bookingCount = await BookingModel.countDocuments({
+        voyageId: voyage._id,
+        status: { $in: ['CONFIRMED', 'PARTIAL'] },
+      });
+
+      if (bookingCount === 0) {
+        results.push({
+          voyageNumber: voyage.voyageNumber,
+          action: 'skipped',
+          reason: 'No confirmed bookings',
+        });
+        continue;
+      }
+
+      // Fetch the vessel to initialise coolingSectionStatus
+      const vessel = await VesselModel.findById(voyage.vesselId).lean() as any;
+      if (!vessel) {
+        results.push({
+          voyageNumber: voyage.voyageNumber,
+          action: 'skipped',
+          reason: 'Vessel not found',
+        });
+        continue;
+      }
+
+      const planNumber = await generatePlanNumber(
+        voyage.voyageNumber,
+        vessel.name,
+        voyage.weekNumber ?? undefined,
+        voyage.departureDate ?? undefined,
+      );
+
+      await StowagePlanModel.create({
+        planNumber,
+        vesselId: vessel._id,
+        voyageId: voyage._id,
+        status: 'DRAFT',
+        cargoPositions: [],
+        coolingSectionStatus: (vessel.temperatureZones ?? []).map((zone: any) => ({
+          zoneId: zone.zoneId,
+          coolingSectionIds: (zone.coolingSections ?? []).map((s: any) => s.sectionId),
+          assignedTemperature: undefined,
+          locked: false,
+          assignedCargo: [],
+        })),
+        overstowViolations: [],
+        temperatureConflicts: [],
+        weightDistributionWarnings: [],
+        createdBy: 'AUTO',
+      });
+
+      results.push({
+        voyageNumber: voyage.voyageNumber,
+        action: 'created',
+        planNumber,
+      });
+    }
+
+    const created = results.filter(r => r.action === 'created').length;
+    const skipped = results.filter(r => r.action === 'skipped').length;
+
+    return {
+      success: true,
+      created,
+      skipped,
+      results,
+      message: created === 0
+        ? 'No new plans generated — all eligible voyages already have plans or lack confirmed bookings'
+        : `Generated ${created} draft plan${created > 1 ? 's' : ''}`,
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Error auto-generating draft plans:', msg);
+    return { success: false, error: `Auto-generation failed: ${msg}` };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// GET ADMIN PLANS — full list for /admin Stowage Plans tab
+// Returns all plans with populated vessel + voyage, sorted newest first.
+// ----------------------------------------------------------------------------
+
+export async function getAdminPlans() {
+  try {
+    await connectDB();
+
+    const plans = await StowagePlanModel.find()
+      .populate('vesselId', 'name')
+      .populate('voyageId', 'voyageNumber departureDate weekNumber')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const data = plans.map((p: any) => ({
+      _id: p._id.toString(),
+      planNumber: p.planNumber ?? '—',
+      status: p.status ?? 'DRAFT',
+      createdAt: p.createdAt,
+      cargoPositionCount: (p.cargoPositions ?? []).length,
+      voyageRawId: p.voyageId ? (p.voyageId as any)._id?.toString() ?? null : null,
+      vesselId: p.vesselId
+        ? { name: (p.vesselId as any).name }
+        : undefined,
+      voyageId: p.voyageId
+        ? {
+            voyageNumber: (p.voyageId as any).voyageNumber,
+            departureDate: (p.voyageId as any).departureDate,
+            weekNumber: (p.voyageId as any).weekNumber,
+          }
+        : undefined,
+    }));
+
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error fetching admin plans:', error);
+    return { success: false, data: [], error: 'Failed to fetch plans' };
+  }
 }

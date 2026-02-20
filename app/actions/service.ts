@@ -29,15 +29,18 @@ const RoutePortSchema = z.object({
   portName: z.string().min(1).max(200),
   country: z.string().min(1).max(100),
   sequence: z.number().int().positive(),
-  estimatedDays: z.number().int().min(0).optional(),
+  weeksFromStart: z.number().int().min(0).default(0),
+  operations: z.array(z.enum(['LOAD', 'DISCHARGE'])).min(1).default(['LOAD']),
 });
 
 const CreateServiceSchema = z.object({
   serviceCode: ServiceCodeSchema,
+  shortCode: z.string().min(2).max(5).regex(/^[A-Z0-9]+$/, 'Short code must be uppercase alphanumeric').optional(),
   serviceName: z.string().min(1).max(200),
   description: z.string().max(1000).optional(),
   frequency: z.enum(['WEEKLY', 'BIWEEKLY', 'MONTHLY']),
-  route: z.array(RoutePortSchema).min(2, 'Route must have at least 2 ports'),
+  cycleDurationWeeks: z.number().int().positive().default(4),
+  portRotation: z.array(RoutePortSchema).min(2, 'Port rotation must have at least 2 ports'),
   vessels: z.array(z.string()).optional().default([]),
   active: z.boolean().optional().default(true),
 });
@@ -69,7 +72,7 @@ export async function createService(data: unknown) {
     }
     
     // Validate port sequence (must be consecutive)
-    const sequences = validated.route.map(p => p.sequence).sort((a, b) => a - b);
+    const sequences = validated.portRotation.map(p => p.sequence).sort((a, b) => a - b);
     for (let i = 0; i < sequences.length; i++) {
       if (sequences[i] !== i + 1) {
         return {
@@ -91,7 +94,7 @@ export async function createService(data: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error creating service:', error);
@@ -132,9 +135,9 @@ export async function updateService(
       }
     }
     
-    // If updating route, validate sequence
-    if (validated.route) {
-      const sequences = validated.route.map(p => p.sequence).sort((a, b) => a - b);
+    // If updating portRotation, validate sequence
+    if (validated.portRotation) {
+      const sequences = validated.portRotation.map(p => p.sequence).sort((a, b) => a - b);
       for (let i = 0; i < sequences.length; i++) {
         if (sequences[i] !== i + 1) {
           return {
@@ -164,7 +167,7 @@ export async function updateService(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error updating service:', error);
@@ -349,7 +352,7 @@ export async function getServiceById(serviceId: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error fetching service:', error);
@@ -384,7 +387,7 @@ export async function getServiceByCode(code: unknown) {
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error fetching service by code:', error);
@@ -407,16 +410,16 @@ export async function getServiceRoute(serviceId: unknown) {
     await connectDB();
     
     const service = await ServiceModel.findById(id)
-      .select('serviceCode route')
+      .select('serviceCode portRotation')
       .lean();
-    
+
     if (!service) {
       return { success: false, error: 'Service not found' };
     }
-    
+
     // Sort ports by sequence
-    const sortedRoute = service.route.sort((a, b) => a.sequence - b.sequence);
-    
+    const sortedRoute = service.portRotation.sort((a: any, b: any) => a.sequence - b.sequence);
+
     return {
       success: true,
       data: {
@@ -455,7 +458,7 @@ export async function addPortToService(
     }
     
     // Check if sequence already exists
-    if (service.route.some(p => p.sequence === port.sequence)) {
+    if (service.portRotation.some((p: any) => p.sequence === port.sequence)) {
       return {
         success: false,
         error: `Sequence ${port.sequence} already exists in route`,
@@ -463,14 +466,14 @@ export async function addPortToService(
     }
     
     // Check if port code already exists
-    if (service.route.some(p => p.portCode === port.portCode)) {
+    if (service.portRotation.some((p: any) => p.portCode === port.portCode)) {
       return {
         success: false,
         error: `Port ${port.portCode} already exists in route`,
       };
     }
     
-    service.route.push(port);
+    service.portRotation.push(port);
     await service.save();
     
     return {
@@ -482,7 +485,7 @@ export async function addPortToService(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.errors[0].message}`,
+        error: `Validation error: ${error.issues[0].message}`,
       };
     }
     console.error('Error adding port to service:', error);
@@ -515,7 +518,7 @@ export async function removePortFromService(
     }
     
     // Check minimum ports requirement
-    if (service.route.length <= 2) {
+    if (service.portRotation.length <= 2) {
       return {
         success: false,
         error: 'Cannot remove port. Service must have at least 2 ports.',
@@ -523,16 +526,16 @@ export async function removePortFromService(
     }
     
     // Remove port
-    const portIndex = service.route.findIndex(p => p.portCode === code);
+    const portIndex = service.portRotation.findIndex((p: any) => p.portCode === code);
     
     if (portIndex === -1) {
       return { success: false, error: 'Port not found in service route' };
     }
     
-    service.route.splice(portIndex, 1);
+    service.portRotation.splice(portIndex, 1);
     
     // Resequence remaining ports
-    service.route.forEach((port, index) => {
+    service.portRotation.forEach((port: any, index: number) => {
       port.sequence = index + 1;
     });
     
@@ -574,14 +577,14 @@ export async function assignVesselToService(
     }
     
     // Check if vessel already assigned
-    if (service.vessels.includes(vId)) {
+    if (service.vesselPool.includes(vId)) {
       return {
         success: false,
         error: 'Vessel already assigned to this service',
       };
     }
     
-    service.vessels.push(vId);
+    service.vesselPool.push(vId);
     await service.save();
     
     return {
@@ -618,7 +621,7 @@ export async function removeVesselFromService(
       return { success: false, error: 'Service not found' };
     }
     
-    service.vessels = service.vessels.filter(v => v !== vId);
+    service.vesselPool = service.vesselPool.filter((v: any) => v !== vId);
     await service.save();
     
     return {
