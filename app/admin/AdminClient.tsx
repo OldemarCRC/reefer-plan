@@ -34,6 +34,7 @@ interface AdminPlan {
   status: string;
   createdAt?: string;
   cargoPositionCount: number;
+  voyageRawId?: string | null;
   vesselId?: { name?: string };
   voyageId?: { voyageNumber?: string; departureDate?: string; weekNumber?: number };
 }
@@ -383,6 +384,20 @@ function PlansTab({ initialPlans }: { initialPlans: AdminPlan[] }) {
 
   const confirmPlan = plans.find(p => p._id === confirmId);
 
+  // Compute which plan is the latest (highest planNumber) per voyage.
+  // Only the latest plan can be deleted to prevent sequential numbering gaps.
+  const deletablePlanIds: Set<string> = (() => {
+    const latestByVoyage = new Map<string, AdminPlan>();
+    for (const p of plans) {
+      const key = p.voyageRawId ?? p._id; // plans without a voyage key are self-keyed
+      const current = latestByVoyage.get(key);
+      if (!current || (p.planNumber ?? '') > (current.planNumber ?? '')) {
+        latestByVoyage.set(key, p);
+      }
+    }
+    return new Set(Array.from(latestByVoyage.values()).map(p => p._id));
+  })();
+
   const handleDelete = () => {
     if (!confirmId) return;
     setErrorMsg(null);
@@ -449,12 +464,22 @@ function PlansTab({ initialPlans }: { initialPlans: AdminPlan[] }) {
                     </td>
                     <td className={styles.cellMono}>{fmtDate(p.createdAt)}</td>
                     <td className={styles.cellActions}>
-                      <button
-                        className={styles.btnDanger}
-                        onClick={() => { setConfirmId(p._id); setErrorMsg(null); }}
-                      >
-                        Delete
-                      </button>
+                      {deletablePlanIds.has(p._id) ? (
+                        <button
+                          className={styles.btnDanger}
+                          onClick={() => { setConfirmId(p._id); setErrorMsg(null); }}
+                        >
+                          Delete
+                        </button>
+                      ) : (
+                        <span
+                          className={styles.cellSecondary}
+                          style={{ fontSize: 'var(--text-xs)', fontStyle: 'italic' }}
+                          title="Newer plans exist — delete them first"
+                        >
+                          newer plan exists
+                        </span>
+                      )}
                     </td>
                   </tr>
                 );
