@@ -46,7 +46,7 @@ export interface PortRotation {
 
 export interface Service {
   _id: string;
-  serviceCode: string; // "SEABAN", "SEAMED", "CARIBANEX"
+  serviceCode: string; // "CARIBANEX" "RAYO"
   shortCode: string;   // "CBX", "RAY", "ANX" — used in contract/booking numbers
   serviceName: string;
   description: string;
