@@ -368,6 +368,103 @@
   transform: translateY(-1px);
 }
 
+/* ── Booking Roster ────────────────────────────────────────────────────── */
+
+.bookingRoster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--border-color);
+  margin-top: 0.5rem;
+}
+
+.rosterCard {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 5px;
+  border: 1px solid var(--border-color);
+  background: var(--surface-base);
+  cursor: pointer;
+  font-size: 0.78rem;
+  transition: all 0.15s;
+  line-height: 1;
+}
+
+.rosterCard:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  background: rgba(14, 165, 233, 0.05);
+}
+
+.rosterCard:disabled {
+  cursor: default;
+}
+
+/* Status variants */
+.rosterNone {
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.rosterPartial {
+  border-color: rgba(234, 179, 8, 0.35);
+}
+
+.rosterDone {
+  border-color: rgba(34, 197, 94, 0.25);
+  opacity: 0.7;
+}
+
+/* Selected booking */
+.rosterActive {
+  border-color: var(--accent-primary) !important;
+  background: rgba(14, 165, 233, 0.08) !important;
+  opacity: 1 !important;
+}
+
+.rosterDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rosterNum {
+  font-family: 'Space Grotesk', monospace;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+.rosterBar {
+  width: 44px;
+  height: 4px;
+  background: var(--surface-hover);
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.rosterFill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  opacity: 0.8;
+}
+
+.rosterCount {
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.rosterCountDone  { color: #22c55e; }
+.rosterCountPartial { color: #eab308; }
+.rosterCountNone  { color: #ef4444; }
+
 /* ── Vessel Profile SVG Container ─────────────────────────────────────── */
 
 .svgContainer {
@@ -755,6 +852,22 @@
 
 .compartmentFull {
   opacity: 0.6;
+}
+
+.compartmentFillBar {
+  width: 48px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.compartmentFillInner {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.2s ease;
 }
 
 .capacityWarning {

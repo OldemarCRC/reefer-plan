@@ -818,6 +818,37 @@ export default function StowagePlanDetailPage() {
           )}
         </div>
 
+        {/* Booking Roster — all bookings progress at a glance */}
+        {bookings.length > 0 && (
+          <div className={styles.bookingRoster}>
+            {bookings.map(b => {
+              const assigned = assignedQty(b);
+              const remaining = b.totalQuantity - assigned;
+              const pct = b.totalQuantity > 0 ? Math.min(100, (assigned / b.totalQuantity) * 100) : 0;
+              const isDone = remaining <= 0;
+              const isNone = assigned === 0;
+              return (
+                <button
+                  key={b.bookingId}
+                  className={`${styles.rosterCard} ${isDone ? styles.rosterDone : isNone ? styles.rosterNone : styles.rosterPartial} ${b.bookingId === selectedBookingId ? styles.rosterActive : ''}`}
+                  onClick={() => setSelectedBookingId(b.bookingId)}
+                  title={`${b.bookingNumber} · ${b.cargoType.replace(/_/g, ' ')} · ${b.consignee} · ${assigned}/${b.totalQuantity} pallets`}
+                  disabled={isLocked && !isDone}
+                >
+                  <span className={styles.rosterDot} style={{ background: getCargoTypeColor(b.cargoType) }} />
+                  <span className={styles.rosterNum}>{b.bookingNumber}</span>
+                  <div className={styles.rosterBar}>
+                    <div className={styles.rosterFill} style={{ width: `${pct}%`, background: getCargoTypeColor(b.cargoType) }} />
+                  </div>
+                  <span className={`${styles.rosterCount} ${isDone ? styles.rosterCountDone : isNone ? styles.rosterCountNone : styles.rosterCountPartial}`}>
+                    {isDone ? '✓' : `${remaining} left`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Assignment tags for selected booking */}
         {selectedBooking && selectedBooking.assignments.length > 0 && (
           <div className={styles.assignmentTags}>
@@ -1195,6 +1226,8 @@ export default function StowagePlanDetailPage() {
                     const used = usedInCompartment[compId] ?? 0;
                     const free = cap - used;
                     const isFull = cap > 0 && free <= 0;
+                    const fillPct = cap > 0 ? Math.min(100, (used / cap) * 100) : 0;
+                    const fillColor = fillPct >= 100 ? '#ef4444' : fillPct >= 80 ? '#eab308' : '#22c55e';
                     return (
                       <label
                         key={compId}
@@ -1205,13 +1238,25 @@ export default function StowagePlanDetailPage() {
                           name="compartment"
                           value={compId}
                           checked={selectedCompartment === compId}
-                          onChange={() => { setSelectedCompartment(compId); setShowConflictWarning(false); }}
+                          onChange={() => {
+                            setSelectedCompartment(compId);
+                            setShowConflictWarning(false);
+                            // Auto-cap qty to compartment free capacity
+                            if (assigningBooking && free > 0) {
+                              setAssignQuantity(Math.min(remainingQty(assigningBooking), free));
+                            }
+                          }}
                         />
                         <span className={styles.compartmentId}>{compId}</span>
                         {cap > 0 && (
-                          <span className={isFull ? styles.capacityFull : styles.capacityFree}>
-                            {isFull ? 'full' : `${free} free`}
-                          </span>
+                          <>
+                            <div className={styles.compartmentFillBar}>
+                              <div className={styles.compartmentFillInner} style={{ width: `${fillPct}%`, background: fillColor }} />
+                            </div>
+                            <span className={isFull ? styles.capacityFull : styles.capacityFree}>
+                              {isFull ? 'full' : `${free} free`}
+                            </span>
+                          </>
                         )}
                       </label>
                     );
