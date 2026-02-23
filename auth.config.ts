@@ -1,6 +1,3 @@
-// auth.config.ts — Edge-safe NextAuth configuration
-// Used by middleware.ts (no Node.js/Mongoose imports allowed)
-
 import type { NextAuthConfig } from 'next-auth';
 
 export default {
@@ -31,12 +28,23 @@ export default {
         return Response.redirect(new URL('/', nextUrl));
       }
 
+      // Stevedore: allowed routes are / /voyages (list) /stowage-plans (list + detail)
+      // Everything else redirects to /stowage-plans
+      if (role === 'STEVEDORE') {
+        const allowed =
+          pathname === '/' ||
+          pathname === '/voyages' ||
+          pathname === '/stowage-plans' ||
+          pathname.startsWith('/stowage-plans/') && !pathname.startsWith('/stowage-plans/new');
+
+        if (!allowed) {
+          return Response.redirect(new URL('/stowage-plans', nextUrl));
+        }
+      }
+
       return true;
     },
 
-    // Maps JWT token fields onto the session.user object (runs in edge too).
-    // In NextAuth v5 the custom session callback replaces the default, so
-    // name and email must be mapped explicitly alongside role, id, and sessionToken.
     session({ session, token }) {
       if (session.user) {
         session.user.name  = token.name  ?? null;
@@ -48,7 +56,6 @@ export default {
       return session;
     },
   },
-  // Derive base URL from incoming Host header — works for any IP/port/domain
-  // without needing to hardcode NEXTAUTH_URL.
+
   trustHost: true,
 } satisfies NextAuthConfig;
