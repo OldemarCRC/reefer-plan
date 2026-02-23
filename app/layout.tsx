@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Space_Grotesk, Inter } from 'next/font/google';
-import { redirect } from 'next/navigation';
 import Providers from '@/components/layout/Providers';
+import SessionExpiredHandler from '@/components/layout/SessionExpiredHandler';
 import { auth } from '@/auth';
 import { validateSession } from '@/lib/auth/validate-session';
 import './globals.css';
@@ -32,28 +32,19 @@ export default async function RootLayout({
 }) {
   const session = await auth();
 
-  // Detect session invalidated by a newer login elsewhere.
-  // We MUST use redirect() here rather than calling signOut() directly,
-  // because Next.js does NOT allow cookies to be written from a Server
-  // Component. Calling signOut() from here would throw a redirect but leave
-  // the JWT cookie intact, causing an infinite redirect loop.
-  // The Route Handler at /api/auth/force-signout CAN clear the cookie.
-  if (session?.user?.id && !(await validateSession(session))) {
-    redirect('/api/auth/force-signout');
-    // redirect() returns `never` — TypeScript knows execution stops here.
-  }
+  // If the JWT token exists but the DB sessionToken no longer matches (a newer
+  // login replaced this session), let the client call signOut() to clear the
+  // JWT cookie. The DB is already in the correct state — we must NOT modify it
+  // here, because the DB now holds the NEW session's token and clearing it
+  // would also invalidate the legitimate replacement session.
+  const sessionInvalid =
+    !!session?.user?.id && !(await validateSession(session));
 
   return (
     <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable}`}>
       <body>
-        {/*
-          Pass the resolved session so SessionProvider has it immediately.
-          Without this, useSession() starts as { data: null, status: 'loading' }
-          and AppShell renders '?' until the /api/auth/session round-trip
-          completes.
-        */}
-        <Providers session={session}>
-          {children}
+        <Providers session={sessionInvalid ? null : session}>
+          {sessionInvalid ? <SessionExpiredHandler /> : children}
         </Providers>
       </body>
     </html>
