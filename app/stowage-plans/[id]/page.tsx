@@ -52,6 +52,8 @@ export default function StowagePlanDetailPage() {
   const [showSentModal, setShowSentModal] = useState(false);
   const [selectedBookingId, setSelectedBookingId] = useState<string>('');
   const [expandedValidation, setExpandedValidation] = useState<Record<string, boolean>>({});
+  const [communicationLog, setCommunicationLog] = useState<any[]>([]);
+  const [captainComm, setCaptainComm] = useState<any>(null);
 
   // Plan header info — populated from DB on mount
   const [plan, setPlan] = useState({
@@ -122,6 +124,10 @@ export default function StowagePlanDetailPage() {
             }))
           );
         }
+
+        // Communication log + captain response
+        setCommunicationLog(p.communicationLog ?? []);
+        setCaptainComm(p.captainCommunication ?? null);
 
         // Load confirmed bookings for this voyage
         const voyageId = typeof p.voyageId === 'object' ? p.voyageId?._id : p.voyageId;
@@ -559,6 +565,14 @@ export default function StowagePlanDetailPage() {
   };
 
   const totalViolations = validation.temperatureConflicts.length + validation.overstowViolations.length + validation.capacityViolations.length;
+
+  const formatDate = (d: string | Date) => {
+    if (!d) return '';
+    return new Date(d).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  };
 
   return (
     <AppShell activeVessel={plan.vesselName} activeVoyage={plan.voyageNumber}>
@@ -1005,6 +1019,87 @@ export default function StowagePlanDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Communication Log */}
+      {(communicationLog.length > 0 || captainComm?.responseType) && (
+        <div className={styles.commLog}>
+          <h3 className={styles.commLogTitle}>Communication Log</h3>
+
+          {communicationLog.map((entry: any, idx: number) => (
+            <div key={idx} className={styles.commLogEntry}>
+              <div className={styles.commLogEntryHeader}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className={styles.commLogIcon}>
+                  <path d="M4 4h16v12H4V4z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                  <path d="M4 4l8 8 8-8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+                <span className={styles.commLogDate}>{formatDate(entry.sentAt)}</span>
+                <span className={styles.commLogSentBy}>by {entry.sentBy || 'system'}</span>
+                {entry.planStatus && (
+                  <span className={styles.commLogStatusBadge}>{entry.planStatus.replace(/_/g, ' ')}</span>
+                )}
+              </div>
+
+              <div className={styles.commLogRecipients}>
+                {entry.recipients?.map((r: any, i: number) => (
+                  <span key={i} className={r.role === 'CAPTAIN' ? styles.recipientCaptain : styles.recipientCC}>
+                    {r.role === 'CAPTAIN' ? (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                        <path d="M3 18l9-13 9 13H3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+                      </svg>
+                    ) : (
+                      <span className={styles.ccLabel}>CC</span>
+                    )}
+                    {r.name ? `${r.name} <${r.email}>` : r.email}
+                  </span>
+                ))}
+              </div>
+
+              {entry.note && (
+                <p className={styles.commLogNote}>"{entry.note}"</p>
+              )}
+            </div>
+          ))}
+
+          {captainComm?.responseType && captainComm.responseType !== 'PENDING' && (
+            <div className={captainComm.responseType === 'APPROVED' ? styles.captainApproved : styles.captainRejected}>
+              <div className={styles.captainResponseHeader}>
+                {captainComm.responseType === 'APPROVED' ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="#22c55e" strokeWidth="2"/>
+                    <path d="M8 12l3 3 5-6" stroke="#22c55e" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="#ef4444" strokeWidth="2"/>
+                    <path d="M9 9l6 6M15 9l-6 6" stroke="#ef4444" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                )}
+                <span className={styles.captainResponseLabel}>
+                  Captain {captainComm.responseType === 'APPROVED' ? 'Approved' : 'Rejected'}
+                </span>
+                {captainComm.captainName && (
+                  <span className={styles.captainName}>{captainComm.captainName}</span>
+                )}
+                {captainComm.responseReceivedAt && (
+                  <span className={styles.commLogDate}>{formatDate(captainComm.responseReceivedAt)}</span>
+                )}
+              </div>
+
+              {captainComm.captainComments && (
+                <p className={styles.captainComments}>"{captainComm.captainComments}"</p>
+              )}
+
+              {captainComm.rejectionReasons && captainComm.rejectionReasons.length > 0 && (
+                <ul className={styles.rejectionReasons}>
+                  {captainComm.rejectionReasons.map((reason: string, i: number) => (
+                    <li key={i}>{reason}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Assign to Compartment Modal */}
       {assigningBooking && (
