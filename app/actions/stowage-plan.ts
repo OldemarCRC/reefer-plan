@@ -14,6 +14,7 @@ import connectDB from '@/lib/db/connect';
 import { StowagePlanModel, VesselModel, VoyageModel, BookingModel } from '@/lib/db/schemas';
 import type { StowagePlan, StowagePlanStatus } from '@/types/models';
 import { sendPlanNotification } from '@/lib/email';
+import { generatePlanPdf } from '@/lib/generate-plan-pdf';
 
 // ISO week number from a date (1–53)
 function getISOWeek(date: Date): number {
@@ -815,7 +816,7 @@ export async function markPlanSent(data: unknown) {
 
     const plan = await StowagePlanModel.findById(validated.planId)
       .populate('vesselId', 'name')
-      .populate('voyageId', 'voyageNumber');
+      .populate('voyageId', 'voyageNumber portCalls');
     if (!plan) {
       return { success: false, error: 'Plan not found' };
     }
@@ -832,10 +833,75 @@ export async function markPlanSent(data: unknown) {
 
     const ccRecipients = validated.recipients.filter(r => r.role === 'CC');
 
-    // Send the actual email
+    // Build PDF data ──────────────────────────────────────────────────────────
     const vesselName: string = (plan.vesselId as any)?.name ?? plan.vesselName ?? 'Unknown Vessel';
     const voyageNumber: string = (plan.voyageId as any)?.voyageNumber ?? plan.voyageNumber ?? 'N/A';
 
+    // Look up booking numbers for cargo positions
+    const rawBookingIds = (plan.cargoPositions ?? [])
+      .map((p: any) => p.bookingId)
+      .filter(Boolean);
+    const uniqueIds = [...new Set(rawBookingIds.map((id: any) => String(id)))];
+    const bookingDocs = uniqueIds.length > 0
+      ? await BookingModel.find({ _id: { $in: uniqueIds } }, 'bookingNumber').lean()
+      : [];
+    const bookingMap: Record<string, string> = Object.fromEntries(
+      (bookingDocs as any[]).map((b: any) => [String(b._id), b.bookingNumber as string])
+    );
+
+    // Zone lookup: compartmentId → { zoneId, temp }
+    const zoneByComp: Record<string, { zoneId: string; temp: number }> = {};
+    for (const cs of (plan.coolingSectionStatus ?? [])) {
+      for (const sId of ((cs as any).coolingSectionIds ?? [])) {
+        zoneByComp[sId] = { zoneId: (cs as any).zoneId, temp: (cs as any).assignedTemperature ?? 13 };
+      }
+    }
+
+    // Generate PDF (non-fatal — fall back to no attachment on error)
+    let pdfBuffer: Buffer | undefined;
+    try {
+      pdfBuffer = await generatePlanPdf({
+        planNumber: plan.planNumber,
+        vesselName,
+        voyageNumber,
+        generatedAt: new Date(),
+        temperatureZones: (plan.coolingSectionStatus ?? []).map((cs: any) => ({
+          zoneId: cs.zoneId,
+          coolingSectionIds: cs.coolingSectionIds ?? [],
+          assignedTemperature: cs.assignedTemperature ?? 13,
+        })),
+        cargoRows: (plan.cargoPositions ?? [])
+          .filter((pos: any) => pos.compartment?.id && (pos.quantity ?? 0) > 0)
+          .map((pos: any) => {
+            const compId: string = pos.compartment.id;
+            const zone = zoneByComp[compId] ?? { zoneId: '-', temp: 0 };
+            return {
+              compartmentId: compId,
+              zoneId: zone.zoneId,
+              assignedTemperature: zone.temp,
+              cargoType: pos.cargoType ?? '-',
+              bookingRef: (pos.bookingId && bookingMap[String(pos.bookingId)])
+                || String(pos.bookingId ?? '-'),
+              quantity: pos.quantity ?? 0,
+            };
+          }),
+        portCalls: ((plan.voyageId as any)?.portCalls ?? [])
+          .map((pc: any) => ({
+            sequence: pc.sequence ?? 0,
+            portCode: pc.portCode,
+            portName: pc.portName,
+            eta: pc.eta ? String(pc.eta) : undefined,
+            etd: pc.etd ? String(pc.etd) : undefined,
+            operations: pc.operations ?? [],
+            status: pc.status,
+          }))
+          .sort((a: any, b: any) => a.sequence - b.sequence),
+      });
+    } catch (pdfErr) {
+      console.error('PDF generation failed (sending email without attachment):', pdfErr);
+    }
+
+    // Send the actual email ───────────────────────────────────────────────────
     await sendPlanNotification({
       to: { name: captain.name, email: captain.email },
       cc: ccRecipients.map(r => ({ name: r.name, email: r.email })),
@@ -843,6 +909,7 @@ export async function markPlanSent(data: unknown) {
       vesselName,
       voyageNumber,
       note: validated.note,
+      pdfBuffer,
     });
 
     // Lock the plan and record the communication log

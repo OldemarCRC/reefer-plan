@@ -12,6 +12,7 @@ import { getStowagePlanById, deleteStowagePlan, saveCargoAssignments, updatePlan
 import MarkSentModal from '@/components/stowage/MarkSentModal';
 import { getConfirmedBookingsForVoyage } from '@/app/actions/booking';
 import ConfigureZonesModal, { type ZoneConfig } from '@/components/vessel/ConfigureZonesModal';
+import CoolingSectionTopDown, { type SectionBookingSlot } from '@/components/stowage/CoolingSectionTopDown';
 import type { VoyageTempAssignment } from '@/lib/vessel-profile-data';
 import styles from './page.module.css';
 
@@ -54,6 +55,7 @@ export default function StowagePlanDetailPage() {
   const [expandedValidation, setExpandedValidation] = useState<Record<string, boolean>>({});
   const [communicationLog, setCommunicationLog] = useState<any[]>([]);
   const [captainComm, setCaptainComm] = useState<any>(null);
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
 
   // Plan header info — populated from DB on mount
   const [plan, setPlan] = useState({
@@ -414,6 +416,47 @@ export default function StowagePlanDetailPage() {
       FROZEN_FISH: '#06b6d4',
     };
     return colors[cargoType] || '#64748b';
+  };
+
+  // ── Top-down view data ────────────────────────────────────────────────────────
+  // Build the slot list for the currently selected section
+  const selectedSectionSlots = useMemo((): SectionBookingSlot[] => {
+    if (!selectedSectionId) return [];
+    return bookings.map(b => ({
+      bookingId: b.bookingId,
+      bookingNumber: b.bookingNumber,
+      cargoType: b.cargoType,
+      quantity: b.assignments.find(a => a.compartmentId === selectedSectionId)?.quantity ?? 0,
+      color: getCargoTypeColor(b.cargoType),
+    }));
+  }, [selectedSectionId, bookings]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Resolve temperature + zone colour for the selected section
+  const selectedSectionInfo = useMemo(() => {
+    if (!selectedSectionId) return null;
+    for (const zone of tempZoneConfig) {
+      if (zone.compartments.includes(selectedSectionId)) {
+        return { temperature: zone.temp, zoneColor: tempToColor(zone.temp) };
+      }
+    }
+    return { temperature: 0, zoneColor: '#64748b' };
+  }, [selectedSectionId, tempZoneConfig]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle quantity changes from top-down paint interaction
+  const handleTopDownChange = (newSlots: SectionBookingSlot[]) => {
+    if (!selectedSectionId) return;
+    setBookings(prev => prev.map(b => {
+      const slot = newSlots.find(s => s.bookingId === b.bookingId);
+      if (!slot) return b;
+      if (slot.quantity === 0) {
+        return { ...b, assignments: b.assignments.filter(a => a.compartmentId !== selectedSectionId) };
+      }
+      const existing = b.assignments.find(a => a.compartmentId === selectedSectionId);
+      if (existing) {
+        return { ...b, assignments: b.assignments.map(a => a.compartmentId === selectedSectionId ? { ...a, quantity: slot.quantity } : a) };
+      }
+      return { ...b, assignments: [...b.assignments, { compartmentId: selectedSectionId, quantity: slot.quantity }] };
+    }));
   };
 
   const handleConfirmAssign = () => {
@@ -794,15 +837,31 @@ export default function StowagePlanDetailPage() {
         )}
       </div>
 
-      {/* Vessel Profile SVG — full width */}
+      {/* Vessel Profile SVG — full width; click a section to drill into top-down view */}
       <div className={styles.svgContainer}>
         <VesselProfile
           vesselName={plan.vesselName}
           voyageNumber={plan.voyageNumber}
           tempAssignments={vesselProfileData}
           conflictCompartmentIds={conflictCompartmentIds}
+          onCompartmentClick={(id) => setSelectedSectionId(prev => prev === id ? null : id)}
         />
       </div>
+
+      {/* Top-down cooling section view — rendered when a section is selected */}
+      {selectedSectionId && selectedSectionInfo && (
+        <CoolingSectionTopDown
+          sectionId={selectedSectionId}
+          capacity={compartmentCapacities[selectedSectionId] ?? 0}
+          temperature={selectedSectionInfo.temperature}
+          zoneColor={selectedSectionInfo.zoneColor}
+          slots={selectedSectionSlots}
+          selectedBookingId={selectedBookingId}
+          isLocked={isLocked || !canEdit}
+          onSlotsChange={handleTopDownChange}
+          onClose={() => setSelectedSectionId(null)}
+        />
+      )}
 
       {/* Validation Panel — below SVG, collapsible sections */}
       <div className={styles.validationCollapsible}>

@@ -25,6 +25,7 @@ export interface SendPlanNotificationOptions {
   vesselName: string;
   voyageNumber: string;
   note?: string;
+  pdfBuffer?: Buffer;        // stowage plan PDF attachment (optional)
 }
 
 export async function sendPlanNotification(opts: SendPlanNotificationOptions): Promise<void> {
@@ -42,18 +43,22 @@ export async function sendPlanNotification(opts: SendPlanNotificationOptions): P
 
   const noteBlock = opts.note ? `\nNote from planner: ${opts.note}\n` : '';
 
+  const pdfNote = opts.pdfBuffer
+    ? 'The stowage plan PDF is attached to this email.'
+    : 'A PDF attachment will be available in a future release.';
+
   const text = `
 Stowage Plan Notification
-─────────────────────────
+-------------------------
 Plan:    ${opts.planNumber}
 Vessel:  ${opts.vesselName}
 Voyage:  ${opts.voyageNumber}
 ${noteBlock}
 This stowage plan has been marked as sent and is now locked for review.
 
-A PDF version of the plan will be attached in a future release.
+${pdfNote}
 
-─────────────────────────
+-------------------------
 Reefer Stowage Planner System
   `.trim();
 
@@ -63,6 +68,11 @@ Reefer Stowage Planner System
     cc: ccAddresses.length > 0 ? ccAddresses : undefined,
     subject,
     text,
+    attachments: opts.pdfBuffer ? [{
+      filename: `${opts.planNumber}.pdf`,
+      content: opts.pdfBuffer,
+      contentType: 'application/pdf',
+    }] : undefined,
   });
 }
 
