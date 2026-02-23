@@ -242,6 +242,49 @@
   cursor: not-allowed;
 }
 
+/* --- Captain response buttons (Approved / Rejected) --- */
+
+.btnApprove {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--color-success);
+  background: var(--color-success-muted);
+  color: var(--color-success);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btnApprove:hover:not(:disabled) {
+  background: var(--color-success);
+  color: white;
+}
+
+.btnReject {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--color-danger);
+  background: transparent;
+  color: var(--color-danger);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btnReject:hover:not(:disabled) {
+  background: var(--color-danger-muted);
+}
+
+.btnApprove:disabled,
+.btnReject:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* --- Small danger button (delete plan) --- */
 
 .btnDangerSm {
@@ -287,6 +330,54 @@
 
 .dateInput:focus {
   outline: none;
+}
+
+/* --- Actual arrival/departure display (ATA/ATD) --- */
+
+.actualValue {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  margin-top: 3px;
+}
+
+.actualError {
+  font-size: 10px;
+  color: var(--color-danger);
+  margin-top: 3px;
+}
+
+/* --- Actual arrival/departure edit inputs --- */
+
+.actualInputRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.actualLabel {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  min-width: 28px;
+}
+
+.dateTimeInput {
+  padding: 3px 6px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  width: 165px;
+}
+
+.dateTimeInput:focus {
+  outline: none;
+  border-color: var(--color-cyan);
 }
 
 /* --- Port edit inputs (CHANGE_PORT mode) --- */

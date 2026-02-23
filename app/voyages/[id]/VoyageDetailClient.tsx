@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { deleteVoyage, updatePortRotation, resequencePortCallsByEta } from '@/app/actions/voyage';
-import { deleteStowagePlan } from '@/app/actions/stowage-plan';
+import { deleteStowagePlan, markCaptainResponse } from '@/app/actions/stowage-plan';
 import styles from './page.module.css';
 import clientStyles from './VoyageDetailClient.module.css';
 
@@ -18,6 +19,8 @@ interface PortCallRow {
   sequence: number;
   eta?: string | null;
   etd?: string | null;
+  ata?: string | null;
+  atd?: string | null;
   operations: string[];
   locked?: boolean;
   status?: string;
@@ -110,19 +113,91 @@ export function DeleteVoyageButton({ voyageId, voyageNumber, voyageStatus }: {
 }
 
 // ---------------------------------------------------------------------------
-// Delete Stowage Plan Button (used in voyage detail plan list)
+// Plan Action Buttons (used in voyage detail plan list)
+// Shows: Delete (draft) | Approved/Rejected (EMAIL_SENT) | nothing (locked/stevedore)
 // ---------------------------------------------------------------------------
 
-export function DeletePlanButton({ planId, planNumber, voyageId }: {
+const SENT_OR_LOCKED_STATUSES = [
+  'EMAIL_SENT', 'CAPTAIN_APPROVED', 'CAPTAIN_REJECTED',
+  'IN_REVISION', 'READY_FOR_EXECUTION', 'IN_EXECUTION', 'COMPLETED',
+];
+
+const CAN_EDIT_ROLES = ['ADMIN', 'SHIPPING_PLANNER'];
+
+// Captain response buttons — shown when plan is EMAIL_SENT and user can edit
+function CaptainResponseButtons({ planId, planNumber, voyageId }: {
+  planId: string; planNumber: string; voyageId: string;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const respond = (response: 'CAPTAIN_APPROVED' | 'CAPTAIN_REJECTED') => {
+    startTransition(async () => {
+      const result = await markCaptainResponse(planId, response);
+      if (result.success) {
+        router.refresh();
+      } else {
+        setError(result.error ?? 'Failed to record response');
+      }
+    });
+  };
+
+  return (
+    <>
+      <button
+        className={clientStyles.btnApprove}
+        onClick={() => respond('CAPTAIN_APPROVED')}
+        disabled={isPending}
+        title={`Mark plan ${planNumber} as approved by captain`}
+      >
+        ✓ Captain Approved
+      </button>
+      <button
+        className={clientStyles.btnReject}
+        onClick={() => respond('CAPTAIN_REJECTED')}
+        disabled={isPending}
+        title={`Mark plan ${planNumber} as rejected by captain`}
+      >
+        ✗ Rejected
+      </button>
+      {error && <span className={clientStyles.inlineError}>{error}</span>}
+    </>
+  );
+}
+
+/** @deprecated Use PlanActionButtons */
+export function DeletePlanButton(props: {
+  planId: string; planNumber: string; voyageId: string; planStatus: string;
+}) {
+  return <PlanActionButtons {...props} />;
+}
+
+export function PlanActionButtons({ planId, planNumber, voyageId, planStatus }: {
   planId: string;
   planNumber: string;
   voyageId: string;
+  planStatus: string;
 }) {
   const router = useRouter();
+  const { data: session } = useSession();
+  const role = session?.user?.role ?? '';
   const [showConfirm, setShowConfirm] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // Only ADMIN and SHIPPING_PLANNER can take actions
+  if (!CAN_EDIT_ROLES.includes(role)) return null;
+
+  // Sent and awaiting captain response → show Approved / Rejected
+  if (planStatus === 'EMAIL_SENT') {
+    return <CaptainResponseButtons planId={planId} planNumber={planNumber} voyageId={voyageId} />;
+  }
+
+  // Any other locked status → no actions
+  if (SENT_OR_LOCKED_STATUSES.includes(planStatus)) return null;
+
+  // Draft / Estimated → show Delete
   const handleDelete = () => {
     startTransition(async () => {
       const result = await deleteStowagePlan(planId);
@@ -207,6 +282,8 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
   servicePortRotation?: ServicePort[];
 }) {
   const router = useRouter();
+  const { data: session } = useSession();
+  const canEdit = CAN_EDIT_ROLES.includes(session?.user?.role ?? '');
   const [portCalls, setPortCalls] = useState<PortCallRow[]>(initialPortCalls);
 
   // Inline edit state
@@ -214,6 +291,10 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [editEta, setEditEta] = useState('');
   const [editEtd, setEditEtd] = useState('');
+  const [editAta, setEditAta] = useState('');
+  const [editAtd, setEditAtd] = useState('');
+  const [ataError, setAtaError] = useState('');
+  const [atdError, setAtdError] = useState('');
   const [editPortCode, setEditPortCode] = useState('');
   const [editPortName, setEditPortName] = useState('');
   const [editPortCountry, setEditPortCountry] = useState('');
@@ -244,10 +325,24 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
     try { return new Date(d).toISOString().split('T')[0]; } catch { return ''; }
   };
 
+  const toDateTimeLocalStr = (d: string | null | undefined) => {
+    if (!d) return '';
+    try { return new Date(d).toISOString().slice(0, 16); } catch { return ''; }
+  };
+
   const formatDate = (d: string | null | undefined) => {
     if (!d) return '—';
     try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }); }
     catch { return '—'; }
+  };
+
+  const formatDateTime = (d: string | null | undefined) => {
+    if (!d) return '—';
+    try {
+      return new Date(d).toLocaleString('en-US', {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      });
+    } catch { return '—'; }
   };
 
   const clearFeedback = () => {
@@ -278,6 +373,10 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
     setEditMode('dates');
     setEditEta(toDateStr(pc.eta));
     setEditEtd(toDateStr(pc.etd));
+    setEditAta(toDateTimeLocalStr(pc.ata));
+    setEditAtd(toDateTimeLocalStr(pc.atd));
+    setAtaError('');
+    setAtdError('');
   };
 
   const startEditPort = (pc: PortCallRow) => {
@@ -300,12 +399,25 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
   const cancelEdit = () => {
     setEditingPort(null);
     setEditMode(null);
+    setAtaError('');
+    setAtdError('');
   };
 
   // Save date change then resequence by ETA
   const saveDates = (portCode: string) => {
-    if (editEta && editEtd && editEta >= editEtd) {
-      setError('ETA must be before ETD — vessel cannot depart before arriving');
+    if (editEta && editEtd && editEtd < editEta) {
+      setError('ETD cannot be before ETA — vessel cannot depart before arriving');
+      clearFeedback();
+      return;
+    }
+    const now = new Date();
+    if (editAta && new Date(editAta) > now) {
+      setError('ATA cannot be in the future — actual arrival must have already occurred');
+      clearFeedback();
+      return;
+    }
+    if (editAtd && new Date(editAtd) > now) {
+      setError('ATD cannot be in the future — actual departure must have already occurred');
       clearFeedback();
       return;
     }
@@ -315,6 +427,8 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
         portCode,
         eta: editEta || undefined,
         etd: editEtd || undefined,
+        ata: editAta || undefined,
+        atd: editAtd || undefined,
       }]);
       if (result.success) {
         setEditingPort(null);
@@ -417,8 +531,8 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
       clearFeedback();
       return;
     }
-    if (addEta && addEtd && addEta >= addEtd) {
-      setError('ETA must be before ETD — vessel cannot depart before arriving');
+    if (addEta && addEtd && addEtd < addEta) {
+      setError('ETD cannot be before ETA — vessel cannot depart before arriving');
       clearFeedback();
       return;
     }
@@ -570,6 +684,25 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
                           value={editEta}
                           onChange={e => setEditEta(e.target.value)}
                         />
+                        <div className={clientStyles.actualInputRow}>
+                          <label className={clientStyles.actualLabel}>ATA</label>
+                          <input
+                            type="datetime-local"
+                            className={clientStyles.dateTimeInput}
+                            value={editAta}
+                            max={new Date().toISOString().slice(0, 16)}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setEditAta(val);
+                              if (val && new Date(val) > new Date()) {
+                                setAtaError('ATA cannot be in the future');
+                              } else {
+                                setAtaError('');
+                              }
+                            }}
+                          />
+                        </div>
+                        {ataError && <div className={clientStyles.actualError}>{ataError}</div>}
                       </td>
                       <td>
                         <input
@@ -578,12 +711,41 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
                           value={editEtd}
                           onChange={e => setEditEtd(e.target.value)}
                         />
+                        <div className={clientStyles.actualInputRow}>
+                          <label className={clientStyles.actualLabel}>ATD</label>
+                          <input
+                            type="datetime-local"
+                            className={clientStyles.dateTimeInput}
+                            value={editAtd}
+                            max={new Date().toISOString().slice(0, 16)}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setEditAtd(val);
+                              if (val && new Date(val) > new Date()) {
+                                setAtdError('ATD cannot be in the future');
+                              } else {
+                                setAtdError('');
+                              }
+                            }}
+                          />
+                        </div>
+                        {atdError && <div className={clientStyles.actualError}>{atdError}</div>}
                       </td>
                     </>
                   ) : (
                     <>
-                      <td className={styles.cellMono}>{formatDate(pc.eta)}</td>
-                      <td className={styles.cellMono}>{formatDate(pc.etd)}</td>
+                      <td className={styles.cellMono}>
+                        {formatDate(pc.eta)}
+                        {pc.ata && (
+                          <div className={clientStyles.actualValue}>ATA {formatDateTime(pc.ata)}</div>
+                        )}
+                      </td>
+                      <td className={styles.cellMono}>
+                        {formatDate(pc.etd)}
+                        {pc.atd && (
+                          <div className={clientStyles.actualValue}>ATD {formatDateTime(pc.atd)}</div>
+                        )}
+                      </td>
                     </>
                   )}
 
@@ -611,14 +773,14 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
 
                   {/* Actions */}
                   <td>
-                    {!isLocked && (
+                    {!isLocked && canEdit && (
                       <div className={clientStyles.rowActions}>
                         {isEditing ? (
                           <>
                             <button
                               className={clientStyles.btnSave}
                               onClick={() => editMode === 'dates' ? saveDates(pc.portCode) : savePortChange(pc.portCode)}
-                              disabled={isPending}
+                              disabled={isPending || !!ataError || !!atdError}
                             >
                               Save
                             </button>
@@ -675,8 +837,8 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
         </table>
       </div>
 
-      {/* Add Port Call section */}
-      <div className={clientStyles.addPortSection}>
+      {/* Add Port Call section — hidden for read-only roles */}
+      <div className={clientStyles.addPortSection} style={canEdit ? undefined : { display: 'none' }}>
         {showAddForm ? (
           <div className={clientStyles.addPortForm}>
             <div className={clientStyles.addPortRow}>
@@ -804,6 +966,7 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
                 value={cancelReason}
                 onChange={e => setCancelReason(e.target.value)}
                 placeholder="e.g. Port strike, bad weather, commercial change"
+                maxLength={300}
                 onKeyDown={e => { if (e.key === 'Enter') cancelPort(showCancelModal); }}
               />
             </div>
