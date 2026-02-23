@@ -13,6 +13,7 @@ import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
 import { StowagePlanModel, VesselModel, VoyageModel, BookingModel } from '@/lib/db/schemas';
 import type { StowagePlan, StowagePlanStatus } from '@/types/models';
+import { sendPlanNotification } from '@/lib/email';
 
 // ISO week number from a date (1–53)
 function getISOWeek(date: Date): number {
@@ -736,9 +737,21 @@ export async function deleteStowagePlan(planId: unknown) {
 
     await connectDB();
 
-    const plan = await StowagePlanModel.findById(id).select('planNumber voyageId').lean();
+    const plan = await StowagePlanModel.findById(id).select('planNumber voyageId status').lean();
     if (!plan) {
       return { success: false, error: 'Stowage plan not found' };
+    }
+
+    // Guard: plans that have been sent or are in any locked state cannot be deleted
+    const SENT_OR_LOCKED = [
+      'EMAIL_SENT', 'CAPTAIN_APPROVED', 'CAPTAIN_REJECTED',
+      'IN_REVISION', 'READY_FOR_EXECUTION', 'IN_EXECUTION', 'COMPLETED',
+    ];
+    if (SENT_OR_LOCKED.includes((plan as any).status)) {
+      return {
+        success: false,
+        error: `Cannot delete a plan that has been sent or is locked (status: ${(plan as any).status})`,
+      };
     }
 
     // Guard: only the most recent plan for a voyage can be deleted to prevent gaps
@@ -786,9 +799,11 @@ export async function deleteStowagePlan(planId: unknown) {
 
 const MarkPlanSentSchema = z.object({
   planId: z.string().min(1),
-  captainName: z.string().min(1, 'Captain name is required'),
-  captainEmail: z.string().email('Valid captain email required'),
-  ccEmails: z.array(z.string().email()).optional(),
+  recipients: z.array(z.object({
+    name: z.string().optional(),
+    email: z.string().email(),
+    role: z.enum(['CAPTAIN', 'CC']),
+  })).min(1, 'Select at least one recipient'),
   note: z.string().optional(),
 });
 
@@ -798,7 +813,9 @@ export async function markPlanSent(data: unknown) {
 
     await connectDB();
 
-    const plan = await StowagePlanModel.findById(validated.planId);
+    const plan = await StowagePlanModel.findById(validated.planId)
+      .populate('vesselId', 'name')
+      .populate('voyageId', 'voyageNumber');
     if (!plan) {
       return { success: false, error: 'Plan not found' };
     }
@@ -808,17 +825,33 @@ export async function markPlanSent(data: unknown) {
       return { success: false, error: `Plan is already locked (status: ${plan.status})` };
     }
 
-    const recipients: { name?: string; email: string; role: 'CAPTAIN' | 'CC' }[] = [
-      { name: validated.captainName, email: validated.captainEmail, role: 'CAPTAIN' },
-      ...(validated.ccEmails ?? []).map((email: any) => ({ email, role: 'CC' as const })),
-    ];
+    const captain = validated.recipients.find(r => r.role === 'CAPTAIN');
+    if (!captain) {
+      return { success: false, error: 'A captain recipient is required' };
+    }
 
+    const ccRecipients = validated.recipients.filter(r => r.role === 'CC');
+
+    // Send the actual email
+    const vesselName: string = (plan.vesselId as any)?.name ?? plan.vesselName ?? 'Unknown Vessel';
+    const voyageNumber: string = (plan.voyageId as any)?.voyageNumber ?? plan.voyageNumber ?? 'N/A';
+
+    await sendPlanNotification({
+      to: { name: captain.name, email: captain.email },
+      cc: ccRecipients.map(r => ({ name: r.name, email: r.email })),
+      planNumber: plan.planNumber,
+      vesselName,
+      voyageNumber,
+      note: validated.note,
+    });
+
+    // Lock the plan and record the communication log
     plan.status = 'EMAIL_SENT';
 
     plan.captainCommunication = {
       emailSentAt: new Date(),
-      captainName: validated.captainName,
-      captainEmail: validated.captainEmail,
+      captainName: captain.name ?? 'Captain',
+      captainEmail: captain.email,
       responseType: 'PENDING',
     };
 
@@ -828,7 +861,7 @@ export async function markPlanSent(data: unknown) {
     (plan.communicationLog as any[]).push({
       sentAt: new Date(),
       sentBy: 'SYSTEM',
-      recipients,
+      recipients: validated.recipients,
       planStatus: 'EMAIL_SENT',
       note: validated.note ?? undefined,
     });
@@ -839,7 +872,7 @@ export async function markPlanSent(data: unknown) {
 
     return {
       success: true,
-      message: `Plan marked as sent to ${validated.captainEmail}`,
+      message: `Plan sent to ${captain.email}`,
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -847,7 +880,108 @@ export async function markPlanSent(data: unknown) {
     }
     const msg = error instanceof Error ? error.message : String(error);
     console.error('Error marking plan as sent:', msg);
-    return { success: false, error: `Failed to mark plan as sent: ${msg}` };
+    return { success: false, error: `Failed to send plan: ${msg}` };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// MARK CAPTAIN RESPONSE
+// Sets status to CAPTAIN_APPROVED or CAPTAIN_REJECTED and records the event.
+// Only callable by ADMIN / SHIPPING_PLANNER — enforced on the client via role check.
+// ----------------------------------------------------------------------------
+
+export async function markCaptainResponse(
+  planId: unknown,
+  response: 'CAPTAIN_APPROVED' | 'CAPTAIN_REJECTED',
+) {
+  try {
+    const id = StowagePlanIdSchema.parse(planId);
+
+    await connectDB();
+
+    const plan = await StowagePlanModel.findById(id);
+    if (!plan) return { success: false, error: 'Plan not found' };
+
+    if (plan.status !== 'EMAIL_SENT') {
+      return {
+        success: false,
+        error: `Plan must be in EMAIL_SENT status to record captain response (current: ${plan.status})`,
+      };
+    }
+
+    plan.status = response;
+
+    if (plan.captainCommunication) {
+      plan.captainCommunication.responseType =
+        response === 'CAPTAIN_APPROVED' ? 'APPROVED' : 'REJECTED';
+      plan.captainCommunication.responseAt = new Date();
+      plan.markModified('captainCommunication');
+    }
+
+    if (!plan.communicationLog) plan.communicationLog = [];
+    (plan.communicationLog as any[]).push({
+      sentAt: new Date(),
+      sentBy: 'SYSTEM',
+      recipients: [],
+      planStatus: response,
+      note: `Captain ${response === 'CAPTAIN_APPROVED' ? 'approved' : 'rejected'} the plan`,
+    });
+    plan.markModified('communicationLog');
+
+    await plan.save();
+
+    return { success: true };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Error recording captain response:', msg);
+    return { success: false, error: `Failed to record response: ${msg}` };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// GET LATEST PLAN INFO FOR VOYAGES
+// Returns a map of voyageId → latest plan info.
+// Used by the stowage plan wizard to detect revision mode.
+// ----------------------------------------------------------------------------
+
+export interface LatestPlanInfo {
+  planId: string;
+  planNumber: string;
+  status: string;
+  coolingSectionStatus: { zoneId: string; assignedTemperature: number; coolingSectionIds: string[] }[];
+}
+
+export async function getLatestPlanInfoForVoyages(
+  voyageIds: string[],
+): Promise<Record<string, LatestPlanInfo>> {
+  if (voyageIds.length === 0) return {};
+  try {
+    await connectDB();
+    // Sort descending — first plan per voyage encountered is the latest
+    const plans = await StowagePlanModel.find({ voyageId: { $in: voyageIds } })
+      .select('voyageId planNumber status coolingSectionStatus')
+      .sort({ planNumber: -1, createdAt: -1 })
+      .lean();
+
+    const map: Record<string, LatestPlanInfo> = {};
+    for (const plan of plans) {
+      const vid = String((plan as any).voyageId);
+      if (!map[vid]) {
+        map[vid] = {
+          planId: String((plan as any)._id),
+          planNumber: (plan as any).planNumber ?? '',
+          status: (plan as any).status ?? 'DRAFT',
+          coolingSectionStatus: ((plan as any).coolingSectionStatus ?? []).map((cs: any) => ({
+            zoneId: cs.zoneId,
+            assignedTemperature: cs.assignedTemperature ?? 13,
+            coolingSectionIds: cs.coolingSectionIds ?? [],
+          })),
+        };
+      }
+    }
+    return map;
+  } catch {
+    return {};
   }
 }
 
