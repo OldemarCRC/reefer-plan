@@ -278,21 +278,21 @@ function CreateContractModal({
           {/* Client info */}
           <div className={styles.formRow}>
             <label className={styles.formLabel}>Client Name</label>
-            <input className={styles.formInput} value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Company name" />
+            <input className={styles.formInput} value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Company name" required maxLength={120} />
           </div>
           <div className={styles.formGrid2}>
             <div className={styles.formRow}>
               <label className={styles.formLabel}>Contact</label>
-              <input className={styles.formInput} value={clientContact} onChange={(e) => setClientContact(e.target.value)} placeholder="Contact person" />
+              <input className={styles.formInput} value={clientContact} onChange={(e) => setClientContact(e.target.value)} placeholder="Contact person" required maxLength={120} />
             </div>
             <div className={styles.formRow}>
               <label className={styles.formLabel}>Email</label>
-              <input className={styles.formInput} type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="email@example.com" />
+              <input className={styles.formInput} type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="email@example.com" required maxLength={200} />
             </div>
           </div>
           <div className={styles.formRow}>
             <label className={styles.formLabel}>Country</label>
-            <input className={styles.formInput} value={clientCountry} onChange={(e) => setClientCountry(e.target.value)} placeholder="e.g. Netherlands" />
+            <input className={styles.formInput} value={clientCountry} onChange={(e) => setClientCountry(e.target.value)} placeholder="e.g. Netherlands" required maxLength={60} />
           </div>
 
           {/* Service & Route */}
@@ -331,11 +331,11 @@ function CreateContractModal({
           <div className={styles.formGrid2}>
             <div className={styles.formRow}>
               <label className={styles.formLabel}>Valid From</label>
-              <input className={styles.formInput} type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
+              <input className={styles.formInput} type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} required />
             </div>
             <div className={styles.formRow}>
               <label className={styles.formLabel}>Valid To</label>
-              <input className={styles.formInput} type="date" value={validTo} onChange={(e) => setValidTo(e.target.value)} />
+              <input className={styles.formInput} type="date" value={validTo} onChange={(e) => setValidTo(e.target.value)} required min={validFrom || undefined} />
             </div>
           </div>
 
@@ -356,11 +356,11 @@ function CreateContractModal({
               <div className={styles.formGrid2}>
                 <div className={styles.formRow}>
                   <label className={styles.formLabel}>Name</label>
-                  <input className={styles.formInput} value={cp.name} onChange={(e) => updateCounterparty(idx, 'name', e.target.value)} placeholder="Company name" />
+                  <input className={styles.formInput} value={cp.name} onChange={(e) => updateCounterparty(idx, 'name', e.target.value)} placeholder="Company name" maxLength={120} />
                 </div>
                 <div className={styles.formRow}>
                   <label className={styles.formLabel}>Code</label>
-                  <input className={styles.formInput} value={cp.code} onChange={(e) => updateCounterparty(idx, 'code', e.target.value)} placeholder="e.g. SHP01" />
+                  <input className={styles.formInput} value={cp.code} onChange={(e) => updateCounterparty(idx, 'code', e.target.value)} placeholder="e.g. SHP01" maxLength={20} />
                 </div>
               </div>
               <div className={styles.formRow}>

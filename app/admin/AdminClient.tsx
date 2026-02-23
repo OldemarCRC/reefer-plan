@@ -716,20 +716,28 @@ function PortRotationEditor({ ports, onChange }: {
             value={newCode}
             onChange={e => { setNewCode(e.target.value.toUpperCase()); setAddErr(''); }}
             placeholder="CODE"
+            required
             maxLength={6}
+            pattern="[A-Z0-9]{4,6}"
+            title="4–6 uppercase letters/digits (UNLOCODE format)"
           />
           <input
             className={`${styles.portAddInput} ${styles.portAddInputName}`}
             value={newName}
             onChange={e => { setNewName(e.target.value); setAddErr(''); }}
             placeholder="Port name"
+            required
+            maxLength={80}
           />
           <input
             className={`${styles.portAddInput} ${styles.portAddInputCC}`}
             value={newCountry}
             onChange={e => { setNewCountry(e.target.value.toUpperCase()); setAddErr(''); }}
             placeholder="CC"
+            required
             maxLength={2}
+            pattern="[A-Z]{2}"
+            title="2-letter ISO country code"
           />
           <div className={styles.opToggles}>
             {(['LOAD', 'DISCHARGE'] as const).map(op => (
@@ -843,6 +851,8 @@ function CreateServiceModal({ onClose, onCreated }: {
               value={serviceName}
               onChange={e => setServiceName(e.target.value)}
               placeholder="South America Banana Express"
+              required
+              maxLength={80}
             />
           </div>
           <div className={styles.formGroup}>
@@ -974,6 +984,8 @@ function EditServiceModal({ service, onClose, onUpdated }: {
               className={styles.formInput}
               value={serviceName}
               onChange={e => setServiceName(e.target.value)}
+              required
+              maxLength={80}
             />
           </div>
           <div className={styles.formGroup}>
