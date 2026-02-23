@@ -570,8 +570,10 @@ export interface PortCallChange {
   portName?: string;
   country?: string;
   sequence?: number;
-  eta?: string;           // ISO date string
-  etd?: string;           // ISO date string
+  eta?: string;           // ISO date string (estimated arrival)
+  etd?: string;           // ISO date string (estimated departure)
+  ata?: string;           // ISO datetime string (actual arrival)
+  atd?: string;           // ISO datetime string (actual departure)
   operations?: ('LOAD' | 'DISCHARGE')[];
   reason?: string;
   // For CHANGE_PORT action:
@@ -632,11 +634,11 @@ export async function updatePortRotation(
         const pc = portCalls.find((p: any) => p.portCode === change.portCode);
         if (!pc) continue;
 
-        // Validate: ETA must be before ETD
+        // Validate: ETD must not be before ETA (equal is allowed — same-day turnaround)
         const effectiveEta = change.eta !== undefined ? (change.eta ? new Date(change.eta) : undefined) : pc.eta;
         const effectiveEtd = change.etd !== undefined ? (change.etd ? new Date(change.etd) : undefined) : pc.etd;
-        if (effectiveEta && effectiveEtd && effectiveEta >= effectiveEtd) {
-          return { success: false, error: 'ETA must be before ETD — vessel cannot depart before arriving' };
+        if (effectiveEta && effectiveEtd && effectiveEtd < effectiveEta) {
+          return { success: false, error: 'ETD cannot be before ETA — vessel cannot depart before arriving' };
         }
 
         const etaStr = pc.eta ? new Date(pc.eta).toISOString().slice(0, 10) : '';
@@ -644,6 +646,15 @@ export async function updatePortRotation(
         const prev = `ETA:${etaStr},ETD:${etdStr}`;
         if (change.eta !== undefined) pc.eta = change.eta ? new Date(change.eta) : undefined;
         if (change.etd !== undefined) pc.etd = change.etd ? new Date(change.etd) : undefined;
+        // Validate: ATA/ATD cannot be in the future
+        if (change.ata && new Date(change.ata) > now) {
+          return { success: false, error: 'ATA cannot be in the future — actual arrival must have already occurred' };
+        }
+        if (change.atd && new Date(change.atd) > now) {
+          return { success: false, error: 'ATD cannot be in the future — actual departure must have already occurred' };
+        }
+        if (change.ata !== undefined) pc.ata = change.ata ? new Date(change.ata) : undefined;
+        if (change.atd !== undefined) pc.atd = change.atd ? new Date(change.atd) : undefined;
         const etaNew = pc.eta ? new Date(pc.eta).toISOString().slice(0, 10) : '';
         const etdNew = pc.etd ? new Date(pc.etd).toISOString().slice(0, 10) : '';
         changelogEntries.push({
@@ -685,9 +696,9 @@ export async function updatePortRotation(
         });
 
       } else if (change.action === 'ADD') {
-        // Validate: ETA must be before ETD
-        if (change.eta && change.etd && new Date(change.eta) >= new Date(change.etd)) {
-          return { success: false, error: 'ETA must be before ETD — vessel cannot depart before arriving' };
+        // Validate: ETD must not be before ETA (equal is allowed — same-day turnaround)
+        if (change.eta && change.etd && new Date(change.etd) < new Date(change.eta)) {
+          return { success: false, error: 'ETD cannot be before ETA — vessel cannot depart before arriving' };
         }
         const maxSeq = Math.max(0, ...portCalls.map((p: any) => p.sequence));
         const newSeq = change.sequence ?? maxSeq + 1;
