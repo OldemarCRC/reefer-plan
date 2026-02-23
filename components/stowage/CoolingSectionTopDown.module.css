@@ -109,10 +109,33 @@
 .hint {
   margin: 0;
   padding: 0.45rem 1rem;
-  font-size: 0.8rem;
-  color: #475569;
-  background: rgba(14, 165, 233, 0.05);
+  font-size: 0.78rem;
+  color: #64748b;
+  background: rgba(14, 165, 233, 0.04);
   border-bottom: 1px solid #1e3a5f;
+  line-height: 1.4;
+}
+
+/* Mode indicator pills — shown inside the header when a gesture is active */
+.modePill {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 20px;
+  text-transform: uppercase;
+}
+
+.modePaint {
+  background: rgba(14, 165, 233, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+.modeMove {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.25);
 }
 
 /* ── SVG wrapper ─────────────────────────────────────────────────────────────── */
