@@ -410,6 +410,55 @@
   margin-top: 1rem;
 }
 
+/* --- Warning box (unsent previous plan notice) --- */
+.warningBox {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(234, 179, 8, 0.08);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  border-radius: 8px;
+  margin-top: 2rem;
+}
+
+.warningBox svg {
+  flex-shrink: 0;
+  color: #ca8a04;
+  margin-top: 0.125rem;
+}
+
+.warningBox p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.warningBox strong {
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+}
+
+/* --- Revision badge on voyage cards --- */
+.revisionBadge {
+  padding: 0.2rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(99, 102, 241, 0.12);
+  color: #818cf8;
+}
+
+/* --- Read-only temperature display --- */
+.tempReadOnly {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-family: var(--font-mono, monospace);
+}
+
 /* Actions */
 .actions {
   display: flex;
