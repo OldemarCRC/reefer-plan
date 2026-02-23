@@ -10,7 +10,7 @@ import { signOut } from 'next-auth/react';
 
 export default function SessionExpiredHandler() {
   useEffect(() => {
-    signOut({ callbackUrl: '/login' });
+    signOut({ callbackUrl: `${window.location.origin}/login` });
   }, []);
 
   return (

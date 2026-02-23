@@ -14,7 +14,7 @@ interface ProvidersProps {
 
 export default function Providers({ children, session }: ProvidersProps) {
   return (
-    <SessionProvider session={session}>
+    <SessionProvider key={session?.user?.id ?? 'guest'} session={session}>
       <ActivityTracker />
       {children}
     </SessionProvider>

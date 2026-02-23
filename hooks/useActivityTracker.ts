@@ -19,13 +19,21 @@ export function useActivityTracker(enabled: boolean) {
     if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
     inactivityTimerRef.current = setTimeout(() => {
       console.log('[activity] Inactivity timeout — signing out');
-      signOut({ callbackUrl: '/login' });
+      signOut({ callbackUrl: `${window.location.origin}/login` });
     }, INACTIVITY_TIMEOUT);
   }, []);
 
   const sendHeartbeat = useCallback(async () => {
     try {
-      await fetch('/api/auth/heartbeat', { method: 'POST' });
+      const res = await fetch('/api/auth/heartbeat', { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.error === 'session_replaced') {
+          // Another login replaced this session. Sign out immediately.
+          console.log('[activity] session replaced — signing out');
+          signOut({ callbackUrl: `${window.location.origin}/login` });
+        }
+      }
     } catch {
       // Network errors are silently ignored; cleanup job handles stale sessions
     }
