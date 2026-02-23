@@ -4,7 +4,7 @@ import { getStowagePlansByVoyage } from '@/app/actions/stowage-plan';
 import { getBookingsByVoyage } from '@/app/actions/booking';
 import Link from 'next/link';
 import styles from './page.module.css';
-import { PortCallsEditor } from './VoyageDetailClient';
+import { PortCallsEditor, DeletePlanButton } from './VoyageDetailClient';
 
 const statusStyles: Record<string, { bg: string; color: string }> = {
   IN_PROGRESS: { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
@@ -141,6 +141,8 @@ export default async function VoyageDetailPage({
                 sequence: pc.sequence ?? 0,
                 eta: pc.eta ?? null,
                 etd: pc.etd ?? null,
+                ata: pc.ata ?? null,
+                atd: pc.atd ?? null,
                 operations: pc.operations ?? [],
                 locked: pc.locked ?? false,
                 status: pc.status ?? 'SCHEDULED',
@@ -202,19 +204,32 @@ export default async function VoyageDetailPage({
             <p className={styles.cellMuted}>No stowage plans for this voyage.</p>
           ) : (
             <div className={styles.planList}>
-              {plans.map((plan: any) => (
-                <div key={plan._id} className={styles.planRow}>
-                  <div className={styles.planInfo}>
-                    <span className={styles.planName}>{plan.planNumber || `Plan ${plan._id.slice(-6)}`}</span>
-                    <span className={styles.planMeta}>
-                      {plan.status || 'DRAFT'} · Created {formatDate(plan.createdAt)}
-                    </span>
+              {plans.map((plan: any, idx: number) => {
+                const isLatest = idx === 0; // plans are sorted newest-first by getStowagePlansByVoyage
+                return (
+                  <div key={plan._id} className={styles.planRow}>
+                    <div className={styles.planInfo}>
+                      <span className={styles.planName}>{plan.planNumber || `Plan ${plan._id.slice(-6)}`}</span>
+                      <span className={styles.planMeta}>
+                        {plan.status || 'DRAFT'} · Created {formatDate(plan.createdAt)}
+                      </span>
+                    </div>
+                    <div className={styles.planActions}>
+                      <Link href={`/stowage-plans/${plan._id}`} className={styles.btnGhost}>
+                        Open →
+                      </Link>
+                      {isLatest && (
+                        <DeletePlanButton
+                          planId={plan._id}
+                          planNumber={plan.planNumber || plan._id.slice(-6)}
+                          voyageId={id}
+                          planStatus={plan.status || 'DRAFT'}
+                        />
+                      )}
+                    </div>
                   </div>
-                  <Link href={`/stowage-plans/${plan._id}`} className={styles.btnGhost}>
-                    Open →
-                  </Link>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

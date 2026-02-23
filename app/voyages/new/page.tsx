@@ -292,6 +292,10 @@ export default function NewVoyagePage() {
                       value={voyageNumber}
                       onChange={e => setVoyageNumber(e.target.value.toUpperCase())}
                       placeholder="e.g. ACON-062026"
+                      required
+                      maxLength={30}
+                      pattern="[A-Z0-9-]+"
+                      title="Uppercase letters, numbers, and hyphens only"
                     />
                   </div>
 
@@ -345,12 +349,15 @@ export default function NewVoyagePage() {
                               className={styles.dateInput}
                               value={p.eta}
                               onChange={e => handlePortDateChange(p.sequence, 'eta', e.target.value)}
+                              required
                             />
                             <input
                               type="date"
                               className={styles.dateInput}
                               value={p.etd}
+                              min={p.eta || undefined}
                               onChange={e => handlePortDateChange(p.sequence, 'etd', e.target.value)}
+                              required
                             />
                           </>
                         ) : (
