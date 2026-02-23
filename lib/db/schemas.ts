@@ -621,6 +621,9 @@ const UserSchema = new Schema({
   company: { type: String },
   port: { type: String },
   canSendEmailsToCaptains: { type: Boolean, default: false },
+  // Email confirmation
+  emailConfirmed: { type: Boolean, default: false },
+  emailConfirmToken: { type: String, select: false },
   // Session management
   isOnline: { type: Boolean, default: false },
   sessionToken: { type: String, select: false },

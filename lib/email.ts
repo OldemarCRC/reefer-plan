@@ -76,6 +76,48 @@ Reefer Stowage Planner System
   });
 }
 
+// ============================================================================
+// USER ACCOUNT CONFIRMATION EMAIL
+// Sent when an admin creates a new user account
+// ============================================================================
+
+export interface SendUserConfirmationOptions {
+  to: EmailRecipient;
+  confirmToken: string;
+}
+
+export async function sendUserConfirmationEmail(opts: SendUserConfirmationOptions): Promise<void> {
+  const from = `"Reefer Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
+  const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
+  const confirmUrl = `${baseUrl}/confirm/${opts.confirmToken}`;
+
+  const toAddress = opts.to.name
+    ? `"${opts.to.name}" <${opts.to.email}>`
+    : opts.to.email;
+
+  const subject = 'Your Reefer Planner account is ready — set your password';
+
+  const text = `
+Welcome to Reefer Planner, ${opts.to.name ?? opts.to.email}!
+
+An administrator has created an account for you. To activate it and set your password, please visit the link below:
+
+  ${confirmUrl}
+
+This link is valid for 7 days. If you did not request an account, please contact your system administrator.
+
+-------------------------
+Reefer Stowage Planner System
+  `.trim();
+
+  await transporter.sendMail({
+    from,
+    to: toAddress,
+    subject,
+    text,
+  });
+}
+
 // Build the vessel-specific captain email address from the vessel name.
 // "ACONCAGUA BAY" → "oldemar.chaves+aconcagua_bay@gmail.com"
 export function vesselCaptainEmail(vesselName: string): string {

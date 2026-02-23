@@ -20,6 +20,28 @@ const VesselNameSchema = z.string()
   .min(1, 'Vessel name is required')
   .max(200, 'Vessel name too long');
 
+const CreateVesselSchema = z.object({
+  name: z.string().min(1, 'Vessel name is required').max(200),
+  imoNumber: z.string().regex(/^\d{7}$/, 'IMO number must be exactly 7 digits'),
+  flag: z.string().length(2, 'Flag must be a 2-letter ISO country code'),
+  callSign: z.string().max(10).optional(),
+  capacity: z.object({
+    totalPallets: z.number().int().min(1).max(99999).optional(),
+  }).optional(),
+  active: z.boolean().optional(),
+});
+
+const UpdateVesselSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  imoNumber: z.string().regex(/^\d{7}$/, 'IMO number must be exactly 7 digits').optional(),
+  flag: z.string().length(2, 'Flag must be a 2-letter ISO country code').optional(),
+  callSign: z.string().max(10).optional(),
+  capacity: z.object({
+    totalPallets: z.number().int().min(1).max(99999).optional(),
+  }).optional(),
+  active: z.boolean().optional(),
+});
+
 // ----------------------------------------------------------------------------
 // GET ALL VESSELS
 // ----------------------------------------------------------------------------
@@ -304,6 +326,108 @@ export async function validateCoolingSectionTemperature(
     }
     console.error('Error validating cooling section temperature:', error);
     throw error;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// CREATE VESSEL
+// ----------------------------------------------------------------------------
+
+export async function createVessel(input: unknown) {
+  try {
+    const data = CreateVesselSchema.parse(input);
+
+    await connectDB();
+
+    const normalizedName = data.name.trim().toUpperCase();
+    const normalizedFlag = data.flag.toUpperCase();
+
+    const exists = await VesselModel.findOne({ imoNumber: data.imoNumber });
+    if (exists) {
+      return { success: false, error: `IMO number ${data.imoNumber} is already registered` };
+    }
+
+    const vessel = await VesselModel.create({
+      name: normalizedName,
+      imoNumber: data.imoNumber,
+      flag: normalizedFlag,
+      callSign: data.callSign?.toUpperCase().trim(),
+      capacity: data.capacity,
+      active: data.active !== false,
+      temperatureZones: [],
+    });
+
+    return {
+      success: true,
+      data: {
+        _id: vessel._id.toString(),
+        name: vessel.name,
+        imoNumber: vessel.imoNumber,
+        flag: vessel.flag,
+        capacity: vessel.capacity,
+        active: vessel.active !== false,
+        voyageCount: 0,
+      },
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.issues[0].message };
+    }
+    console.error('Error creating vessel:', error);
+    return { success: false, error: 'Failed to create vessel' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// UPDATE VESSEL
+// ----------------------------------------------------------------------------
+
+export async function updateVessel(id: unknown, input: unknown) {
+  try {
+    const vesselId = VesselIdSchema.parse(id);
+    const data = UpdateVesselSchema.parse(input);
+
+    await connectDB();
+
+    // If changing IMO, check uniqueness
+    if (data.imoNumber) {
+      const conflict = await VesselModel.findOne({
+        imoNumber: data.imoNumber,
+        _id: { $ne: vesselId },
+      });
+      if (conflict) {
+        return { success: false, error: `IMO number ${data.imoNumber} is already registered to another vessel` };
+      }
+    }
+
+    const update: Record<string, any> = {};
+    if (data.name !== undefined) update.name = data.name.trim().toUpperCase();
+    if (data.imoNumber !== undefined) update.imoNumber = data.imoNumber;
+    if (data.flag !== undefined) update.flag = data.flag.toUpperCase();
+    if (data.callSign !== undefined) update.callSign = data.callSign.toUpperCase().trim();
+    if (data.capacity !== undefined) update.capacity = data.capacity;
+    if (data.active !== undefined) update.active = data.active;
+
+    const vessel = await VesselModel.findByIdAndUpdate(vesselId, update, { new: true }).lean() as any;
+    if (!vessel) return { success: false, error: 'Vessel not found' };
+
+    return {
+      success: true,
+      data: {
+        _id: vessel._id.toString(),
+        name: vessel.name,
+        imoNumber: vessel.imoNumber,
+        flag: vessel.flag,
+        capacity: vessel.capacity,
+        active: vessel.active !== false,
+      },
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.issues[0].message };
+    }
+    console.error('Error updating vessel:', error);
+    return { success: false, error: 'Failed to update vessel' };
   }
 }
 

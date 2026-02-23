@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { cancelVoyage, hardDeleteVoyage } from '@/app/actions/voyage';
 import { deleteStowagePlan } from '@/app/actions/stowage-plan';
-import { deleteVessel } from '@/app/actions/vessel';
+import { deleteVessel, createVessel, updateVessel } from '@/app/actions/vessel';
 import { deleteService, createService, updateService } from '@/app/actions/service';
+import { createUser, updateUser, deleteUser, resendUserConfirmation } from '@/app/actions/user';
 import ContractsClient from '@/app/contracts/ContractsClient';
 import type { DisplayContract } from '@/app/contracts/ContractsClient';
 import styles from './page.module.css';
@@ -47,6 +48,20 @@ interface AdminVessel {
   capacity?: { totalPallets?: number };
   active?: boolean;
   voyageCount: number;
+}
+
+interface AdminUser {
+  _id: string;
+  email: string;
+  name: string;
+  role: string;
+  company: string;
+  port: string;
+  canSendEmailsToCaptains: boolean;
+  emailConfirmed: boolean;
+  isOnline: boolean;
+  lastLogin: string | null;
+  createdAt: string | null;
 }
 
 interface AdminService {
@@ -520,10 +535,231 @@ function PlansTab({ initialPlans }: { initialPlans: AdminPlan[] }) {
 // Vessels Tab
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Create Vessel Modal
+// ---------------------------------------------------------------------------
+
+function CreateVesselModal({ onClose, onCreated }: {
+  onClose: () => void;
+  onCreated: (v: AdminVessel) => void;
+}) {
+  const [name, setName] = useState('');
+  const [imoNumber, setImoNumber] = useState('');
+  const [flag, setFlag] = useState('');
+  const [callSign, setCallSign] = useState('');
+  const [totalPallets, setTotalPallets] = useState('');
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = () => {
+    if (!name.trim() || !imoNumber.trim() || !flag.trim()) {
+      setError('Vessel name, IMO number and flag are required');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await createVessel({
+        name: name.trim(),
+        imoNumber: imoNumber.trim(),
+        flag: flag.trim().toUpperCase(),
+        callSign: callSign.trim() || undefined,
+        capacity: totalPallets ? { totalPallets: Number(totalPallets) } : undefined,
+      });
+      if (result.success) {
+        onCreated(result.data as AdminVessel);
+      } else {
+        setError(result.error ?? 'Failed to create vessel');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h3 className={styles.modalTitle}>New Vessel</h3>
+
+        <div className={styles.formGrid}>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Vessel Name *</label>
+            <input
+              className={styles.formInput}
+              value={name}
+              onChange={e => setName(e.target.value.toUpperCase())}
+              placeholder="ACONCAGUA BAY"
+              maxLength={200}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>IMO Number * (7 digits)</label>
+            <input
+              className={`${styles.formInput} ${styles.formInputMono}`}
+              value={imoNumber}
+              onChange={e => setImoNumber(e.target.value.replace(/\D/g, '').slice(0, 7))}
+              placeholder="9999999"
+              maxLength={7}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Flag * (2-letter code)</label>
+            <input
+              className={`${styles.formInput} ${styles.formInputMono}`}
+              value={flag}
+              onChange={e => setFlag(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2))}
+              placeholder="PA"
+              maxLength={2}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Call Sign</label>
+            <input
+              className={`${styles.formInput} ${styles.formInputMono}`}
+              value={callSign}
+              onChange={e => setCallSign(e.target.value.toUpperCase())}
+              placeholder="HPXY1"
+              maxLength={10}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Total Pallets</label>
+            <input
+              type="number"
+              className={styles.formInput}
+              value={totalPallets}
+              onChange={e => setTotalPallets(e.target.value)}
+              placeholder="1400"
+              min={1}
+              max={99999}
+            />
+          </div>
+        </div>
+
+        {error && <div className={styles.modalError}>{error}</div>}
+
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
+          <button
+            className={styles.btnPrimary}
+            onClick={handleSubmit}
+            disabled={isPending || !name.trim() || imoNumber.length !== 7 || flag.length !== 2}
+          >
+            {isPending ? 'Creating…' : 'Create Vessel'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Edit Vessel Modal
+// ---------------------------------------------------------------------------
+
+function EditVesselModal({ vessel, onClose, onUpdated }: {
+  vessel: AdminVessel;
+  onClose: () => void;
+  onUpdated: (v: AdminVessel) => void;
+}) {
+  const [name, setName] = useState(vessel.name);
+  const [imoNumber, setImoNumber] = useState(vessel.imoNumber ?? '');
+  const [flag, setFlag] = useState(vessel.flag ?? '');
+  const [totalPallets, setTotalPallets] = useState(String(vessel.capacity?.totalPallets ?? ''));
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = () => {
+    if (!name.trim() || !flag.trim()) {
+      setError('Vessel name and flag are required');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await updateVessel(vessel._id, {
+        name: name.trim(),
+        imoNumber: imoNumber.trim() || undefined,
+        flag: flag.trim().toUpperCase(),
+        capacity: totalPallets ? { totalPallets: Number(totalPallets) } : undefined,
+      });
+      if (result.success) {
+        onUpdated({ ...vessel, ...result.data } as AdminVessel);
+      } else {
+        setError(result.error ?? 'Failed to save vessel');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h3 className={styles.modalTitle}>Edit Vessel</h3>
+
+        <div className={styles.formGrid}>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Vessel Name *</label>
+            <input
+              className={styles.formInput}
+              value={name}
+              onChange={e => setName(e.target.value.toUpperCase())}
+              maxLength={200}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>IMO Number (7 digits)</label>
+            <input
+              className={`${styles.formInput} ${styles.formInputMono}`}
+              value={imoNumber}
+              onChange={e => setImoNumber(e.target.value.replace(/\D/g, '').slice(0, 7))}
+              maxLength={7}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Flag * (2-letter code)</label>
+            <input
+              className={`${styles.formInput} ${styles.formInputMono}`}
+              value={flag}
+              onChange={e => setFlag(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2))}
+              maxLength={2}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Total Pallets</label>
+            <input
+              type="number"
+              className={styles.formInput}
+              value={totalPallets}
+              onChange={e => setTotalPallets(e.target.value)}
+              min={1}
+              max={99999}
+            />
+          </div>
+        </div>
+
+        {error && <div className={styles.modalError}>{error}</div>}
+
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
+          <button
+            className={styles.btnPrimary}
+            onClick={handleSave}
+            disabled={isPending || !name.trim() || flag.length !== 2}
+          >
+            {isPending ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Vessels Tab
+// ---------------------------------------------------------------------------
+
 function VesselsTab({ initialVessels }: { initialVessels: AdminVessel[] }) {
   const router = useRouter();
   const [vessels, setVessels] = useState<AdminVessel[]>(initialVessels);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editingVessel, setEditingVessel] = useState<AdminVessel | null>(null);
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -550,6 +786,9 @@ function VesselsTab({ initialVessels }: { initialVessels: AdminVessel[] }) {
         <div className={styles.toolbarLeft}>
           <span className={styles.toolbarCount}>{vessels.length} vessels</span>
         </div>
+        <button className={styles.btnPrimary} onClick={() => setShowCreate(true)}>
+          + New Vessel
+        </button>
       </div>
 
       <div className={styles.tableWrap}>
@@ -586,6 +825,9 @@ function VesselsTab({ initialVessels }: { initialVessels: AdminVessel[] }) {
                       {v.voyageCount}
                     </td>
                     <td className={styles.cellActions}>
+                      <button className={styles.btnSm} onClick={() => setEditingVessel(v)}>
+                        Edit
+                      </button>
                       <button
                         className={`${styles.btnDanger} ${!canDelete ? styles.btnBlocked : ''}`}
                         onClick={() => { setConfirmId(v._id); setErrorMsg(null); }}
@@ -640,6 +882,27 @@ function VesselsTab({ initialVessels }: { initialVessels: AdminVessel[] }) {
             </div>
           </div>
         </div>
+      )}
+
+      {showCreate && (
+        <CreateVesselModal
+          onClose={() => setShowCreate(false)}
+          onCreated={v => {
+            setVessels(prev => [v, ...prev].sort((a, b) => a.name.localeCompare(b.name)));
+            setShowCreate(false);
+          }}
+        />
+      )}
+
+      {editingVessel && (
+        <EditVesselModal
+          vessel={editingVessel}
+          onClose={() => setEditingVessel(null)}
+          onUpdated={updated => {
+            setVessels(prev => prev.map(v => v._id === updated._id ? { ...v, ...updated } : v));
+            setEditingVessel(null);
+          }}
+        />
       )}
     </div>
   );
@@ -1220,16 +1483,432 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Stub tab (users only)
+// Create User Modal
 // ---------------------------------------------------------------------------
 
-function StubTab({ label }: { label: string }) {
+const USER_ROLES = [
+  { value: 'ADMIN',            label: 'Admin' },
+  { value: 'SHIPPING_PLANNER', label: 'Shipping Planner' },
+  { value: 'STEVEDORE',        label: 'Stevedore' },
+  { value: 'CHECKER',          label: 'Checker' },
+  { value: 'EXPORTER',         label: 'Exporter' },
+  { value: 'VIEWER',           label: 'Viewer' },
+];
+
+function CreateUserModal({ onClose, onCreated }: {
+  onClose: () => void;
+  onCreated: (u: AdminUser) => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [role, setRole] = useState('SHIPPING_PLANNER');
+  const [company, setCompany] = useState('');
+  const [port, setPort] = useState('');
+  const [canSend, setCanSend] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = () => {
+    if (!email.trim() || !name.trim()) {
+      setError('Email and name are required');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await createUser({
+        email: email.trim(),
+        name: name.trim(),
+        role,
+        company: company.trim() || undefined,
+        port: port.trim() || undefined,
+        canSendEmailsToCaptains: canSend,
+      });
+      if (result.success) {
+        onCreated(result.data as AdminUser);
+      } else {
+        setError(result.error ?? 'Failed to create user');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h3 className={styles.modalTitle}>New User</h3>
+        <p className={styles.modalBody}>
+          An invitation email with a confirmation link will be sent to the user.
+        </p>
+
+        <div className={styles.formGrid}>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Email *</label>
+            <input
+              className={styles.formInput}
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="user@company.com"
+            />
+          </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Full Name *</label>
+            <input
+              className={styles.formInput}
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Jane Smith"
+              maxLength={100}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Role *</label>
+            <select
+              className={styles.formSelect}
+              value={role}
+              onChange={e => setRole(e.target.value)}
+            >
+              {USER_ROLES.map(r => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Company</label>
+            <input
+              className={styles.formInput}
+              value={company}
+              onChange={e => setCompany(e.target.value)}
+              placeholder="Acme Exports Ltd."
+              maxLength={100}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Base Port</label>
+            <input
+              className={`${styles.formInput} ${styles.formInputMono}`}
+              value={port}
+              onChange={e => setPort(e.target.value.toUpperCase())}
+              placeholder="CRLIM"
+              maxLength={10}
+            />
+          </div>
+          <div className={styles.formGroup} style={{ justifyContent: 'flex-end' }}>
+            <label className={styles.formLabel} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', textTransform: 'none', letterSpacing: 0 }}>
+              <input
+                type="checkbox"
+                checked={canSend}
+                onChange={e => setCanSend(e.target.checked)}
+              />
+              Can send emails to captains
+            </label>
+          </div>
+        </div>
+
+        {error && <div className={styles.modalError}>{error}</div>}
+
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
+          <button
+            className={styles.btnPrimary}
+            onClick={handleSubmit}
+            disabled={isPending || !email.trim() || !name.trim()}
+          >
+            {isPending ? 'Creating…' : 'Create & Send Invite'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Edit User Modal
+// ---------------------------------------------------------------------------
+
+function EditUserModal({ user, onClose, onUpdated }: {
+  user: AdminUser;
+  onClose: () => void;
+  onUpdated: (u: AdminUser) => void;
+}) {
+  const [name, setName] = useState(user.name);
+  const [role, setRole] = useState(user.role);
+  const [company, setCompany] = useState(user.company);
+  const [port, setPort] = useState(user.port);
+  const [canSend, setCanSend] = useState(user.canSendEmailsToCaptains);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = () => {
+    if (!name.trim()) { setError('Name is required'); return; }
+    setError(null);
+    startTransition(async () => {
+      const result = await updateUser(user._id, {
+        name: name.trim(),
+        role,
+        company: company.trim(),
+        port: port.trim(),
+        canSendEmailsToCaptains: canSend,
+      });
+      if (result.success) {
+        onUpdated({ ...user, ...result.data } as AdminUser);
+      } else {
+        setError(result.error ?? 'Failed to save user');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h3 className={styles.modalTitle}>Edit User</h3>
+        <p className={styles.modalBody} style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
+          {user.email}
+        </p>
+
+        <div className={styles.formGrid}>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Full Name *</label>
+            <input
+              className={styles.formInput}
+              value={name}
+              onChange={e => setName(e.target.value)}
+              maxLength={100}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Role *</label>
+            <select
+              className={styles.formSelect}
+              value={role}
+              onChange={e => setRole(e.target.value)}
+            >
+              {USER_ROLES.map(r => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Company</label>
+            <input
+              className={styles.formInput}
+              value={company}
+              onChange={e => setCompany(e.target.value)}
+              maxLength={100}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Base Port</label>
+            <input
+              className={`${styles.formInput} ${styles.formInputMono}`}
+              value={port}
+              onChange={e => setPort(e.target.value.toUpperCase())}
+              maxLength={10}
+            />
+          </div>
+          <div className={styles.formGroup} style={{ justifyContent: 'flex-end' }}>
+            <label className={styles.formLabel} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', textTransform: 'none', letterSpacing: 0 }}>
+              <input
+                type="checkbox"
+                checked={canSend}
+                onChange={e => setCanSend(e.target.checked)}
+              />
+              Can send emails to captains
+            </label>
+          </div>
+        </div>
+
+        {error && <div className={styles.modalError}>{error}</div>}
+
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
+          <button
+            className={styles.btnPrimary}
+            onClick={handleSave}
+            disabled={isPending || !name.trim()}
+          >
+            {isPending ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Users Tab
+// ---------------------------------------------------------------------------
+
+function UsersTab({ initialUsers }: { initialUsers: AdminUser[] }) {
+  const router = useRouter();
+  const [users, setUsers] = useState<AdminUser[]>(initialUsers);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+
+  const confirmUser = users.find(u => u._id === confirmId);
+
+  const handleDelete = () => {
+    if (!confirmId) return;
+    setErrorMsg(null);
+    startTransition(async () => {
+      const result = await deleteUser(confirmId);
+      if (result.success) {
+        setUsers(prev => prev.filter(u => u._id !== confirmId));
+        setConfirmId(null);
+        router.refresh();
+      } else {
+        setErrorMsg(result.error ?? 'Delete failed');
+      }
+    });
+  };
+
+  const handleResend = (id: string) => {
+    setResendingId(id);
+    startTransition(async () => {
+      await resendUserConfirmation(id);
+      setResendingId(null);
+    });
+  };
+
+  const roleLabel = (role: string) =>
+    USER_ROLES.find(r => r.value === role)?.label ?? role;
+
   return (
     <div className={styles.tabContent}>
-      <div className={styles.stubMsg}>
-        <span className={styles.stubIcon}>🚧</span>
-        <p><strong>{label}</strong> management coming in a follow-up task.</p>
+      <div className={styles.toolbar}>
+        <div className={styles.toolbarLeft}>
+          <span className={styles.toolbarCount}>{users.length} users</span>
+        </div>
+        <button className={styles.btnPrimary} onClick={() => setShowCreate(true)}>
+          + New User
+        </button>
       </div>
+
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Company</th>
+              <th>Status</th>
+              <th className={styles.thActions}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.length === 0 ? (
+              <tr><td colSpan={6} className={styles.emptyCell}>No users found.</td></tr>
+            ) : (
+              users.map(u => (
+                <tr key={u._id}>
+                  <td>
+                    <span style={{ fontWeight: 'var(--weight-medium)' }}>{u.name}</span>
+                    {u.isOnline && (
+                      <span className={styles.wkBadge} style={{ background: 'var(--color-success-muted)', color: 'var(--color-success)' }}>
+                        online
+                      </span>
+                    )}
+                  </td>
+                  <td className={styles.cellMono}>{u.email}</td>
+                  <td>
+                    <span className={styles.badge} style={{
+                      background: u.role === 'ADMIN' ? 'var(--color-warning-muted)' : 'var(--color-bg-tertiary)',
+                      color: u.role === 'ADMIN' ? 'var(--color-warning)' : 'var(--color-text-secondary)',
+                    }}>
+                      {roleLabel(u.role)}
+                    </span>
+                  </td>
+                  <td className={styles.cellSecondary}>{u.company || '—'}</td>
+                  <td>
+                    {u.emailConfirmed ? (
+                      <span className={styles.badge} style={{ background: 'var(--color-success-muted)', color: 'var(--color-success)' }}>
+                        Active
+                      </span>
+                    ) : (
+                      <span className={styles.badge} style={{ background: 'var(--color-warning-muted)', color: 'var(--color-warning)' }}>
+                        Pending
+                      </span>
+                    )}
+                  </td>
+                  <td className={styles.cellActions}>
+                    {!u.emailConfirmed && (
+                      <button
+                        className={styles.btnSm}
+                        onClick={() => handleResend(u._id)}
+                        disabled={resendingId === u._id || isPending}
+                        title="Resend invitation email"
+                      >
+                        {resendingId === u._id ? 'Sending…' : 'Resend'}
+                      </button>
+                    )}
+                    <button className={styles.btnSm} onClick={() => setEditingUser(u)}>
+                      Edit
+                    </button>
+                    <button
+                      className={styles.btnDanger}
+                      onClick={() => { setConfirmId(u._id); setErrorMsg(null); }}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {confirmUser && (
+        <div className={styles.overlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>⚠ Delete User</h3>
+            <div className={styles.modalVoyageInfo}>
+              <span className={styles.modalVoyageNumber}>{confirmUser.name}</span>
+              <span className={styles.cellMono} style={{ fontSize: '0.8em', opacity: 0.7 }}>
+                {confirmUser.email}
+              </span>
+            </div>
+            <p className={styles.modalBody}>
+              This will <strong>permanently remove</strong> the user account.
+              This action cannot be undone.
+            </p>
+            {errorMsg && <div className={styles.modalError}>{errorMsg}</div>}
+            <div className={styles.modalActions}>
+              <button className={styles.btnModalCancel} onClick={() => setConfirmId(null)} disabled={isPending}>
+                Cancel
+              </button>
+              <button className={styles.btnModalDanger} onClick={handleDelete} disabled={isPending}>
+                {isPending ? 'Deleting…' : 'Yes, Delete User'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreate && (
+        <CreateUserModal
+          onClose={() => setShowCreate(false)}
+          onCreated={u => {
+            setUsers(prev => [...prev, u].sort((a, b) => a.name.localeCompare(b.name)));
+            setShowCreate(false);
+          }}
+        />
+      )}
+
+      {editingUser && (
+        <EditUserModal
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onUpdated={updated => {
+            setUsers(prev => prev.map(u => u._id === updated._id ? updated : u));
+            setEditingUser(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1254,9 +1933,10 @@ interface AdminClientProps {
   services: any[];
   plans: AdminPlan[];
   vessels: AdminVessel[];
+  users: AdminUser[];
 }
 
-export default function AdminClient({ voyages, contracts, offices, services, plans, vessels }: AdminClientProps) {
+export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users }: AdminClientProps) {
   const [activeTab, setActiveTab] = useState<Tab>('voyages');
 
   return (
@@ -1294,7 +1974,7 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
       {activeTab === 'plans'    && <PlansTab initialPlans={plans} />}
       {activeTab === 'vessels'  && <VesselsTab initialVessels={vessels} />}
       {activeTab === 'services' && <ServicesTab initialServices={services as AdminService[]} />}
-      {activeTab === 'users'    && <StubTab label="Users" />}
+      {activeTab === 'users'    && <UsersTab initialUsers={users} />}
     </div>
   );
 }

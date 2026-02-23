@@ -20,6 +20,9 @@ export default {
         return true;
       }
 
+      // Account confirmation page: public, no auth required
+      if (pathname.startsWith('/confirm')) return true;
+
       // All other routes require authentication
       if (!isLoggedIn) return false; // NextAuth redirects to pages.signIn
 
