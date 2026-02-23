@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { cancelVoyage, hardDeleteVoyage } from '@/app/actions/voyage';
 import { deleteStowagePlan } from '@/app/actions/stowage-plan';
-import { deleteVessel, createVessel, updateVessel } from '@/app/actions/vessel';
+import { createVessel, updateVessel } from '@/app/actions/vessel';
 import { deleteService, createService, updateService } from '@/app/actions/service';
 import { createUser, updateUser, deleteUser, resendUserConfirmation } from '@/app/actions/user';
 import ContractsClient from '@/app/contracts/ContractsClient';
@@ -40,14 +40,54 @@ interface AdminPlan {
   voyageId?: { voyageNumber?: string; departureDate?: string; weekNumber?: number };
 }
 
+interface ZoneSection {
+  sectionId: string;
+  sqm: number;
+  designStowageFactor: number;
+}
+
+interface VesselZone {
+  zoneId: string;
+  coolingSections: ZoneSection[];
+}
+
 interface AdminVessel {
   _id: string;
   name: string;
   imoNumber?: string;
   flag?: string;
-  capacity?: { totalPallets?: number };
+  callSign?: string;
+  built?: number;
+  capacity?: { totalPallets?: number; totalSqm?: number };
+  temperatureZones?: VesselZone[];
   active?: boolean;
   voyageCount: number;
+}
+
+// Form-level zone types (string values for number inputs during editing)
+interface FormSection { sectionId: string; sqm: string; factor: string; }
+interface FormZone { zoneId: string; sections: FormSection[]; }
+
+function toFormZones(zones?: VesselZone[]): FormZone[] {
+  return (zones ?? []).map(z => ({
+    zoneId: z.zoneId,
+    sections: z.coolingSections.map(s => ({
+      sectionId: s.sectionId,
+      sqm: String(s.sqm),
+      factor: String(s.designStowageFactor),
+    })),
+  }));
+}
+
+function fromFormZones(formZones: FormZone[]) {
+  return formZones.map(z => ({
+    zoneId: z.zoneId,
+    coolingSections: z.sections.map(s => ({
+      sectionId: s.sectionId,
+      sqm: parseFloat(s.sqm) || 0,
+      designStowageFactor: parseFloat(s.factor) || 1.32,
+    })),
+  }));
 }
 
 interface AdminUser {
@@ -536,6 +576,173 @@ function PlansTab({ initialPlans }: { initialPlans: AdminPlan[] }) {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// Temperature Zone Editor
+// ---------------------------------------------------------------------------
+
+function TemperatureZoneEditor({ zones, onChange }: {
+  zones: FormZone[];
+  onChange: (z: FormZone[]) => void;
+}) {
+  const [newZoneId, setNewZoneId] = useState('');
+  const [zoneErr, setZoneErr] = useState('');
+  const [addingSection, setAddingSection] = useState<Record<string, FormSection>>({});
+
+  const getAdding = (zid: string): FormSection =>
+    addingSection[zid] ?? { sectionId: '', sqm: '', factor: '1.32' };
+
+  const setAdding = (zid: string, val: FormSection) =>
+    setAddingSection(prev => ({ ...prev, [zid]: val }));
+
+  const addZone = () => {
+    const zid = newZoneId.trim().toUpperCase();
+    if (!zid) return;
+    if (zones.some(z => z.zoneId === zid)) { setZoneErr('Zone already exists'); return; }
+    onChange([...zones, { zoneId: zid, sections: [] }]);
+    setNewZoneId('');
+    setZoneErr('');
+  };
+
+  const removeZone = (zoneId: string) => onChange(zones.filter(z => z.zoneId !== zoneId));
+
+  const addSection = (zoneId: string) => {
+    const a = getAdding(zoneId);
+    const sid = a.sectionId.trim().toUpperCase();
+    if (!sid || !a.sqm) return;
+    const zone = zones.find(z => z.zoneId === zoneId)!;
+    if (zone.sections.some(s => s.sectionId === sid)) return;
+    onChange(zones.map(z => z.zoneId === zoneId
+      ? { ...z, sections: [...z.sections, { sectionId: sid, sqm: a.sqm, factor: a.factor || '1.32' }] }
+      : z
+    ));
+    setAdding(zoneId, { sectionId: '', sqm: '', factor: '1.32' });
+  };
+
+  const removeSection = (zoneId: string, sectionId: string) =>
+    onChange(zones.map(z => z.zoneId === zoneId
+      ? { ...z, sections: z.sections.filter(s => s.sectionId !== sectionId) }
+      : z
+    ));
+
+  return (
+    <div className={styles.zoneEditor}>
+      {zones.length === 0 && (
+        <p className={styles.portEmptyHint}>No temperature zones yet. Add zones below.</p>
+      )}
+
+      {zones.map(zone => {
+        const a = getAdding(zone.zoneId);
+        const totalSqm = zone.sections.reduce((s, x) => s + (parseFloat(x.sqm) || 0), 0);
+        const totalPallets = zone.sections.reduce((s, x) =>
+          s + Math.floor((parseFloat(x.sqm) || 0) * (parseFloat(x.factor) || 1.32)), 0);
+        return (
+          <div key={zone.zoneId} className={styles.zoneBlock}>
+            <div className={styles.zoneHeader}>
+              <span className={styles.zoneIdTag}>{zone.zoneId}</span>
+              <span className={styles.zoneCount}>
+                {zone.sections.length} section{zone.sections.length !== 1 ? 's' : ''}
+                {totalSqm > 0 && ` · ${totalSqm.toFixed(1)} m² · ~${totalPallets} pallets`}
+              </span>
+              <button type="button" className={styles.btnRemovePort}
+                onClick={() => removeZone(zone.zoneId)} title="Remove zone">×</button>
+            </div>
+
+            {zone.sections.length > 0 && (
+              <div className={styles.zoneTableWrap}>
+                <table className={styles.zoneTable}>
+                  <thead>
+                    <tr>
+                      <th>Section</th>
+                      <th>m²</th>
+                      <th>Design factor</th>
+                      <th>Max pallets *</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {zone.sections.map(s => (
+                      <tr key={s.sectionId}>
+                        <td><span className={styles.zoneIdTag}>{s.sectionId}</span></td>
+                        <td>{s.sqm}</td>
+                        <td>{s.factor}</td>
+                        <td className={styles.calcPallets}>
+                          ~{Math.floor((parseFloat(s.sqm) || 0) * (parseFloat(s.factor) || 1.32))}
+                        </td>
+                        <td>
+                          <button type="button" className={styles.btnRemovePort}
+                            onClick={() => removeSection(zone.zoneId, s.sectionId)}>×</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Add section inline row */}
+            <div className={styles.sectionAddRow}>
+              <input
+                className={`${styles.sectionAddInput} ${styles.sectionAddInputId}`}
+                value={a.sectionId}
+                onChange={e => setAdding(zone.zoneId, { ...a, sectionId: e.target.value.toUpperCase() })}
+                placeholder="1A"
+                maxLength={10}
+                onKeyDown={e => e.key === 'Enter' && addSection(zone.zoneId)}
+              />
+              <input
+                type="number"
+                className={`${styles.sectionAddInput} ${styles.sectionAddInputNum}`}
+                value={a.sqm}
+                onChange={e => setAdding(zone.zoneId, { ...a, sqm: e.target.value })}
+                placeholder="m²"
+                min={0}
+                step={0.1}
+              />
+              <input
+                type="number"
+                className={`${styles.sectionAddInput} ${styles.sectionAddInputNum}`}
+                value={a.factor}
+                onChange={e => setAdding(zone.zoneId, { ...a, factor: e.target.value })}
+                placeholder="1.32"
+                min={0.1}
+                max={10}
+                step={0.01}
+              />
+              <button type="button" className={styles.btnSm}
+                onClick={() => addSection(zone.zoneId)}
+                disabled={!a.sectionId.trim() || !a.sqm}>
+                + Section
+              </button>
+              <span className={styles.calcPallets}>ID · m² · factor</span>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Add zone row */}
+      <div className={styles.portAddForm}>
+        <div className={styles.zoneAddRow}>
+          <input
+            className={`${styles.portAddInput} ${styles.portAddInputCode}`}
+            value={newZoneId}
+            onChange={e => { setNewZoneId(e.target.value.toUpperCase()); setZoneErr(''); }}
+            placeholder="1AB"
+            maxLength={20}
+            onKeyDown={e => e.key === 'Enter' && addZone()}
+          />
+          <button type="button" className={styles.btnSm} onClick={addZone}
+            disabled={!newZoneId.trim()}>
+            + Add Zone
+          </button>
+          <span className={styles.calcPallets}>Zone ID (e.g. 1AB, 2UPDCD)</span>
+        </div>
+        {zoneErr && <span className={styles.portAddError}>{zoneErr}</span>}
+        <span className={styles.calcPallets}>* Max pallets = floor(m² × design factor)</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Create Vessel Modal
 // ---------------------------------------------------------------------------
 
@@ -547,7 +754,10 @@ function CreateVesselModal({ onClose, onCreated }: {
   const [imoNumber, setImoNumber] = useState('');
   const [flag, setFlag] = useState('');
   const [callSign, setCallSign] = useState('');
+  const [builtYear, setBuiltYear] = useState('');
   const [totalPallets, setTotalPallets] = useState('');
+  const [totalSqm, setTotalSqm] = useState('');
+  const [zones, setZones] = useState<FormZone[]>([]);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -563,7 +773,12 @@ function CreateVesselModal({ onClose, onCreated }: {
         imoNumber: imoNumber.trim(),
         flag: flag.trim().toUpperCase(),
         callSign: callSign.trim() || undefined,
-        capacity: totalPallets ? { totalPallets: Number(totalPallets) } : undefined,
+        built: builtYear ? Number(builtYear) : undefined,
+        capacity: (totalPallets || totalSqm) ? {
+          totalPallets: totalPallets ? Number(totalPallets) : undefined,
+          totalSqm: totalSqm ? Number(totalSqm) : undefined,
+        } : undefined,
+        temperatureZones: fromFormZones(zones),
       });
       if (result.success) {
         onCreated(result.data as AdminVessel);
@@ -575,9 +790,11 @@ function CreateVesselModal({ onClose, onCreated }: {
 
   return (
     <div className={styles.overlay}>
-      <div className={styles.modal}>
+      <div className={`${styles.modal} ${styles.modalXWide}`}>
         <h3 className={styles.modalTitle}>New Vessel</h3>
 
+        {/* Basic info */}
+        <p className={styles.sectionHeader}>Basic Information</p>
         <div className={styles.formGrid}>
           <div className={styles.formGroupFull}>
             <label className={styles.formLabel}>Vessel Name *</label>
@@ -600,7 +817,7 @@ function CreateVesselModal({ onClose, onCreated }: {
             />
           </div>
           <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Flag * (2-letter code)</label>
+            <label className={styles.formLabel}>Flag * (2-letter ISO)</label>
             <input
               className={`${styles.formInput} ${styles.formInputMono}`}
               value={flag}
@@ -620,6 +837,23 @@ function CreateVesselModal({ onClose, onCreated }: {
             />
           </div>
           <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Year Built</label>
+            <input
+              type="number"
+              className={styles.formInput}
+              value={builtYear}
+              onChange={e => setBuiltYear(e.target.value)}
+              placeholder="2010"
+              min={1900}
+              max={2100}
+            />
+          </div>
+        </div>
+
+        {/* Capacity */}
+        <p className={styles.sectionHeader}>Cargo Capacity</p>
+        <div className={styles.formGrid}>
+          <div className={styles.formGroup}>
             <label className={styles.formLabel}>Total Pallets</label>
             <input
               type="number"
@@ -631,7 +865,23 @@ function CreateVesselModal({ onClose, onCreated }: {
               max={99999}
             />
           </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Total Floor Area (m²)</label>
+            <input
+              type="number"
+              className={styles.formInput}
+              value={totalSqm}
+              onChange={e => setTotalSqm(e.target.value)}
+              placeholder="1060"
+              min={1}
+              step={0.1}
+            />
+          </div>
         </div>
+
+        {/* Temperature Zones */}
+        <p className={styles.sectionHeader}>Temperature Zones & Cooling Sections</p>
+        <TemperatureZoneEditor zones={zones} onChange={setZones} />
 
         {error && <div className={styles.modalError}>{error}</div>}
 
@@ -662,7 +912,11 @@ function EditVesselModal({ vessel, onClose, onUpdated }: {
   const [name, setName] = useState(vessel.name);
   const [imoNumber, setImoNumber] = useState(vessel.imoNumber ?? '');
   const [flag, setFlag] = useState(vessel.flag ?? '');
+  const [callSign, setCallSign] = useState(vessel.callSign ?? '');
+  const [builtYear, setBuiltYear] = useState(vessel.built ? String(vessel.built) : '');
   const [totalPallets, setTotalPallets] = useState(String(vessel.capacity?.totalPallets ?? ''));
+  const [totalSqm, setTotalSqm] = useState(String(vessel.capacity?.totalSqm ?? ''));
+  const [zones, setZones] = useState<FormZone[]>(() => toFormZones(vessel.temperatureZones));
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -677,7 +931,13 @@ function EditVesselModal({ vessel, onClose, onUpdated }: {
         name: name.trim(),
         imoNumber: imoNumber.trim() || undefined,
         flag: flag.trim().toUpperCase(),
-        capacity: totalPallets ? { totalPallets: Number(totalPallets) } : undefined,
+        callSign: callSign.trim() || undefined,
+        built: builtYear ? Number(builtYear) : undefined,
+        capacity: (totalPallets || totalSqm) ? {
+          totalPallets: totalPallets ? Number(totalPallets) : undefined,
+          totalSqm: totalSqm ? Number(totalSqm) : undefined,
+        } : undefined,
+        temperatureZones: fromFormZones(zones),
       });
       if (result.success) {
         onUpdated({ ...vessel, ...result.data } as AdminVessel);
@@ -689,9 +949,11 @@ function EditVesselModal({ vessel, onClose, onUpdated }: {
 
   return (
     <div className={styles.overlay}>
-      <div className={styles.modal}>
-        <h3 className={styles.modalTitle}>Edit Vessel</h3>
+      <div className={`${styles.modal} ${styles.modalXWide}`}>
+        <h3 className={styles.modalTitle}>Edit Vessel — {vessel.name}</h3>
 
+        {/* Basic info */}
+        <p className={styles.sectionHeader}>Basic Information</p>
         <div className={styles.formGrid}>
           <div className={styles.formGroupFull}>
             <label className={styles.formLabel}>Vessel Name *</label>
@@ -712,7 +974,7 @@ function EditVesselModal({ vessel, onClose, onUpdated }: {
             />
           </div>
           <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Flag * (2-letter code)</label>
+            <label className={styles.formLabel}>Flag * (2-letter ISO)</label>
             <input
               className={`${styles.formInput} ${styles.formInputMono}`}
               value={flag}
@@ -721,17 +983,60 @@ function EditVesselModal({ vessel, onClose, onUpdated }: {
             />
           </div>
           <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Call Sign</label>
+            <input
+              className={`${styles.formInput} ${styles.formInputMono}`}
+              value={callSign}
+              onChange={e => setCallSign(e.target.value.toUpperCase())}
+              maxLength={10}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Year Built</label>
+            <input
+              type="number"
+              className={styles.formInput}
+              value={builtYear}
+              onChange={e => setBuiltYear(e.target.value)}
+              placeholder="2010"
+              min={1900}
+              max={2100}
+            />
+          </div>
+        </div>
+
+        {/* Capacity */}
+        <p className={styles.sectionHeader}>Cargo Capacity</p>
+        <div className={styles.formGrid}>
+          <div className={styles.formGroup}>
             <label className={styles.formLabel}>Total Pallets</label>
             <input
               type="number"
               className={styles.formInput}
               value={totalPallets}
               onChange={e => setTotalPallets(e.target.value)}
+              placeholder="1400"
               min={1}
               max={99999}
             />
           </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Total Floor Area (m²)</label>
+            <input
+              type="number"
+              className={styles.formInput}
+              value={totalSqm}
+              onChange={e => setTotalSqm(e.target.value)}
+              placeholder="1060"
+              min={1}
+              step={0.1}
+            />
+          </div>
         </div>
+
+        {/* Temperature Zones */}
+        <p className={styles.sectionHeader}>Temperature Zones & Cooling Sections</p>
+        <TemperatureZoneEditor zones={zones} onChange={setZones} />
 
         {error && <div className={styles.modalError}>{error}</div>}
 
@@ -755,30 +1060,9 @@ function EditVesselModal({ vessel, onClose, onUpdated }: {
 // ---------------------------------------------------------------------------
 
 function VesselsTab({ initialVessels }: { initialVessels: AdminVessel[] }) {
-  const router = useRouter();
   const [vessels, setVessels] = useState<AdminVessel[]>(initialVessels);
-  const [confirmId, setConfirmId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [editingVessel, setEditingVessel] = useState<AdminVessel | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const confirmVessel = vessels.find(v => v._id === confirmId);
-
-  const handleDelete = () => {
-    if (!confirmId) return;
-    setErrorMsg(null);
-    startTransition(async () => {
-      const result = await deleteVessel(confirmId);
-      if (result.success) {
-        setVessels(prev => prev.filter(v => v._id !== confirmId));
-        setConfirmId(null);
-        router.refresh();
-      } else {
-        setErrorMsg(result.error ?? 'Delete failed');
-      }
-    });
-  };
 
   return (
     <div className={styles.tabContent}>
@@ -797,18 +1081,22 @@ function VesselsTab({ initialVessels }: { initialVessels: AdminVessel[] }) {
             <tr>
               <th>Vessel Name</th>
               <th>IMO</th>
-              <th>Flag</th>
+              <th>Flag / Call</th>
+              <th>Built</th>
               <th className={styles.thNum}>Pallets</th>
+              <th className={styles.thNum}>m²</th>
+              <th className={styles.thNum}>Zones</th>
               <th className={styles.thNum}>Voyages</th>
               <th className={styles.thActions}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {vessels.length === 0 ? (
-              <tr><td colSpan={6} className={styles.emptyCell}>No vessels found.</td></tr>
+              <tr><td colSpan={9} className={styles.emptyCell}>No vessels found.</td></tr>
             ) : (
               vessels.map(v => {
-                const canDelete = v.voyageCount === 0;
+                const zoneCount = v.temperatureZones?.length ?? 0;
+                const sectionCount = v.temperatureZones?.reduce((s, z) => s + z.coolingSections.length, 0) ?? 0;
                 return (
                   <tr key={v._id}>
                     <td>
@@ -817,9 +1105,22 @@ function VesselsTab({ initialVessels }: { initialVessels: AdminVessel[] }) {
                       </Link>
                     </td>
                     <td className={styles.cellMono}>{v.imoNumber ?? '—'}</td>
-                    <td className={styles.cellSecondary}>{v.flag ?? '—'}</td>
-                    <td className={`${styles.cellNum} ${styles.countNonZero}`}>
+                    <td className={styles.cellSecondary}>
+                      {v.flag ?? '—'}
+                      {v.callSign && (
+                        <span className={styles.wkBadge}>{v.callSign}</span>
+                      )}
+                    </td>
+                    <td className={styles.cellSecondary}>{v.built ?? '—'}</td>
+                    <td className={`${styles.cellNum} ${v.capacity?.totalPallets ? styles.countNonZero : styles.countZero}`}>
                       {v.capacity?.totalPallets?.toLocaleString() ?? '—'}
+                    </td>
+                    <td className={`${styles.cellNum} ${v.capacity?.totalSqm ? styles.countNonZero : styles.countZero}`}>
+                      {v.capacity?.totalSqm != null ? v.capacity.totalSqm.toLocaleString() : '—'}
+                    </td>
+                    <td className={`${styles.cellNum} ${zoneCount > 0 ? styles.countNonZero : styles.countZero}`}
+                      title={sectionCount > 0 ? `${sectionCount} sections across ${zoneCount} zones` : undefined}>
+                      {zoneCount > 0 ? `${zoneCount} / ${sectionCount}` : '—'}
                     </td>
                     <td className={`${styles.cellNum} ${v.voyageCount > 0 ? styles.countNonZero : styles.countZero}`}>
                       {v.voyageCount}
@@ -827,15 +1128,6 @@ function VesselsTab({ initialVessels }: { initialVessels: AdminVessel[] }) {
                     <td className={styles.cellActions}>
                       <button className={styles.btnSm} onClick={() => setEditingVessel(v)}>
                         Edit
-                      </button>
-                      <button
-                        className={`${styles.btnDanger} ${!canDelete ? styles.btnBlocked : ''}`}
-                        onClick={() => { setConfirmId(v._id); setErrorMsg(null); }}
-                        title={canDelete
-                          ? 'Permanently remove vessel from database'
-                          : `Blocked: ${v.voyageCount} voyage${v.voyageCount > 1 ? 's' : ''} must be removed first`}
-                      >
-                        Delete
                       </button>
                     </td>
                   </tr>
@@ -845,44 +1137,6 @@ function VesselsTab({ initialVessels }: { initialVessels: AdminVessel[] }) {
           </tbody>
         </table>
       </div>
-
-      {confirmVessel && (
-        <div className={styles.overlay}>
-          <div className={styles.modal}>
-            <h3 className={styles.modalTitle}>⚠ Delete Vessel</h3>
-            <div className={styles.modalVoyageInfo}>
-              <span className={styles.modalVoyageNumber}>{confirmVessel.name}</span>
-              {confirmVessel.imoNumber && (
-                <span className={styles.cellMono} style={{ fontSize: '0.8em', opacity: 0.7 }}>
-                  IMO {confirmVessel.imoNumber}
-                </span>
-              )}
-            </div>
-            {confirmVessel.voyageCount > 0 ? (
-              <div className={styles.modalBlocker}>
-                <strong>Cannot delete:</strong>{' '}
-                {confirmVessel.voyageCount} voyage{confirmVessel.voyageCount > 1 ? 's' : ''} must be removed first.
-              </div>
-            ) : (
-              <p className={styles.modalBody}>
-                This will <strong>permanently remove</strong> the vessel from the database.
-                This action cannot be undone.
-              </p>
-            )}
-            {errorMsg && <div className={styles.modalError}>{errorMsg}</div>}
-            <div className={styles.modalActions}>
-              <button className={styles.btnModalCancel} onClick={() => setConfirmId(null)} disabled={isPending}>
-                Cancel
-              </button>
-              {confirmVessel.voyageCount === 0 && (
-                <button className={styles.btnModalDanger} onClick={handleDelete} disabled={isPending}>
-                  {isPending ? 'Deleting…' : 'Yes, Delete Permanently'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {showCreate && (
         <CreateVesselModal

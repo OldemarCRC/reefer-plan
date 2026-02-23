@@ -20,14 +20,28 @@ const VesselNameSchema = z.string()
   .min(1, 'Vessel name is required')
   .max(200, 'Vessel name too long');
 
+const CoolingSectionDetailEntrySchema = z.object({
+  sectionId: z.string().min(1).max(10),
+  sqm: z.number().positive('SQM must be positive'),
+  designStowageFactor: z.number().min(0.1).max(10),
+});
+
+const TemperatureZoneEntrySchema = z.object({
+  zoneId: z.string().min(1).max(20),
+  coolingSections: z.array(CoolingSectionDetailEntrySchema).default([]),
+});
+
 const CreateVesselSchema = z.object({
   name: z.string().min(1, 'Vessel name is required').max(200),
   imoNumber: z.string().regex(/^\d{7}$/, 'IMO number must be exactly 7 digits'),
   flag: z.string().length(2, 'Flag must be a 2-letter ISO country code'),
   callSign: z.string().max(10).optional(),
+  built: z.number().int().min(1900).max(2100).optional(),
   capacity: z.object({
     totalPallets: z.number().int().min(1).max(99999).optional(),
+    totalSqm: z.number().positive().optional(),
   }).optional(),
+  temperatureZones: z.array(TemperatureZoneEntrySchema).optional().default([]),
   active: z.boolean().optional(),
 });
 
@@ -36,9 +50,12 @@ const UpdateVesselSchema = z.object({
   imoNumber: z.string().regex(/^\d{7}$/, 'IMO number must be exactly 7 digits').optional(),
   flag: z.string().length(2, 'Flag must be a 2-letter ISO country code').optional(),
   callSign: z.string().max(10).optional(),
+  built: z.number().int().min(1900).max(2100).optional(),
   capacity: z.object({
     totalPallets: z.number().int().min(1).max(99999).optional(),
+    totalSqm: z.number().positive().optional(),
   }).optional(),
+  temperatureZones: z.array(TemperatureZoneEntrySchema).optional(),
   active: z.boolean().optional(),
 });
 
@@ -347,14 +364,23 @@ export async function createVessel(input: unknown) {
       return { success: false, error: `IMO number ${data.imoNumber} is already registered` };
     }
 
+    const zones = (data.temperatureZones ?? []).map((z: any) => ({
+      zoneId: z.zoneId.toUpperCase(),
+      coolingSections: z.coolingSections,
+      locked: false,
+    }));
+
     const vessel = await VesselModel.create({
       name: normalizedName,
       imoNumber: data.imoNumber,
       flag: normalizedFlag,
       callSign: data.callSign?.toUpperCase().trim(),
+      built: data.built ? new Date(Date.UTC(data.built, 0, 1)) : undefined,
       capacity: data.capacity,
+      temperatureZones: zones,
+      maxTemperatureZones: zones.length,
       active: data.active !== false,
-      temperatureZones: [],
+      holds: [],
     });
 
     return {
@@ -364,7 +390,17 @@ export async function createVessel(input: unknown) {
         name: vessel.name,
         imoNumber: vessel.imoNumber,
         flag: vessel.flag,
+        callSign: vessel.callSign,
+        built: vessel.built ? new Date(vessel.built).getFullYear() : undefined,
         capacity: vessel.capacity,
+        temperatureZones: (vessel.temperatureZones ?? []).map((z: any) => ({
+          zoneId: z.zoneId,
+          coolingSections: (z.coolingSections ?? []).map((s: any) => ({
+            sectionId: s.sectionId,
+            sqm: s.sqm,
+            designStowageFactor: s.designStowageFactor,
+          })),
+        })),
         active: vessel.active !== false,
         voyageCount: 0,
       },
@@ -405,8 +441,17 @@ export async function updateVessel(id: unknown, input: unknown) {
     if (data.imoNumber !== undefined) update.imoNumber = data.imoNumber;
     if (data.flag !== undefined) update.flag = data.flag.toUpperCase();
     if (data.callSign !== undefined) update.callSign = data.callSign.toUpperCase().trim();
+    if (data.built !== undefined) update.built = new Date(Date.UTC(data.built, 0, 1));
     if (data.capacity !== undefined) update.capacity = data.capacity;
     if (data.active !== undefined) update.active = data.active;
+    if (data.temperatureZones !== undefined) {
+      update.temperatureZones = data.temperatureZones.map((z: any) => ({
+        zoneId: z.zoneId.toUpperCase(),
+        coolingSections: z.coolingSections,
+        locked: false,
+      }));
+      update.maxTemperatureZones = data.temperatureZones.length;
+    }
 
     const vessel = await VesselModel.findByIdAndUpdate(vesselId, update, { new: true }).lean() as any;
     if (!vessel) return { success: false, error: 'Vessel not found' };
@@ -418,7 +463,17 @@ export async function updateVessel(id: unknown, input: unknown) {
         name: vessel.name,
         imoNumber: vessel.imoNumber,
         flag: vessel.flag,
+        callSign: vessel.callSign,
+        built: vessel.built ? new Date(vessel.built).getFullYear() : undefined,
         capacity: vessel.capacity,
+        temperatureZones: (vessel.temperatureZones ?? []).map((z: any) => ({
+          zoneId: z.zoneId,
+          coolingSections: (z.coolingSections ?? []).map((s: any) => ({
+            sectionId: s.sectionId,
+            sqm: s.sqm,
+            designStowageFactor: s.designStowageFactor,
+          })),
+        })),
         active: vessel.active !== false,
       },
     };
@@ -588,7 +643,20 @@ export async function getAdminVessels() {
       name: v.name,
       imoNumber: v.imoNumber,
       flag: v.flag,
-      capacity: { totalPallets: v.capacity?.totalPallets },
+      callSign: v.callSign,
+      built: v.built ? new Date(v.built).getFullYear() : undefined,
+      capacity: {
+        totalPallets: v.capacity?.totalPallets,
+        totalSqm: v.capacity?.totalSqm,
+      },
+      temperatureZones: (v.temperatureZones ?? []).map((z: any) => ({
+        zoneId: z.zoneId,
+        coolingSections: (z.coolingSections ?? []).map((s: any) => ({
+          sectionId: s.sectionId,
+          sqm: s.sqm,
+          designStowageFactor: s.designStowageFactor,
+        })),
+      })),
       active: v.active !== false,
       voyageCount: countMap[v._id.toString()] ?? 0,
     }));
