@@ -1,4 +1,5 @@
 import { getVoyagesForPlanWizard } from '@/app/actions/voyage';
+import { getLatestPlanInfoForVoyages } from '@/app/actions/stowage-plan';
 import StowagePlanWizard from './StowagePlanWizard';
 import type { WizardVoyage } from './StowagePlanWizard';
 
@@ -12,10 +13,16 @@ export default async function NewStowagePlanPage({
   const result = await getVoyagesForPlanWizard();
   const raw = result.success ? result.data : [];
 
+  // Fetch latest plan info for all voyages to detect revision mode
+  const voyageIds: string[] = raw.map((v: any) => String(v._id));
+  const latestPlanMap = await getLatestPlanInfoForVoyages(voyageIds);
+
   const voyages: WizardVoyage[] = raw.map((v: any) => {
     const vessel = v.vesselId as any;
+    const vid = String(v._id);
+    const lp = latestPlanMap[vid] ?? null;
     return {
-      _id: v._id,
+      _id: vid,
       voyageNumber: v.voyageNumber,
       vesselName: vessel?.name ?? v.vesselName ?? 'Unknown vessel',
       startDate: v.departureDate
@@ -36,6 +43,17 @@ export default async function NewStowagePlanPage({
           sectionId: s.sectionId,
         })),
       })),
+      latestPlan: lp
+        ? {
+            planId: lp.planId,
+            planNumber: lp.planNumber,
+            status: lp.status,
+            coolingSectionTemps: lp.coolingSectionStatus.map(cs => ({
+              zoneId: cs.zoneId,
+              assignedTemperature: cs.assignedTemperature,
+            })),
+          }
+        : null,
     };
   });
 

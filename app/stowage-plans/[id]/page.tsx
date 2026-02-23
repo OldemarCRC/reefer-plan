@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import AppShell from '@/components/layout/AppShell';
 import VesselProfile from '@/components/vessel/VesselProfile';
 import { getStowagePlanById, deleteStowagePlan, saveCargoAssignments, updatePlanStatus, copyStowagePlan } from '@/app/actions/stowage-plan';
@@ -534,6 +535,9 @@ export default function StowagePlanDetailPage() {
   const LOCKED_STATUSES = ['EMAIL_SENT', 'CAPTAIN_APPROVED', 'CAPTAIN_REJECTED', 'IN_REVISION', 'READY_FOR_EXECUTION', 'IN_EXECUTION', 'COMPLETED'];
   const isLocked = LOCKED_STATUSES.includes(plan.status);
 
+  const { data: session } = useSession();
+  const canEdit = ['ADMIN', 'SHIPPING_PLANNER'].includes(session?.user?.role ?? '');
+
   const handleMarkSent = () => {
     setShowSentModal(true);
   };
@@ -600,15 +604,17 @@ export default function StowagePlanDetailPage() {
                 }}>
                   LOCKED
                 </span>
-                <button
-                  className={styles.btnPrimary}
-                  onClick={handleNewDraft}
-                  disabled={isCopying}
-                >
-                  {isCopying ? 'Creating...' : '+ New Draft'}
-                </button>
+                {canEdit && (
+                  <button
+                    className={styles.btnPrimary}
+                    onClick={handleNewDraft}
+                    disabled={isCopying}
+                  >
+                    {isCopying ? 'Creating...' : '+ New Draft'}
+                  </button>
+                )}
               </>
-            ) : (
+            ) : canEdit ? (
               <>
                 <button className={styles.btnSecondary} onClick={() => setShowZoneModal(true)}>
                   Configure Zones
@@ -626,14 +632,16 @@ export default function StowagePlanDetailPage() {
                   </button>
                 )}
               </>
+            ) : null}
+            {canEdit && !isLocked && (
+              <button
+                className={styles.btnDanger}
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={isDeleting}
+              >
+                Delete Plan
+              </button>
             )}
-            <button
-              className={styles.btnDanger}
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={isDeleting}
-            >
-              Delete Plan
-            </button>
           </div>
         </div>
 
@@ -733,7 +741,7 @@ export default function StowagePlanDetailPage() {
             </div>
           )}
 
-          {!isLocked && selectedBooking && (
+          {!isLocked && canEdit && selectedBooking && (
             <div className={styles.cargoBarActions}>
               <button
                 className={styles.btnAssign}
@@ -760,7 +768,7 @@ export default function StowagePlanDetailPage() {
               <span key={a.compartmentId} className={styles.assignmentTag}>
                 <span className={styles.compartmentTag}>{a.compartmentId}</span>
                 <span className={styles.assignmentQty}>{a.quantity} pal</span>
-                {!isLocked && (
+                {!isLocked && canEdit && (
                   <button
                     className={styles.btnRemoveSmall}
                     onClick={() => handleRemoveAssignment(selectedBooking.bookingId, a.compartmentId)}
@@ -1190,6 +1198,7 @@ export default function StowagePlanDetailPage() {
         <MarkSentModal
           planId={planId}
           planNumber={plan.planNumber}
+          vesselName={plan.vesselName}
           onClose={() => setShowSentModal(false)}
           onSuccess={() => {
             setShowSentModal(false);

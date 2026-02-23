@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import styles from './page.module.css';
-import { createStowagePlanFromWizard } from '@/app/actions/stowage-plan';
+import { createStowagePlanFromWizard, copyStowagePlan } from '@/app/actions/stowage-plan';
 
 type WizardStep = 'voyage' | 'temperature' | 'review';
+
+const UNSENT_STATUSES = ['ESTIMATED', 'DRAFT'];
 
 interface TempAssignment {
   coolingSectionId: string;
@@ -18,6 +20,13 @@ interface WizardVesselZone {
   coolingSections: { sectionId: string }[];
 }
 
+export interface WizardLatestPlan {
+  planId: string;
+  planNumber: string;
+  status: string;
+  coolingSectionTemps: { zoneId: string; assignedTemperature: number }[];
+}
+
 export interface WizardVoyage {
   _id: string;
   voyageNumber: string;
@@ -26,6 +35,7 @@ export interface WizardVoyage {
   status: string;
   portCalls: { portName: string; sequence: number }[];
   vesselZones: WizardVesselZone[];
+  latestPlan: WizardLatestPlan | null;
 }
 
 interface Props {
@@ -35,6 +45,13 @@ interface Props {
 
 function makeDefaultAssignments(zones: WizardVesselZone[]): TempAssignment[] {
   return zones.map(z => ({ coolingSectionId: z.zoneId, targetTemp: 13 }));
+}
+
+function makeAssignmentsFromPlan(plan: WizardLatestPlan): TempAssignment[] {
+  return plan.coolingSectionTemps.map(cs => ({
+    coolingSectionId: cs.zoneId,
+    targetTemp: cs.assignedTemperature,
+  }));
 }
 
 function tempToColor(temp: number) {
@@ -54,13 +71,19 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
     initialVoyageId ?? ''
   );
   const [tempAssignments, setTempAssignments] = useState<TempAssignment[]>(
-    initialVoyage ? makeDefaultAssignments(initialVoyage.vesselZones) : []
+    initialVoyage
+      ? initialVoyage.latestPlan
+        ? makeAssignmentsFromPlan(initialVoyage.latestPlan)
+        : makeDefaultAssignments(initialVoyage.vesselZones)
+      : []
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const selectedVoyage = voyages.find(v => v._id === selectedVoyageId) ?? null;
   const vesselZones: WizardVesselZone[] = selectedVoyage?.vesselZones ?? [];
+  const isRevision = !!selectedVoyage?.latestPlan;
+  const latestPlan = selectedVoyage?.latestPlan ?? null;
 
   // Derive hold numbers from zone IDs (e.g. '1AB' → 1, '2UPDAB' → 2)
   const holdNums = [...new Set(vesselZones.map(z => parseInt(z.zoneId[0])))].sort(
@@ -70,7 +93,11 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
   const handleVoyageSelect = (voyageId: string) => {
     const voyage = voyages.find(v => v._id === voyageId);
     setSelectedVoyageId(voyageId);
-    setTempAssignments(voyage ? makeDefaultAssignments(voyage.vesselZones) : []);
+    if (voyage?.latestPlan) {
+      setTempAssignments(makeAssignmentsFromPlan(voyage.latestPlan));
+    } else {
+      setTempAssignments(voyage ? makeDefaultAssignments(voyage.vesselZones) : []);
+    }
   };
 
   const handleTempChange = (sectionId: string, value: number) => {
@@ -85,13 +112,21 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const result = await createStowagePlanFromWizard({
-        voyageId: selectedVoyageId,
-        coolingSectionTemps: tempAssignments.map(a => ({
-          coolingSectionId: a.coolingSectionId,
-          targetTemp: a.targetTemp,
-        })),
-      });
+      let result: { success: boolean; planId?: string; error?: string };
+
+      if (isRevision && latestPlan) {
+        // Revision: copy the latest plan (preserves cargo + temp config)
+        result = await copyStowagePlan(latestPlan.planId);
+      } else {
+        result = await createStowagePlanFromWizard({
+          voyageId: selectedVoyageId,
+          coolingSectionTemps: tempAssignments.map(a => ({
+            coolingSectionId: a.coolingSectionId,
+            targetTemp: a.targetTemp,
+          })),
+        });
+      }
+
       if (result.success && result.planId) {
         router.push(`/stowage-plans/${result.planId}`);
       } else {
@@ -117,7 +152,7 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.titleRow}>
-          <h1>Create Stowage Plan</h1>
+          <h1>{isRevision ? 'Create Revision' : 'Create Stowage Plan'}</h1>
           <Link href="/stowage-plans" className={styles.cancelBtn}>
             Cancel
           </Link>
@@ -153,6 +188,7 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
             <h2>Select a Voyage</h2>
             <p className={styles.stepDescription}>
               Choose the voyage for which you want to create a stowage plan.
+              Voyages that already have plans will create a revision (copy).
             </p>
 
             {voyages.length === 0 ? (
@@ -169,11 +205,18 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
                   >
                     <div className={styles.voyageHeader}>
                       <h3>{voyage.voyageNumber}</h3>
-                      <span
-                        className={`${styles.statusBadge} ${styles[voyage.status.toLowerCase()]}`}
-                      >
-                        {voyage.status}
-                      </span>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        {voyage.latestPlan && (
+                          <span className={styles.revisionBadge}>
+                            Revision
+                          </span>
+                        )}
+                        <span
+                          className={`${styles.statusBadge} ${styles[voyage.status.toLowerCase()]}`}
+                        >
+                          {voyage.status}
+                        </span>
+                      </div>
                     </div>
                     <div className={styles.voyageDetails}>
                       <div className={styles.detail}>
@@ -190,6 +233,12 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
                           {voyage.portCalls.map(pc => pc.portName).join(' → ')}
                         </span>
                       </div>
+                      {voyage.latestPlan && (
+                        <div className={styles.detail}>
+                          <span className={styles.label}>Latest plan:</span>
+                          <span className={styles.value}>{voyage.latestPlan.planNumber}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -202,7 +251,7 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
                 disabled={!selectedVoyageId}
                 onClick={() => setCurrentStep('temperature')}
               >
-                Continue to Temperature Setup
+                {isRevision ? 'Continue to Review Configuration' : 'Continue to Temperature Setup'}
               </button>
             </div>
           </div>
@@ -211,11 +260,26 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
         {/* STEP 2: Temperature Zone Assignment */}
         {currentStep === 'temperature' && (
           <div className={styles.stepContent}>
-            <h2>Assign Temperature Zones</h2>
-            <p className={styles.stepDescription}>
-              Configure temperature zones for each cooling section. Each section can be set to a
-              different temperature based on cargo requirements.
-            </p>
+            <h2>{isRevision ? 'Temperature Configuration (Read-only)' : 'Assign Temperature Zones'}</h2>
+
+            {isRevision ? (
+              <div className={styles.infoBox}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <circle cx="10" cy="10" r="9" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M10 6v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                <p>
+                  Temperature zones are inherited from{' '}
+                  <strong>{latestPlan?.planNumber}</strong>. To change zone temperatures,
+                  open the plan and use the Configure Zones option.
+                </p>
+              </div>
+            ) : (
+              <p className={styles.stepDescription}>
+                Configure temperature zones for each cooling section. Each section can be set to a
+                different temperature based on cargo requirements.
+              </p>
+            )}
 
             {vesselZones.length === 0 ? (
               <p className={styles.stepDescription}>
@@ -242,17 +306,24 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
                         {zone.coolingSections.map(s => s.sectionId).join(', ')}
                       </div>
                       <div className={styles.colTemp}>
-                        <input
-                          type="number"
-                          value={assignment?.targetTemp ?? 13}
-                          onChange={e =>
-                            handleTempChange(zone.zoneId, parseFloat(e.target.value))
-                          }
-                          min={-25}
-                          max={15}
-                          step={0.5}
-                          className={styles.tempInput}
-                        />
+                        {isRevision ? (
+                          <span className={styles.tempReadOnly}>
+                            {(assignment?.targetTemp ?? 13) > 0 ? '+' : ''}
+                            {assignment?.targetTemp ?? 13}°C
+                          </span>
+                        ) : (
+                          <input
+                            type="number"
+                            value={assignment?.targetTemp ?? 13}
+                            onChange={e =>
+                              handleTempChange(zone.zoneId, parseFloat(e.target.value))
+                            }
+                            min={-25}
+                            max={15}
+                            step={0.5}
+                            className={styles.tempInput}
+                          />
+                        )}
                       </div>
                     </div>
                   );
@@ -278,7 +349,7 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
         {/* STEP 3: Review & Create */}
         {currentStep === 'review' && (
           <div className={styles.stepContent}>
-            <h2>Review Stowage Plan</h2>
+            <h2>Review {isRevision ? 'Revision' : 'Stowage Plan'}</h2>
             <p className={styles.stepDescription}>
               Review the configuration before creating the stowage plan.
             </p>
@@ -303,12 +374,18 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
                     <span className={styles.label}>Status:</span>
                     <span className={styles.value}>{selectedVoyage.status}</span>
                   </div>
+                  {isRevision && latestPlan && (
+                    <div className={styles.reviewItem}>
+                      <span className={styles.label}>Copied from:</span>
+                      <span className={styles.value}>{latestPlan.planNumber}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
             <div className={styles.reviewSection}>
-              <h3>Temperature Configuration</h3>
+              <h3>Temperature Configuration{isRevision ? ' (inherited)' : ''}</h3>
               <div className={styles.tempSummary}>
                 {holdNums.map(holdNum => (
                   <div key={holdNum} className={styles.holdColumn}>
@@ -349,22 +426,44 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
               </div>
             </div>
 
-            <div className={styles.infoBox}>
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <circle cx="10" cy="10" r="9" stroke="currentColor" strokeWidth="1.5" />
-                <path
-                  d="M10 6v4m0 4h.01"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <p>
-                After creating this plan, you'll be able to add cargo manually or use the
-                auto-stow algorithm to automatically place bookings based on temperature
-                requirements and vessel stability.
-              </p>
-            </div>
+            {/* Warning: previous plan is unsent */}
+            {isRevision && latestPlan && UNSENT_STATUSES.includes(latestPlan.status) && (
+              <div className={styles.warningBox}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path
+                    d="M10 2L1 18h18L10 2z"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinejoin="round"
+                  />
+                  <path d="M10 8v4m0 3h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                <p>
+                  The previous plan <strong>{latestPlan.planNumber}</strong> has not been sent
+                  to the captain yet (status: {latestPlan.status}). A new revision will be created
+                  alongside it. The previous plan will remain accessible.
+                </p>
+              </div>
+            )}
+
+            {!isRevision && (
+              <div className={styles.infoBox}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <circle cx="10" cy="10" r="9" stroke="currentColor" strokeWidth="1.5" />
+                  <path
+                    d="M10 6v4m0 4h.01"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <p>
+                  After creating this plan, you&apos;ll be able to add cargo manually or use the
+                  auto-stow algorithm to automatically place bookings based on temperature
+                  requirements and vessel stability.
+                </p>
+              </div>
+            )}
 
             {submitError && <div className={styles.errorBox}>{submitError}</div>}
 
@@ -381,7 +480,11 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
                 onClick={handleCreatePlan}
                 disabled={isSubmitting}
               >
-                {isSubmitting ? 'Creating…' : 'Create Stowage Plan'}
+                {isSubmitting
+                  ? 'Creating…'
+                  : isRevision
+                  ? 'Create Revision'
+                  : 'Create Stowage Plan'}
               </button>
             </div>
           </div>
