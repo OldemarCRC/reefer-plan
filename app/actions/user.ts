@@ -107,6 +107,7 @@ export async function createUser(input: unknown) {
       await sendUserConfirmationEmail({
         to: { name: data.name.trim(), email: normalizedEmail },
         confirmToken: emailConfirmToken,
+        role: data.role,
       });
     } catch (emailErr) {
       console.error('[createUser] confirmation email failed:', emailErr);
@@ -235,6 +236,7 @@ export async function resendUserConfirmation(id: unknown) {
       await sendUserConfirmationEmail({
         to: { name: user.name, email: user.email },
         confirmToken: emailConfirmToken,
+        role: user.role,
       });
     } catch (emailErr) {
       console.error('[resendUserConfirmation] email failed:', emailErr);
@@ -245,6 +247,38 @@ export async function resendUserConfirmation(id: unknown) {
   } catch (error) {
     console.error('Error resending confirmation:', error);
     return { success: false, error: 'Failed to resend confirmation' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// CHANGE PASSWORD (for logged-in users)
+// Verifies the current password before allowing the change.
+// ----------------------------------------------------------------------------
+
+export async function changePassword(userId: unknown, currentPassword: unknown, newPassword: unknown) {
+  try {
+    const uid  = UserIdSchema.parse(userId);
+    const curr = z.string().min(1, 'Current password is required').parse(currentPassword);
+    const next = z.string().min(8, 'New password must be at least 8 characters').parse(newPassword);
+
+    await connectDB();
+
+    const user = await UserModel.findById(uid).select('+passwordHash').lean() as any;
+    if (!user) return { success: false, error: 'User not found' };
+
+    const valid = await bcrypt.compare(curr, user.passwordHash ?? '');
+    if (!valid) return { success: false, error: 'Current password is incorrect' };
+
+    const passwordHash = await bcrypt.hash(next, 12);
+    await UserModel.findByIdAndUpdate(uid, { passwordHash });
+
+    return { success: true };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.issues[0].message };
+    }
+    console.error('Error changing password:', error);
+    return { success: false, error: 'Failed to change password' };
   }
 }
 

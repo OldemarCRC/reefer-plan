@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { cancelVoyage, hardDeleteVoyage } from '@/app/actions/voyage';
@@ -8,6 +8,7 @@ import { deleteStowagePlan } from '@/app/actions/stowage-plan';
 import { createVessel, updateVessel } from '@/app/actions/vessel';
 import { deleteService, createService, updateService } from '@/app/actions/service';
 import { createUser, updateUser, deleteUser, resendUserConfirmation } from '@/app/actions/user';
+import { getPorts, createPort, updatePort } from '@/app/actions/port';
 import ContractsClient from '@/app/contracts/ContractsClient';
 import type { DisplayContract } from '@/app/contracts/ContractsClient';
 import styles from './page.module.css';
@@ -126,11 +127,21 @@ interface PortEntry {
   portCode: string;
   portName: string;
   country: string;
+  city?: string;
   operations: ('LOAD' | 'DISCHARGE')[];
   weeksFromStart: number;
 }
 
-type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users';
+interface AdminPort {
+  _id: string;
+  code: string;
+  name: string;
+  country: string;
+  city: string;
+  active: boolean;
+}
+
+type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users' | 'ports';
 
 type ConfirmAction =
   | { type: 'cancel'; voyage: AdminVoyage }
@@ -1170,26 +1181,42 @@ function PortRotationEditor({ ports, onChange }: {
   ports: PortEntry[];
   onChange: (ports: PortEntry[]) => void;
 }) {
-  const [newCode, setNewCode] = useState('');
-  const [newName, setNewName] = useState('');
-  const [newCountry, setNewCountry] = useState('');
+  const [masterPorts, setMasterPorts] = useState<AdminPort[]>([]);
+  const [selectedCode, setSelectedCode] = useState('');
   const [newOps, setNewOps] = useState<('LOAD' | 'DISCHARGE')[]>(['LOAD']);
   const [addErr, setAddErr] = useState('');
+
+  // Load master port list from DB on mount
+  useEffect(() => {
+    getPorts().then(res => {
+      if (res.success) setMasterPorts((res.data as AdminPort[]).filter(p => p.active));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggleOp = (op: 'LOAD' | 'DISCHARGE') =>
     setNewOps(prev => prev.includes(op) ? prev.filter(o => o !== op) : [...prev, op]);
 
   const addPort = () => {
-    if (!newCode.trim() || !newName.trim() || !newCountry.trim()) {
-      setAddErr('Port code, name and country are required');
-      return;
-    }
+    if (!selectedCode) { setAddErr('Select a port from the list'); return; }
     if (newOps.length === 0) { setAddErr('Select at least one operation'); return; }
-    const code = newCode.toUpperCase().trim();
-    if (ports.some(p => p.portCode === code)) { setAddErr('Port already in list'); return; }
-    onChange([...ports, { portCode: code, portName: newName.trim(), country: newCountry.toUpperCase().trim(), operations: newOps, weeksFromStart: ports.length }]);
-    setNewCode(''); setNewName(''); setNewCountry(''); setNewOps(['LOAD']); setAddErr('');
+    if (ports.some(p => p.portCode === selectedCode)) { setAddErr('Port already in list'); return; }
+    const mp = masterPorts.find(p => p.code === selectedCode);
+    if (!mp) { setAddErr('Port not found'); return; }
+    onChange([...ports, {
+      portCode: mp.code,
+      portName: mp.name,
+      country: mp.country,
+      city: mp.city,
+      operations: newOps,
+      weeksFromStart: ports.length,
+    }]);
+    setSelectedCode('');
+    setNewOps(['LOAD']);
+    setAddErr('');
   };
+
+  const availablePorts = masterPorts.filter(mp => !ports.some(p => p.portCode === mp.code));
 
   return (
     <div>
@@ -1227,56 +1254,47 @@ function PortRotationEditor({ ports, onChange }: {
       )}
 
       <div className={styles.portAddForm}>
-        <div className={styles.portAddRow}>
-          <input
-            className={`${styles.portAddInput} ${styles.portAddInputCode}`}
-            value={newCode}
-            onChange={e => { setNewCode(e.target.value.toUpperCase()); setAddErr(''); }}
-            placeholder="CODE"
-            required
-            maxLength={6}
-            pattern="[A-Z0-9]{4,6}"
-            title="4–6 uppercase letters/digits (UNLOCODE format)"
-          />
-          <input
-            className={`${styles.portAddInput} ${styles.portAddInputName}`}
-            value={newName}
-            onChange={e => { setNewName(e.target.value); setAddErr(''); }}
-            placeholder="Port name"
-            required
-            maxLength={80}
-          />
-          <input
-            className={`${styles.portAddInput} ${styles.portAddInputCC}`}
-            value={newCountry}
-            onChange={e => { setNewCountry(e.target.value.toUpperCase()); setAddErr(''); }}
-            placeholder="CC"
-            required
-            maxLength={2}
-            pattern="[A-Z]{2}"
-            title="2-letter ISO country code"
-          />
-          <div className={styles.opToggles}>
-            {(['LOAD', 'DISCHARGE'] as const).map(op => (
-              <button
-                key={op}
-                type="button"
-                className={newOps.includes(op) ? styles.opToggleActive : styles.opToggle}
-                onClick={() => toggleOp(op)}
-              >
-                {op === 'LOAD' ? '▲ L' : '▼ D'}
-              </button>
-            ))}
+        {masterPorts.length === 0 ? (
+          <p className={styles.portEmptyHint}>
+            No ports available. Create ports in the Ports tab first.
+          </p>
+        ) : (
+          <div className={styles.portAddRow}>
+            <select
+              className={styles.formSelect}
+              value={selectedCode}
+              onChange={e => { setSelectedCode(e.target.value); setAddErr(''); }}
+              style={{ flex: 1 }}
+            >
+              <option value="">— Select port —</option>
+              {availablePorts.map(mp => (
+                <option key={mp.code} value={mp.code}>
+                  {mp.code} — {mp.name} ({mp.country})
+                </option>
+              ))}
+            </select>
+            <div className={styles.opToggles}>
+              {(['LOAD', 'DISCHARGE'] as const).map(op => (
+                <button
+                  key={op}
+                  type="button"
+                  className={newOps.includes(op) ? styles.opToggleActive : styles.opToggle}
+                  onClick={() => toggleOp(op)}
+                >
+                  {op === 'LOAD' ? '▲ L' : '▼ D'}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className={styles.btnSm}
+              onClick={addPort}
+              disabled={!selectedCode}
+            >
+              + Add
+            </button>
           </div>
-          <button
-            type="button"
-            className={styles.btnSm}
-            onClick={addPort}
-            disabled={!newCode.trim()}
-          >
-            + Add
-          </button>
-        </div>
+        )}
         {addErr && <span className={styles.portAddError}>{addErr}</span>}
       </div>
     </div>
@@ -1315,6 +1333,7 @@ function CreateServiceModal({ onClose, onCreated }: {
         portCode: p.portCode,
         portName: p.portName,
         country: p.country,
+        city: p.city,
         sequence: i + 1,
         weeksFromStart: p.weeksFromStart,
         operations: p.operations,
@@ -1460,6 +1479,7 @@ function EditServiceModal({ service, onClose, onUpdated }: {
         portCode: p.portCode,
         portName: p.portName,
         country: p.country,
+        city: p.city,
         sequence: i + 1,
         weeksFromStart: p.weeksFromStart,
         operations: p.operations,
@@ -2168,6 +2188,209 @@ function UsersTab({ initialUsers }: { initialUsers: AdminUser[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// Ports Tab
+// ---------------------------------------------------------------------------
+
+function CreatePortModal({ onClose, onCreated }: {
+  onClose: () => void;
+  onCreated: (p: AdminPort) => void;
+}) {
+  const [code, setCode]       = useState('');
+  const [name, setName]       = useState('');
+  const [country, setCountry] = useState('');
+  const [city, setCity]       = useState('');
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = () => {
+    if (!code.trim() || !name.trim() || !country.trim() || !city.trim()) {
+      setError('All fields are required');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await createPort({ code: code.toUpperCase().trim(), name: name.trim(), country: country.toUpperCase().trim(), city: city.trim() });
+      if (result.success) {
+        onCreated(result.data as AdminPort);
+      } else {
+        setError(result.error ?? 'Failed to create port');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h3 className={styles.modalTitle}>New Port</h3>
+        <div className={styles.formGrid}>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>UNLOCODE *</label>
+            <input className={`${styles.formInput} ${styles.formInputMono}`} value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="CLVAP" maxLength={6} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Country (2-letter) *</label>
+            <input className={`${styles.formInput} ${styles.formInputMono}`} value={country} onChange={e => setCountry(e.target.value.toUpperCase())} placeholder="CL" maxLength={2} />
+          </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Port Name *</label>
+            <input className={styles.formInput} value={name} onChange={e => setName(e.target.value)} placeholder="Valparaíso" maxLength={100} />
+          </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>City (for weather data) *</label>
+            <input className={styles.formInput} value={city} onChange={e => setCity(e.target.value)} placeholder="Valparaíso" maxLength={100} />
+            <span className={styles.formHint}>City name used to fetch weather forecasts via OpenWeatherMap API.</span>
+          </div>
+        </div>
+        {error && <div className={styles.modalError}>{error}</div>}
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
+          <button className={styles.btnPrimary} onClick={handleSubmit} disabled={isPending || !code.trim() || !name.trim() || !country.trim() || !city.trim()}>
+            {isPending ? 'Creating…' : 'Create Port'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditPortModal({ port, onClose, onUpdated }: {
+  port: AdminPort;
+  onClose: () => void;
+  onUpdated: (p: AdminPort) => void;
+}) {
+  const [name, setName]       = useState(port.name);
+  const [country, setCountry] = useState(port.country);
+  const [city, setCity]       = useState(port.city);
+  const [active, setActive]   = useState(port.active);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = () => {
+    if (!name.trim() || !country.trim() || !city.trim()) {
+      setError('All fields are required');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await updatePort(port._id, { name: name.trim(), country: country.toUpperCase().trim(), city: city.trim(), active });
+      if (result.success) {
+        onUpdated(result.data as AdminPort);
+      } else {
+        setError(result.error ?? 'Failed to update port');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h3 className={styles.modalTitle}>Edit Port — {port.code}</h3>
+        <div className={styles.formGrid}>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Port Name *</label>
+            <input className={styles.formInput} value={name} onChange={e => setName(e.target.value)} maxLength={100} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Country (2-letter) *</label>
+            <input className={`${styles.formInput} ${styles.formInputMono}`} value={country} onChange={e => setCountry(e.target.value.toUpperCase())} maxLength={2} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>City (weather) *</label>
+            <input className={styles.formInput} value={city} onChange={e => setCity(e.target.value)} maxLength={100} />
+          </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>
+              <input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} style={{ marginRight: 6 }} />
+              Active (visible for service selection)
+            </label>
+          </div>
+        </div>
+        {error && <div className={styles.modalError}>{error}</div>}
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
+          <button className={styles.btnPrimary} onClick={handleSave} disabled={isPending}>
+            {isPending ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PortsTab({ initialPorts }: { initialPorts: AdminPort[] }) {
+  const router = useRouter();
+  const [ports, setPorts] = useState<AdminPort[]>(initialPorts);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editingPort, setEditingPort] = useState<AdminPort | null>(null);
+
+  return (
+    <div className={styles.tabContent}>
+      <div className={styles.toolbar}>
+        <div className={styles.toolbarLeft}>
+          <span className={styles.toolbarCount}>{ports.length} ports</span>
+        </div>
+        <button className={styles.btnPrimary} onClick={() => setShowCreate(true)}>
+          + New Port
+        </button>
+      </div>
+
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Port Name</th>
+              <th>Country</th>
+              <th>City (weather)</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ports.map(p => (
+              <tr key={p._id} style={{ opacity: p.active ? 1 : 0.5 }}>
+                <td><code>{p.code}</code></td>
+                <td>{p.name}</td>
+                <td>{p.country}</td>
+                <td>{p.city}</td>
+                <td>
+                  <span className={styles.badge} style={{
+                    background: p.active ? 'var(--color-success-muted)' : 'var(--color-bg-tertiary)',
+                    color: p.active ? 'var(--color-success)' : 'var(--color-text-tertiary)',
+                  }}>
+                    {p.active ? 'Active' : 'Inactive'}
+                  </span>
+                </td>
+                <td>
+                  <button className={styles.btnSm} onClick={() => setEditingPort(p)}>Edit</button>
+                </td>
+              </tr>
+            ))}
+            {ports.length === 0 && (
+              <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '2rem' }}>No ports yet. Create the first one.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {showCreate && (
+        <CreatePortModal
+          onClose={() => setShowCreate(false)}
+          onCreated={p => { setPorts(prev => [...prev, p]); setShowCreate(false); router.refresh(); }}
+        />
+      )}
+      {editingPort && (
+        <EditPortModal
+          port={editingPort}
+          onClose={() => setEditingPort(null)}
+          onUpdated={p => { setPorts(prev => prev.map(x => x._id === p._id ? p : x)); setEditingPort(null); router.refresh(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -2178,6 +2401,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'vessels',   label: 'Vessels'       },
   { id: 'services',  label: 'Services'      },
   { id: 'users',     label: 'Users'         },
+  { id: 'ports',     label: 'Ports'         },
 ];
 
 interface AdminClientProps {
@@ -2188,9 +2412,10 @@ interface AdminClientProps {
   plans: AdminPlan[];
   vessels: AdminVessel[];
   users: AdminUser[];
+  ports: AdminPort[];
 }
 
-export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users }: AdminClientProps) {
+export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports }: AdminClientProps) {
   const [activeTab, setActiveTab] = useState<Tab>('voyages');
 
   return (
@@ -2229,6 +2454,7 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
       {activeTab === 'vessels'  && <VesselsTab initialVessels={vessels} />}
       {activeTab === 'services' && <ServicesTab initialServices={services as AdminService[]} />}
       {activeTab === 'users'    && <UsersTab initialUsers={users} />}
+      {activeTab === 'ports'    && <PortsTab initialPorts={ports} />}
     </div>
   );
 }

@@ -6,13 +6,29 @@ import mongoose, { Schema, Model } from 'mongoose';
 // Type imports no longer needed for Schema generics — type safety lives in server actions
 
 // ============================================================================
+// PORT SCHEMA — Master list of ports, chosen when building service rotations
+// ============================================================================
+
+const PortSchema = new Schema({
+  code:    { type: String, required: true, unique: true }, // UNLOCODE e.g. "CLVAP"
+  name:    { type: String, required: true },               // "Valparaíso"
+  country: { type: String, required: true },               // "CL"
+  city:    { type: String, required: true },               // city name for weather API e.g. "Valparaíso"
+  active:  { type: Boolean, default: true },
+}, { timestamps: true });
+
+PortSchema.index({ code: 1 });
+PortSchema.index({ active: 1 });
+
+// ============================================================================
 // SERVICE SCHEMA
 // ============================================================================
 
 const PortRotationSchema = new Schema({
   portCode: { type: String, required: true },
   portName: { type: String, required: true },
-  country: { type: String, required: true },
+  country:  { type: String, required: true },
+  city:     { type: String },                              // city for weather API — copied from Port collection
   sequence: { type: Number, required: true },
   weeksFromStart: { type: Number, required: true },
   operations: [{ type: String, enum: ['LOAD', 'DISCHARGE'], required: true }],
@@ -41,7 +57,8 @@ ServiceSchema.index({ active: 1 });
 const VoyagePortCallSchema = new Schema({
   portCode: { type: String, required: true },
   portName: { type: String, required: true },
-  country: { type: String },
+  country:  { type: String },
+  city:     { type: String },  // city for weather API — copied from service portRotation
   sequence: { type: Number, required: true },
   weekNumber: { type: Number, min: 1, max: 53 },
   eta: { type: Date },
@@ -642,6 +659,9 @@ UserSchema.index({ role: 1 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mongoose schemas are untyped; type safety lives in server actions
 type AnyModel = Model<any>;
+
+export const PortModel: AnyModel =
+  mongoose.models.Port || mongoose.model('Port', PortSchema);
 
 export const OfficeModel: AnyModel =
   mongoose.models.Office || mongoose.model('Office', OfficeSchema);

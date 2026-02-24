@@ -84,23 +84,37 @@ Reefer Stowage Planner System
 export interface SendUserConfirmationOptions {
   to: EmailRecipient;
   confirmToken: string;
+  role?: string;
+}
+
+function formatRoleLabel(role?: string): string {
+  const labels: Record<string, string> = {
+    ADMIN: 'Administrator',
+    SHIPPING_PLANNER: 'Shipping Planner',
+    STEVEDORE: 'Stevedore',
+    CHECKER: 'Checker',
+    EXPORTER: 'Exporter',
+    VIEWER: 'Viewer',
+  };
+  return role ? (labels[role] ?? role) : 'User';
 }
 
 export async function sendUserConfirmationEmail(opts: SendUserConfirmationOptions): Promise<void> {
-  const from = `"Reefer Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
-  const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
+  const from = `"Reefer Stowage Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
+  const baseUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3001';
   const confirmUrl = `${baseUrl}/confirm/${opts.confirmToken}`;
 
   const toAddress = opts.to.name
     ? `"${opts.to.name}" <${opts.to.email}>`
     : opts.to.email;
 
-  const subject = 'Your Reefer Planner account is ready — set your password';
+  const roleLabel = formatRoleLabel(opts.role);
+  const subject = `Your Reefer Stowage Planner account is ready — set your password`;
 
   const text = `
-Welcome to Reefer Planner, ${opts.to.name ?? opts.to.email}!
+Welcome to Reefer Stowage Planner, ${opts.to.name ?? opts.to.email}!
 
-An administrator has created an account for you. To activate it and set your password, please visit the link below:
+An administrator has created a ${roleLabel} account for you. To activate it and set your password, please visit the link below:
 
   ${confirmUrl}
 

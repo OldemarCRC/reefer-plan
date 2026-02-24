@@ -888,3 +888,9 @@
   margin: 0;
   font-size: var(--text-sm);
 }
+
+.formHint {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: var(--space-1);
+}

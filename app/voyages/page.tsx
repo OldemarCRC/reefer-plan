@@ -19,22 +19,24 @@ export default async function VoyagesPage() {
   const result = await getVoyages();
   const voyages = result.success ? result.data : [];
 
-  // Collect unique (portName, country, etaDate) combos for forecast lookup
-  const portKeys = new Map<string, { portName: string; country: string; eta: string | null }>();
+  // Collect unique (city/portName, country, etaDate) combos for forecast lookup
+  // Prefer pc.city if available (from Port collection), fall back to pc.portName
+  const portKeys = new Map<string, { city: string; country: string; eta: string | null }>();
   for (const v of voyages) {
     for (const pc of v.portCalls || []) {
       const etaDate = pc.eta ? new Date(pc.eta).toISOString().slice(0, 10) : null;
-      const key = `${pc.portName},${pc.country || ''},${etaDate || ''}`.toLowerCase();
+      const cityName = (pc as any).city || pc.portName;
+      const key = `${cityName},${pc.country || ''},${etaDate || ''}`.toLowerCase();
       if (!portKeys.has(key)) {
-        portKeys.set(key, { portName: pc.portName, country: pc.country || '', eta: pc.eta || null });
+        portKeys.set(key, { city: cityName, country: pc.country || '', eta: pc.eta || null });
       }
     }
   }
 
   // Fetch forecast for all unique port+date combos in parallel
   const weatherEntries = await Promise.all(
-    Array.from(portKeys.entries()).map(async ([key, { portName, country, eta }]) => {
-      const result = await getPortWeatherForecast(portName, country, eta);
+    Array.from(portKeys.entries()).map(async ([key, { city, country, eta }]) => {
+      const result = await getPortWeatherForecast(city, country, eta);
       return [key, result] as const;
     })
   );
@@ -59,7 +61,8 @@ export default async function VoyagesPage() {
       })
       .map((pc: any) => {
         const etaDate = pc.eta ? new Date(pc.eta).toISOString().slice(0, 10) : null;
-        const weatherKey = `${pc.portName},${pc.country || ''},${etaDate || ''}`.toLowerCase();
+        const cityName = pc.city || pc.portName;
+        const weatherKey = `${cityName},${pc.country || ''},${etaDate || ''}`.toLowerCase();
         const weatherResult = weatherByPort[weatherKey] ?? null;
         return {
           portCode: pc.portCode,

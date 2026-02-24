@@ -13,7 +13,8 @@ import MarkSentModal from '@/components/stowage/MarkSentModal';
 import { getConfirmedBookingsForVoyage } from '@/app/actions/booking';
 import ConfigureZonesModal, { type ZoneConfig } from '@/components/vessel/ConfigureZonesModal';
 import CoolingSectionTopDown, { type SectionBookingSlot } from '@/components/stowage/CoolingSectionTopDown';
-import type { VoyageTempAssignment } from '@/lib/vessel-profile-data';
+import type { VoyageTempAssignment, VesselLayout } from '@/lib/vessel-profile-data';
+import { LEVEL_DISPLAY_ORDER } from '@/lib/vessel-profile-data';
 import styles from './page.module.css';
 
 interface CargoAssignment {
@@ -88,6 +89,9 @@ export default function StowagePlanDetailPage() {
     historicalStowageFactor?: number;
   }>>({});
 
+  // Vessel layout built from DB temperatureZones — drives VesselProfile SVG
+  const [vesselLayout, setVesselLayout] = useState<VesselLayout | undefined>(undefined);
+
   useEffect(() => {
     getStowagePlanById(planId).then(async (result) => {
       if (result.success && result.data) {
@@ -113,6 +117,40 @@ export default function StowagePlanDetailPage() {
             }
           }
           setSectionFactors(factors);
+
+          // Build vessel layout from real DB data (holds + levels derived from sectionId)
+          const allSections: { sectionId: string; sqm: number }[] = [];
+          for (const zone of temperatureZones) {
+            for (const section of zone.coolingSections ?? []) {
+              if (section.sectionId) {
+                allSections.push({ sectionId: section.sectionId, sqm: section.sqm ?? 100 });
+              }
+            }
+          }
+          if (allSections.length > 0) {
+            const holdMap = new Map<number, { sectionId: string; sqm: number }[]>();
+            for (const s of allSections) {
+              const holdNum = parseInt(s.sectionId.match(/^\d+/)?.[0] ?? '0', 10);
+              if (holdNum === 0) continue;
+              if (!holdMap.has(holdNum)) holdMap.set(holdNum, []);
+              holdMap.get(holdNum)!.push(s);
+            }
+            const layout: VesselLayout = {
+              holds: [...holdMap.entries()]
+                .sort(([a], [b]) => a - b)
+                .map(([holdNumber, levels]) => ({
+                  holdNumber,
+                  levels: levels.sort((a, b) => {
+                    const la = a.sectionId.replace(/^\d+/, '');
+                    const lb = b.sectionId.replace(/^\d+/, '');
+                    const ia = LEVEL_DISPLAY_ORDER.indexOf(la);
+                    const ib = LEVEL_DISPLAY_ORDER.indexOf(lb);
+                    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+                  }),
+                })),
+            };
+            setVesselLayout(layout);
+          }
         }
 
         // Use real cooling section temperatures from the plan if available
@@ -875,6 +913,7 @@ export default function StowagePlanDetailPage() {
           voyageNumber={plan.voyageNumber}
           tempAssignments={vesselProfileData}
           conflictCompartmentIds={conflictCompartmentIds}
+          vesselLayout={vesselLayout}
           onCompartmentClick={(id) => setSelectedSectionId(prev => prev === id ? null : id)}
         />
       </div>
