@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useSession } from 'next-auth/react';
 import AppShell from '@/components/layout/AppShell';
+import ShipperShell from '@/components/layout/ShipperShell';
 import { changePassword } from '@/app/actions/user';
 import styles from './account.module.css';
 
@@ -53,9 +54,10 @@ export default function AccountPage() {
   };
 
   const role = (session?.user as any)?.role ?? '';
+  const Shell = role === 'EXPORTER' ? ShipperShell : AppShell;
 
   return (
-    <AppShell>
+    <Shell>
       <div className={styles.page}>
         <div className={styles.header}>
           <h1 className={styles.title}>Account Settings</h1>
@@ -139,6 +141,6 @@ export default function AccountPage() {
           </div>
         </div>
       </div>
-    </AppShell>
+    </Shell>
   );
 }
