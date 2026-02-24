@@ -2,7 +2,7 @@
 
 import type { Session } from 'next-auth';
 import { SessionProvider } from 'next-auth/react';
-import ActivityTracker from './ActivityTracker';
+import InactivityTimer from './InactivityTimer';
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -15,7 +15,7 @@ interface ProvidersProps {
 export default function Providers({ children, session }: ProvidersProps) {
   return (
     <SessionProvider key={session?.user?.id ?? 'guest'} session={session}>
-      <ActivityTracker />
+      <InactivityTimer />
       {children}
     </SessionProvider>
   );

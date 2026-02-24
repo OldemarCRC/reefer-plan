@@ -41,7 +41,7 @@ const UpdateUserSchema = z.object({
 
 // ----------------------------------------------------------------------------
 // GET ALL USERS (for admin panel)
-// Excludes sensitive fields: passwordHash, sessionToken, emailConfirmToken
+// Excludes sensitive fields: passwordHash, sessionVersion, emailConfirmToken
 // ----------------------------------------------------------------------------
 
 export async function getUsers() {
@@ -62,7 +62,6 @@ export async function getUsers() {
       canSendEmailsToCaptains: u.canSendEmailsToCaptains ?? false,
       shipperCode: u.shipperCode ?? '',
       emailConfirmed: u.emailConfirmed ?? false,
-      isOnline: u.isOnline ?? false,
       lastLogin: u.lastLogin ? u.lastLogin.toISOString() : null,
       createdAt: u.createdAt ? u.createdAt.toISOString() : null,
     }));
@@ -129,7 +128,6 @@ export async function createUser(input: unknown) {
         canSendEmailsToCaptains: user.canSendEmailsToCaptains ?? false,
         shipperCode: (user as any).shipperCode ?? '',
         emailConfirmed: false,
-        isOnline: false,
         lastLogin: null,
         createdAt: user.createdAt?.toISOString() ?? null,
       },
@@ -178,7 +176,6 @@ export async function updateUser(id: unknown, input: unknown) {
         canSendEmailsToCaptains: user.canSendEmailsToCaptains ?? false,
         shipperCode: user.shipperCode ?? '',
         emailConfirmed: user.emailConfirmed ?? false,
-        isOnline: user.isOnline ?? false,
         lastLogin: user.lastLogin ? user.lastLogin.toISOString() : null,
         createdAt: user.createdAt ? user.createdAt.toISOString() : null,
       },

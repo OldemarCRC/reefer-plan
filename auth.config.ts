@@ -8,6 +8,18 @@ export default {
   },
 
   callbacks: {
+    // Fix Docker/LAN redirect issue: strip the base URL from redirect targets
+    // so NEXTAUTH_URL=localhost:3000 doesn't corrupt redirects on 192.168.x.x:3001
+    redirect({ url }) {
+      if (url.startsWith('/')) return url;
+      try {
+        const { pathname, search } = new URL(url);
+        return pathname + search;
+      } catch {
+        return '/';
+      }
+    },
+
     // Called on every request in middleware to decide if it's authorized
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
@@ -70,10 +82,10 @@ export default {
       if (session.user) {
         session.user.name  = token.name  ?? null;
         session.user.email = token.email ?? '';
-        (session.user as any).role         = token.role;
-        (session.user as any).id           = token.sub;
-        (session.user as any).shipperCode  = token.shipperCode ?? null;
-        (session.user as any).sessionToken = token.sessionToken;
+        (session.user as any).role           = token.role;
+        (session.user as any).id             = token.sub;
+        (session.user as any).shipperCode    = token.shipperCode ?? null;
+        (session.user as any).sessionVersion = token.sessionVersion;
       }
       return session;
     },

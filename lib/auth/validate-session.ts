@@ -5,20 +5,21 @@ import { UserModel } from '@/lib/db/schemas';
 export async function validateSession(session: Session | null): Promise<boolean> {
   if (!session?.user?.id) return false;
 
-  const jwtToken = (session.user as any).sessionToken as string | undefined;
+  const jwtVersion = (session.user as any).sessionVersion as number | undefined;
 
-  if (!jwtToken) return true;
+  // If no sessionVersion in JWT (legacy tokens), allow through
+  if (jwtVersion === undefined || jwtVersion === null) return true;
 
   try {
     await connectDB();
     const user = await UserModel
       .findById(session.user.id)
-      .select('+sessionToken')
+      .select('sessionVersion')
       .lean();
 
     if (!user) return false;
 
-    return (user as any).sessionToken === jwtToken;
+    return (user as any).sessionVersion === jwtVersion;
   } catch (err) {
     console.error('[validate-session] error:', err);
     return true;

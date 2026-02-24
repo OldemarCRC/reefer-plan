@@ -1,7 +1,6 @@
 // auth.ts — Full NextAuth configuration
 // Server-side only (uses Mongoose + bcryptjs)
 
-import crypto from 'crypto';
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
@@ -34,23 +33,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             .select('+passwordHash')
             .lean();
 
-          if (!user) { console.log('[auth] user not found:', email); return null; }
+          if (!user) return null;
 
           const hash = (user as any).passwordHash as string | undefined;
-          if (!hash) { console.log('[auth] no passwordHash on user:', email); return null; }
+          if (!hash) return null;
 
           const valid = await bcrypt.compare(password, hash);
-          if (!valid) { console.log('[auth] wrong password for:', email); return null; }
+          if (!valid) return null;
 
-          // Generate a new session token — invalidates any previous session for this user
-          const sessionToken = crypto.randomUUID();
+          // Increment sessionVersion — invalidates any previous session for this user
+          const updated = await UserModel.findByIdAndUpdate(
+            (user as any)._id,
+            { $inc: { sessionVersion: 1 }, lastLogin: new Date() },
+            { new: true }
+          ).select('sessionVersion').lean();
 
-          await UserModel.findByIdAndUpdate((user as any)._id, {
-            isOnline: true,
-            sessionToken,
-            lastLogin: new Date(),
-            lastActivity: new Date(),
-          });
+          const sessionVersion = (updated as any)?.sessionVersion ?? 1;
 
           return {
             id: String((user as any)._id),
@@ -58,7 +56,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             name: (user as any).name as string,
             role: (user as any).role,
             shipperCode: (user as any).shipperCode ?? null,
-            sessionToken,
+            sessionVersion,
           } as any;
         } catch (err) {
           console.error('[auth] authorize error:', err);
@@ -71,20 +69,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     ...authConfig.callbacks,
 
-    // Add role, name, email and sessionToken to the JWT token on first sign-in.
+    // Add role, name, email and sessionVersion to the JWT token on first sign-in.
     jwt({ token, user }) {
       if (user) {
-        token.name         = user.name;
-        token.email        = user.email;
-        token.role         = (user as any).role;
-        token.shipperCode  = (user as any).shipperCode ?? null;
-        token.sessionToken = (user as any).sessionToken;
+        token.name           = user.name;
+        token.email          = user.email;
+        token.role           = (user as any).role;
+        token.shipperCode    = (user as any).shipperCode ?? null;
+        token.sessionVersion = (user as any).sessionVersion;
       }
       return token;
     },
   },
 
-  session: { strategy: 'jwt' },
+  session: { strategy: 'jwt', maxAge: 8 * 60 * 60 }, // 8 hours
 
   // Derive base URL from the incoming request Host header instead of
   // NEXTAUTH_URL. Required for Docker / LAN access (192.168.x.x, custom port).

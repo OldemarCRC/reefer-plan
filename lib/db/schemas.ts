@@ -642,11 +642,10 @@ const UserSchema = new Schema({
   // Email confirmation
   emailConfirmed: { type: Boolean, default: false },
   emailConfirmToken: { type: String, select: false },
-  // Session management
-  isOnline: { type: Boolean, default: false },
-  sessionToken: { type: String, select: false },
+  // Session management — sessionVersion is incremented on each login/logout
+  // to invalidate older JWT tokens (single-session enforcement)
+  sessionVersion: { type: Number, default: 0 },
   lastLogin: { type: Date },
-  lastActivity: { type: Date },
 }, {
   timestamps: true,
 });

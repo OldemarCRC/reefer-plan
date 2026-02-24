@@ -33,14 +33,12 @@ export async function logoutAction() {
   try {
     const session = await auth();
     if (session?.user?.id) {
+      // Increment sessionVersion so any other open sessions are invalidated
       await connectDB();
-      await UserModel.findByIdAndUpdate(session.user.id, {
-        isOnline: false,
-        sessionToken: null,
-      });
+      await UserModel.findByIdAndUpdate(session.user.id, { $inc: { sessionVersion: 1 } });
     }
   } catch (err) {
-    console.error('[auth] logout DB update error:', err);
+    console.error('[auth] logout error:', err);
   }
   await signOut({ redirectTo: '/login' });
 }

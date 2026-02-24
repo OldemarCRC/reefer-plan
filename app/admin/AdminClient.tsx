@@ -102,7 +102,6 @@ interface AdminUser {
   canSendEmailsToCaptains: boolean;
   shipperCode: string;
   emailConfirmed: boolean;
-  isOnline: boolean;
   lastLogin: string | null;
   createdAt: string | null;
 }
@@ -2134,11 +2133,6 @@ function UsersTab({ initialUsers }: { initialUsers: AdminUser[] }) {
                 <tr key={u._id}>
                   <td>
                     <span style={{ fontWeight: 'var(--weight-medium)' }}>{u.name}</span>
-                    {u.isOnline && (
-                      <span className={styles.wkBadge} style={{ background: 'var(--color-success-muted)', color: 'var(--color-success)' }}>
-                        online
-                      </span>
-                    )}
                   </td>
                   <td className={styles.cellMono}>{u.email}</td>
                   <td>
