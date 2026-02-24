@@ -1,0 +1,684 @@
+/* ============================================================================
+   SHIPPER PORTAL — Shared styles for all /shipper/* pages
+   ============================================================================ */
+
+/* --- Page header --- */
+
+.pageHeader {
+  margin-bottom: var(--space-6);
+}
+
+.pageTitle {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-1);
+}
+
+.pageSubtitle {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* --- Summary cards grid --- */
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.summaryCard {
+  background: var(--color-bg-secondary);
+  border: var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.summaryCardLabel {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.summaryCardValue {
+  font-family: var(--font-heading);
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-primary);
+  line-height: 1;
+}
+
+.summaryCardValue--blue   { color: var(--color-blue-light); }
+.summaryCardValue--green  { color: var(--color-success); }
+.summaryCardValue--yellow { color: var(--color-warning); }
+.summaryCardValue--muted  { color: var(--color-text-tertiary); }
+
+.summaryCardDesc {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* --- Section headers --- */
+
+.section {
+  margin-bottom: var(--space-6);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.sectionTitle {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.sectionLink {
+  font-size: var(--text-sm);
+  color: var(--color-blue-light);
+  text-decoration: none;
+}
+
+.sectionLink:hover {
+  text-decoration: underline;
+}
+
+/* --- Booking table --- */
+
+.tableWrapper {
+  background: var(--color-bg-secondary);
+  border: var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.table th {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: var(--border-subtle);
+  background: var(--color-bg-tertiary);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border-faint, rgba(255,255,255,0.04));
+  vertical-align: middle;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table tr:hover td {
+  background: var(--color-bg-hover);
+}
+
+.tableLink {
+  color: var(--color-text-primary);
+  font-weight: var(--weight-medium);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-decoration: none;
+}
+
+.tableLink:hover {
+  color: var(--color-blue-light);
+  text-decoration: underline;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* --- Status badge --- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* --- Port route display --- */
+
+.portRoute {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.portArrow {
+  color: var(--color-text-tertiary);
+}
+
+/* --- Empty state --- */
+
+.emptyState {
+  text-align: center;
+  padding: var(--space-10) var(--space-6);
+  color: var(--color-text-tertiary);
+}
+
+.emptyStateIcon {
+  font-size: 2.5rem;
+  margin-bottom: var(--space-3);
+}
+
+.emptyStateTitle {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-2);
+}
+
+.emptyStateDesc {
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+/* --- Loading --- */
+
+.loading {
+  text-align: center;
+  padding: var(--space-10);
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+}
+
+/* --- Voyage strip (upcoming) --- */
+
+.voyageStrip {
+  display: flex;
+  gap: var(--space-4);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+}
+
+.voyageCard {
+  background: var(--color-bg-secondary);
+  border: var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  min-width: 240px;
+  flex-shrink: 0;
+}
+
+.voyageCardNum {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin-bottom: var(--space-1);
+}
+
+.voyageCardVessel {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.voyageCardDep {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-3);
+}
+
+.portChain {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  align-items: center;
+}
+
+.portDot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.portDot--load { color: var(--color-success); }
+.portDot--discharge { color: var(--color-warning); }
+
+.portDotSep {
+  width: 16px;
+  height: 1px;
+  background: var(--color-border-faint, rgba(255,255,255,0.06));
+  display: inline-block;
+  margin: 0 2px;
+}
+
+/* --- Filter / search bar --- */
+
+.filterBar {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 200px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-secondary);
+  border: var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.searchInput:focus {
+  border-color: var(--color-blue);
+}
+
+.filterSelect {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-secondary);
+  border: var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  outline: none;
+  cursor: pointer;
+}
+
+/* --- Detail card --- */
+
+.detailCard {
+  background: var(--color-bg-secondary);
+  border: var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
+}
+
+.detailCardTitle {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 var(--space-4);
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-4);
+}
+
+.detailField label {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin-bottom: 2px;
+}
+
+.detailField span {
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  font-weight: var(--weight-medium);
+}
+
+/* --- Port call timeline --- */
+
+.timeline {
+  position: relative;
+  padding-left: var(--space-6);
+}
+
+.timelineItem {
+  position: relative;
+  padding-bottom: var(--space-4);
+}
+
+.timelineItem:last-child {
+  padding-bottom: 0;
+}
+
+.timelineDot {
+  position: absolute;
+  left: calc(-1 * var(--space-6) + 6px);
+  top: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-bg-tertiary);
+  border: 2px solid var(--color-border-subtle, rgba(255,255,255,0.1));
+}
+
+.timelineDot--load     { background: var(--color-success);    border-color: var(--color-success); }
+.timelineDot--discharge{ background: var(--color-warning);    border-color: var(--color-warning); }
+.timelineDot--locked   { background: var(--color-text-tertiary); border-color: var(--color-text-tertiary); }
+
+.timelineItem::before {
+  content: '';
+  position: absolute;
+  left: calc(-1 * var(--space-6) + 10px);
+  top: 14px;
+  bottom: 0;
+  width: 2px;
+  background: var(--color-border-subtle, rgba(255,255,255,0.06));
+}
+
+.timelineItem:last-child::before {
+  display: none;
+}
+
+.timelinePort {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-primary);
+}
+
+.timelineMeta {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  display: flex;
+  gap: var(--space-3);
+  margin-top: 2px;
+}
+
+.timelineLocked {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* --- Schedules --- */
+
+.serviceSection {
+  margin-bottom: var(--space-6);
+}
+
+.serviceHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.serviceCode {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--color-blue-muted);
+  color: var(--color-blue-light);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.serviceName {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+}
+
+/* --- Wizard / request form --- */
+
+.wizard {
+  max-width: 680px;
+}
+
+.wizardSteps {
+  display: flex;
+  gap: 0;
+  margin-bottom: var(--space-6);
+}
+
+.wizardStep {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  position: relative;
+}
+
+.wizardStep:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  right: -50%;
+  height: 2px;
+  background: var(--color-border-subtle, rgba(255,255,255,0.06));
+  z-index: 0;
+}
+
+.wizardStepDot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-bg-tertiary);
+  border: 2px solid var(--color-border-subtle, rgba(255,255,255,0.1));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-tertiary);
+  z-index: 1;
+  position: relative;
+}
+
+.wizardStep--active .wizardStepDot {
+  background: var(--color-blue);
+  border-color: var(--color-blue);
+  color: #fff;
+}
+
+.wizardStep--done .wizardStepDot {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: #fff;
+}
+
+.wizardStepLabel {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
+.wizardStep--active .wizardStepLabel {
+  color: var(--color-text-primary);
+  font-weight: var(--weight-medium);
+}
+
+.wizardPanel {
+  background: var(--color-bg-secondary);
+  border: var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.wizardTitle {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-4);
+}
+
+.formGroup {
+  margin-bottom: var(--space-4);
+}
+
+.formLabel {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-2);
+}
+
+.formSelect,
+.formInput {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-tertiary);
+  border: var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  outline: none;
+  transition: border-color var(--transition-fast);
+  box-sizing: border-box;
+}
+
+.formSelect:focus,
+.formInput:focus {
+  border-color: var(--color-blue);
+}
+
+.formHint {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin-top: var(--space-1);
+}
+
+.wizardActions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: var(--border-subtle);
+}
+
+.btnPrimary {
+  padding: var(--space-2) var(--space-5);
+  background: var(--color-blue);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: var(--color-blue-hover, #2563EB);
+}
+
+.btnPrimary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btnSecondary {
+  padding: var(--space-2) var(--space-4);
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.btnSecondary:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.errorMsg {
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  margin-top: var(--space-3);
+}
+
+.successMsg {
+  color: var(--color-success);
+  font-size: var(--text-sm);
+  margin-top: var(--space-3);
+}
+
+/* --- Voyage option card (request step 2) --- */
+
+.voyageOption {
+  border: var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+  margin-bottom: var(--space-2);
+}
+
+.voyageOption:hover {
+  background: var(--color-bg-hover);
+}
+
+.voyageOption--selected {
+  border-color: var(--color-blue);
+  background: var(--color-blue-muted);
+}
+
+.voyageOptionHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.voyageOptionNum {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.voyageOptionVessel {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.voyageOptionDep {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin-left: auto;
+}

@@ -1,0 +1,291 @@
+/* ============================================================================
+   SHIPPER SIDEBAR — Stripped-down nav for the exporter portal
+   ============================================================================ */
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--sidebar-width);
+  height: 100vh;
+  background: var(--color-bg-secondary);
+  border-right: var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  z-index: var(--z-sidebar);
+  transition: width var(--transition-normal);
+  overflow: hidden;
+}
+
+.sidebar--collapsed {
+  width: var(--sidebar-width-collapsed);
+}
+
+/* --- Brand --- */
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  height: var(--header-height);
+  border-bottom: var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.brandIcon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brandIcon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.brandText {
+  font-family: var(--font-heading);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  opacity: 1;
+  transition: opacity var(--transition-fast);
+  overflow: hidden;
+}
+
+.sidebar--collapsed .brandText {
+  opacity: 0;
+  width: 0;
+}
+
+.portalBadge {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--color-blue-light);
+  background: var(--color-blue-muted);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity var(--transition-fast);
+}
+
+.sidebar--collapsed .portalBadge {
+  opacity: 0;
+  width: 0;
+}
+
+/* --- Navigation --- */
+
+.nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3) 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.navSectionLabel {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: var(--space-2) var(--space-4) var(--space-1);
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity var(--transition-fast);
+}
+
+.sidebar--collapsed .navSectionLabel {
+  opacity: 0;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  border-radius: 0;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  white-space: nowrap;
+  overflow: hidden;
+  position: relative;
+}
+
+.navItem:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.navItem--active {
+  background: var(--color-blue-muted);
+  color: var(--color-blue-light);
+}
+
+.navItem--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--color-blue);
+  border-radius: 0 2px 2px 0;
+}
+
+.navIcon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.navIcon svg {
+  width: 100%;
+  height: 100%;
+  stroke-width: 1.75;
+}
+
+.navLabel {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity var(--transition-fast);
+}
+
+.sidebar--collapsed .navLabel {
+  opacity: 0;
+  width: 0;
+}
+
+.navBadge {
+  background: var(--color-warning);
+  color: var(--color-bg-primary);
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  padding: 1px 5px;
+  border-radius: 999px;
+  min-width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.sidebar--collapsed .navBadge {
+  opacity: 0;
+}
+
+/* --- User info at bottom --- */
+
+.userSection {
+  border-top: var(--border-subtle);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  overflow: hidden;
+}
+
+.userAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-blue-muted);
+  color: var(--color-blue-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  flex-shrink: 0;
+}
+
+.userInfo {
+  flex: 1;
+  overflow: hidden;
+  transition: opacity var(--transition-fast);
+}
+
+.sidebar--collapsed .userInfo {
+  opacity: 0;
+  width: 0;
+}
+
+.userName {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userRole {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+
+/* --- Collapse toggle --- */
+
+.collapseBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  width: 100%;
+  border-top: var(--border-subtle);
+  transition: color var(--transition-fast), background var(--transition-fast);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.collapseBtn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+
+.collapseIcon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  transition: transform var(--transition-normal);
+}
+
+.collapseIcon svg {
+  width: 100%;
+  height: 100%;
+  stroke-width: 2;
+}
+
+.collapseIcon--rotated {
+  transform: rotate(180deg);
+}
+
+.collapseLabel {
+  overflow: hidden;
+  transition: opacity var(--transition-fast);
+}
+
+.sidebar--collapsed .collapseLabel {
+  opacity: 0;
+  width: 0;
+}

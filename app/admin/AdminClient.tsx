@@ -9,6 +9,7 @@ import { createVessel, updateVessel } from '@/app/actions/vessel';
 import { deleteService, createService, updateService } from '@/app/actions/service';
 import { createUser, updateUser, deleteUser, resendUserConfirmation } from '@/app/actions/user';
 import { getPorts, createPort, updatePort } from '@/app/actions/port';
+import { getShipperCodes } from '@/app/actions/contract';
 import ContractsClient from '@/app/contracts/ContractsClient';
 import type { DisplayContract } from '@/app/contracts/ContractsClient';
 import styles from './page.module.css';
@@ -99,6 +100,7 @@ interface AdminUser {
   company: string;
   port: string;
   canSendEmailsToCaptains: boolean;
+  shipperCode: string;
   emailConfirmed: boolean;
   isOnline: boolean;
   lastLogin: string | null;
@@ -1779,8 +1781,16 @@ function CreateUserModal({ onClose, onCreated }: {
   const [company, setCompany] = useState('');
   const [port, setPort] = useState('');
   const [canSend, setCanSend] = useState(false);
+  const [shipperCode, setShipperCode] = useState('');
+  const [shipperCodes, setShipperCodes] = useState<{ code: string; name: string }[]>([]);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (role === 'EXPORTER') {
+      getShipperCodes().then(r => { if (r.success) setShipperCodes(r.data); });
+    }
+  }, [role]);
 
   const handleSubmit = () => {
     if (!email.trim() || !name.trim()) {
@@ -1796,6 +1806,7 @@ function CreateUserModal({ onClose, onCreated }: {
         company: company.trim() || undefined,
         port: port.trim() || undefined,
         canSendEmailsToCaptains: canSend,
+        shipperCode: role === 'EXPORTER' ? shipperCode.trim() || undefined : undefined,
       });
       if (result.success) {
         onCreated(result.data as AdminUser);
@@ -1876,6 +1887,24 @@ function CreateUserModal({ onClose, onCreated }: {
               Can send emails to captains
             </label>
           </div>
+          {role === 'EXPORTER' && (
+            <div className={styles.formGroupFull}>
+              <label className={styles.formLabel}>Shipper / Exporter Code *</label>
+              <select
+                className={styles.formSelect}
+                value={shipperCode}
+                onChange={e => setShipperCode(e.target.value)}
+              >
+                <option value="">— Select shipper code —</option>
+                {shipperCodes.map(s => (
+                  <option key={s.code} value={s.code}>{s.code} — {s.name}</option>
+                ))}
+              </select>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '0.25rem', display: 'block' }}>
+                Links this user to a shipper in active contracts. Create ports first if none appear.
+              </span>
+            </div>
+          )}
         </div>
 
         {error && <div className={styles.modalError}>{error}</div>}
@@ -1909,8 +1938,16 @@ function EditUserModal({ user, onClose, onUpdated }: {
   const [company, setCompany] = useState(user.company);
   const [port, setPort] = useState(user.port);
   const [canSend, setCanSend] = useState(user.canSendEmailsToCaptains);
+  const [shipperCode, setShipperCode] = useState((user as any).shipperCode ?? '');
+  const [shipperCodes, setShipperCodes] = useState<{ code: string; name: string }[]>([]);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (role === 'EXPORTER') {
+      getShipperCodes().then(r => { if (r.success) setShipperCodes(r.data); });
+    }
+  }, [role]);
 
   const handleSave = () => {
     if (!name.trim()) { setError('Name is required'); return; }
@@ -1922,6 +1959,7 @@ function EditUserModal({ user, onClose, onUpdated }: {
         company: company.trim(),
         port: port.trim(),
         canSendEmailsToCaptains: canSend,
+        shipperCode: role === 'EXPORTER' ? shipperCode.trim() : '',
       });
       if (result.success) {
         onUpdated({ ...user, ...result.data } as AdminUser);
@@ -1989,6 +2027,21 @@ function EditUserModal({ user, onClose, onUpdated }: {
               Can send emails to captains
             </label>
           </div>
+          {role === 'EXPORTER' && (
+            <div className={styles.formGroupFull}>
+              <label className={styles.formLabel}>Shipper / Exporter Code</label>
+              <select
+                className={styles.formSelect}
+                value={shipperCode}
+                onChange={e => setShipperCode(e.target.value)}
+              >
+                <option value="">— Select shipper code —</option>
+                {shipperCodes.map(s => (
+                  <option key={s.code} value={s.code}>{s.code} — {s.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {error && <div className={styles.modalError}>{error}</div>}

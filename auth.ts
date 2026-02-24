@@ -57,6 +57,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             email: (user as any).email as string,
             name: (user as any).name as string,
             role: (user as any).role,
+            shipperCode: (user as any).shipperCode ?? null,
             sessionToken,
           } as any;
         } catch (err) {
@@ -76,6 +77,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.name         = user.name;
         token.email        = user.email;
         token.role         = (user as any).role;
+        token.shipperCode  = (user as any).shipperCode ?? null;
         token.sessionToken = (user as any).sessionToken;
       }
       return token;

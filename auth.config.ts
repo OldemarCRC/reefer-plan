@@ -16,7 +16,11 @@ export default {
 
       // Login page: redirect to dashboard if already authenticated
       if (pathname === '/login') {
-        if (isLoggedIn) return Response.redirect(new URL('/', nextUrl));
+        if (isLoggedIn) {
+          // EXPORTERs go to shipper portal
+          if (role === 'EXPORTER') return Response.redirect(new URL('/shipper', nextUrl));
+          return Response.redirect(new URL('/', nextUrl));
+        }
         return true;
       }
 
@@ -25,6 +29,20 @@ export default {
 
       // All other routes require authentication
       if (!isLoggedIn) return false; // NextAuth redirects to pages.signIn
+
+      // Shipper portal: EXPORTER only
+      if (pathname.startsWith('/shipper')) {
+        if (role !== 'EXPORTER') {
+          return Response.redirect(new URL('/', nextUrl));
+        }
+        return true;
+      }
+
+      // EXPORTERs can only access /shipper/* and /account
+      if (role === 'EXPORTER') {
+        if (pathname === '/account') return true;
+        return Response.redirect(new URL('/shipper', nextUrl));
+      }
 
       // Admin-only routes
       if (pathname.startsWith('/admin') && role !== 'ADMIN') {
@@ -54,6 +72,7 @@ export default {
         session.user.email = token.email ?? '';
         (session.user as any).role         = token.role;
         (session.user as any).id           = token.sub;
+        (session.user as any).shipperCode  = token.shipperCode ?? null;
         (session.user as any).sessionToken = token.sessionToken;
       }
       return session;

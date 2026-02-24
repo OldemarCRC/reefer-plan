@@ -346,3 +346,46 @@ export async function getContractsByService(serviceId: unknown) {
     return { success: false, error: 'Failed to fetch contracts' };
   }
 }
+
+// ----------------------------------------------------------------------------
+// GET SHIPPER CODES
+// Returns all unique {code, name} pairs from shippers+consignees across active contracts.
+// Used by admin when assigning shipperCode to EXPORTER users.
+// ----------------------------------------------------------------------------
+
+export async function getShipperCodes(): Promise<{ success: boolean; data: { code: string; name: string }[]; error?: string }> {
+  try {
+    await connectDB();
+
+    const contracts = await ContractModel.find({ active: true })
+      .select('client shippers consignees')
+      .lean();
+
+    const map = new Map<string, string>();
+
+    for (const c of contracts as any[]) {
+      // If the primary client is a shipper, include them
+      if (c.client?.type === 'SHIPPER' && c.client?.name) {
+        const code = c.client?.clientNumber ?? c.client?.name.slice(0, 10).toUpperCase().replace(/\s/g, '');
+        map.set(code, c.client.name);
+      }
+      // Shippers array
+      for (const s of c.shippers ?? []) {
+        if (s.code && s.name) map.set(s.code, s.name);
+      }
+      // Consignees array — sometimes shippers are in the consignee side
+      for (const s of c.consignees ?? []) {
+        if (s.code && s.name) map.set(s.code, s.name);
+      }
+    }
+
+    const data = Array.from(map.entries())
+      .map(([code, name]) => ({ code, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error fetching shipper codes:', error);
+    return { success: false, data: [], error: 'Failed to fetch shipper codes' };
+  }
+}

@@ -378,3 +378,66 @@ export async function updateBooking(bookingId: unknown, updates: Record<string, 
     return { success: false, error: 'Failed to update booking' };
   }
 }
+
+// ----------------------------------------------------------------------------
+// GET BOOKINGS BY SHIPPER CODE (for EXPORTER portal)
+// Filters bookings where shipper.code matches the user's shipperCode
+// ----------------------------------------------------------------------------
+
+export async function getBookingsByShipperCode(code: string) {
+  try {
+    if (!code) return { success: false, data: [], error: 'Shipper code is required' };
+
+    await connectDB();
+
+    const bookings = await BookingModel.find({ 'shipper.code': code })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const data = (bookings as any[]).map((b: any) => ({
+      _id: b._id.toString(),
+      bookingNumber: b.bookingNumber,
+      contractId: b.contractId?.toString() ?? null,
+      voyageId: b.voyageId?.toString() ?? null,
+      voyageNumber: b.voyageNumber ?? '',
+      officeCode: b.officeCode ?? '',
+      serviceCode: b.serviceCode ?? '',
+      shipper: b.shipper ?? { name: '', code: '' },
+      consignee: b.consignee ?? { name: '', code: '' },
+      cargoType: b.cargoType ?? '',
+      requestedQuantity: b.requestedQuantity ?? 0,
+      confirmedQuantity: b.confirmedQuantity ?? 0,
+      standbyQuantity: b.standbyQuantity ?? 0,
+      requestedTemperature: b.requestedTemperature ?? null,
+      pol: b.pol ?? null,
+      pod: b.pod ?? null,
+      status: b.status ?? 'PENDING',
+      requestedDate: b.requestedDate ? b.requestedDate.toISOString() : null,
+      confirmedDate: b.confirmedDate ? b.confirmedDate.toISOString() : null,
+      createdAt: b.createdAt ? b.createdAt.toISOString() : null,
+    }));
+
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error fetching bookings by shipper code:', error);
+    return { success: false, data: [], error: 'Failed to fetch bookings' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// GET BOOKING BY ID (for shipper detail view)
+// ----------------------------------------------------------------------------
+
+export async function getBookingById(bookingId: string) {
+  try {
+    await connectDB();
+
+    const booking = await BookingModel.findById(bookingId).lean() as any;
+    if (!booking) return { success: false, data: null, error: 'Booking not found' };
+
+    return { success: true, data: JSON.parse(JSON.stringify(booking)) };
+  } catch (error) {
+    console.error('Error fetching booking:', error);
+    return { success: false, data: null, error: 'Failed to fetch booking' };
+  }
+}

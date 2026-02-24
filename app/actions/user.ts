@@ -27,6 +27,7 @@ const CreateUserSchema = z.object({
   company: z.string().max(100).optional(),
   port: z.string().max(50).optional(),
   canSendEmailsToCaptains: z.boolean().optional(),
+  shipperCode: z.string().max(20).optional(),
 });
 
 const UpdateUserSchema = z.object({
@@ -35,6 +36,7 @@ const UpdateUserSchema = z.object({
   company: z.string().max(100).optional(),
   port: z.string().max(50).optional(),
   canSendEmailsToCaptains: z.boolean().optional(),
+  shipperCode: z.string().max(20).optional().nullable(),
 });
 
 // ----------------------------------------------------------------------------
@@ -58,6 +60,7 @@ export async function getUsers() {
       company: u.company ?? '',
       port: u.port ?? '',
       canSendEmailsToCaptains: u.canSendEmailsToCaptains ?? false,
+      shipperCode: u.shipperCode ?? '',
       emailConfirmed: u.emailConfirmed ?? false,
       isOnline: u.isOnline ?? false,
       lastLogin: u.lastLogin ? u.lastLogin.toISOString() : null,
@@ -98,6 +101,7 @@ export async function createUser(input: unknown) {
       company: data.company?.trim() ?? '',
       port: data.port?.trim() ?? '',
       canSendEmailsToCaptains: data.canSendEmailsToCaptains ?? false,
+      shipperCode: data.shipperCode?.trim() ?? '',
       emailConfirmToken,
       emailConfirmed: false,
     });
@@ -123,6 +127,7 @@ export async function createUser(input: unknown) {
         company: user.company ?? '',
         port: user.port ?? '',
         canSendEmailsToCaptains: user.canSendEmailsToCaptains ?? false,
+        shipperCode: (user as any).shipperCode ?? '',
         emailConfirmed: false,
         isOnline: false,
         lastLogin: null,
@@ -156,6 +161,7 @@ export async function updateUser(id: unknown, input: unknown) {
     if (data.company !== undefined) update.company = data.company.trim();
     if (data.port !== undefined) update.port = data.port.trim();
     if (data.canSendEmailsToCaptains !== undefined) update.canSendEmailsToCaptains = data.canSendEmailsToCaptains;
+    if (data.shipperCode !== undefined) update.shipperCode = data.shipperCode?.trim() ?? '';
 
     const user = await UserModel.findByIdAndUpdate(userId, update, { new: true }).lean() as any;
     if (!user) return { success: false, error: 'User not found' };
@@ -170,6 +176,7 @@ export async function updateUser(id: unknown, input: unknown) {
         company: user.company ?? '',
         port: user.port ?? '',
         canSendEmailsToCaptains: user.canSendEmailsToCaptains ?? false,
+        shipperCode: user.shipperCode ?? '',
         emailConfirmed: user.emailConfirmed ?? false,
         isOnline: user.isOnline ?? false,
         lastLogin: user.lastLogin ? user.lastLogin.toISOString() : null,

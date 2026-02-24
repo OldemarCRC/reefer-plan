@@ -638,6 +638,7 @@ const UserSchema = new Schema({
   company: { type: String },
   port: { type: String },
   canSendEmailsToCaptains: { type: Boolean, default: false },
+  shipperCode: { type: String },   // For EXPORTER role — matches booking.shipper.code
   // Email confirmation
   emailConfirmed: { type: Boolean, default: false },
   emailConfirmToken: { type: String, select: false },
