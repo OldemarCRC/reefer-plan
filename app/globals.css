@@ -278,6 +278,27 @@ input:focus, select:focus, textarea:focus {
   margin-top: var(--header-height);
 }
 
+/* ============================================================================
+   PRE-HYDRATION SIDEBAR STATE
+   Set by the blocking <script> in layout.tsx before the first paint.
+   Keeps the sidebar visually correct while React is still loading/hydrating.
+   Only applied on non-mobile (the inline script already skips mobile).
+   ============================================================================ */
+
+@media (min-width: 768px) {
+  html.sidebar-collapsed .app-sidebar {
+    width: var(--sidebar-width-collapsed);
+  }
+
+  html.sidebar-collapsed .app-main {
+    margin-left: var(--sidebar-width-collapsed);
+  }
+
+  html.sidebar-collapsed .app-header {
+    left: var(--sidebar-width-collapsed);
+  }
+}
+
 /* Mobile sidebar backdrop (rendered by AppShell when mobileOpen=true) */
 .sidebar-backdrop {
   position: fixed;

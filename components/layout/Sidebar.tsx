@@ -156,7 +156,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProp
   const totalActive = fleet ? fleet.inTransit + fleet.confirmed : 0;
 
   return (
-    <aside className={`${styles.sidebar} ${collapsed ? styles['sidebar--collapsed'] : ''} ${mobileOpen ? styles['sidebar--mobileOpen'] : ''}`}>
+    <aside className={`${styles.sidebar} app-sidebar ${collapsed ? styles['sidebar--collapsed'] : ''} ${mobileOpen ? styles['sidebar--mobileOpen'] : ''}`}>
       {/* Brand */}
       <div className={styles.brand}>
         <div className={styles.brandIcon}>

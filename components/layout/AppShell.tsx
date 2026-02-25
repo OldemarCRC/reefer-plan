@@ -7,6 +7,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 
 const SIDEBAR_KEY = 'reefer-sidebar-collapsed';
+const HTML_CLASS  = 'sidebar-collapsed';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -15,35 +16,50 @@ interface AppShellProps {
 }
 
 export default function AppShell({ children, activeVessel, activeVoyage }: AppShellProps) {
+  // Default false for SSR; the blocking <script> in layout.tsx sets the correct
+  // visual state before React loads, so there is no visible expand→collapse jump.
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  // Transitions are disabled until the initial persisted state has been painted.
-  // This prevents the sidebar from visibly animating open→closed on every page load.
+  // Transitions are off until the initial state has been painted; this prevents
+  // any residual animation during the hydration gap.
   const [transitionsReady, setTransitionsReady] = useState(false);
   const { data: session } = useSession();
   const pathname = usePathname();
 
-  // On mount: detect mobile breakpoint and restore persisted desktop state
+  // On mount: sync React state from the <html> class that was set by the
+  // blocking script (already visually correct). Keep everything in sync.
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
 
-    const update = (mobile: boolean) => {
+    const syncState = (mobile: boolean) => {
       setIsMobile(mobile);
-      if (!mobile) {
-        const stored = localStorage.getItem(SIDEBAR_KEY);
-        if (stored !== null) setCollapsed(stored === 'true');
+      if (mobile) {
+        // Mobile never uses the collapsed class — remove in case of resize
+        document.documentElement.classList.remove(HTML_CLASS);
+        setCollapsed(false);
+      } else {
+        // Read the state that the blocking script already applied
+        const isCollapsed = document.documentElement.classList.contains(HTML_CLASS);
+        setCollapsed(isCollapsed);
       }
     };
 
-    update(mq.matches);
+    syncState(mq.matches);
 
-    const handler = (e: MediaQueryListEvent) => update(e.matches);
+    const handler = (e: MediaQueryListEvent) => {
+      const nowMobile = e.matches;
+      if (!nowMobile) {
+        // Switching to desktop: restore from localStorage
+        const stored = localStorage.getItem(SIDEBAR_KEY) === 'true';
+        if (stored) document.documentElement.classList.add(HTML_CLASS);
+        else         document.documentElement.classList.remove(HTML_CLASS);
+      }
+      syncState(nowMobile);
+    };
     mq.addEventListener('change', handler);
 
-    // Wait for two animation frames so the browser has painted the corrected
-    // state before we re-enable CSS transitions. This eliminates the
-    // expand→collapse flicker caused by the hydration gap.
+    // Enable transitions only after the corrected state has been painted
     const raf1 = requestAnimationFrame(() => {
       requestAnimationFrame(() => setTransitionsReady(true));
     });
@@ -54,7 +70,7 @@ export default function AppShell({ children, activeVessel, activeVoyage }: AppSh
     };
   }, []);
 
-  // Close mobile sidebar whenever the route changes
+  // Close mobile sidebar on every route change
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
@@ -63,6 +79,9 @@ export default function AppShell({ children, activeVessel, activeVoyage }: AppSh
     setCollapsed((prev) => {
       const next = !prev;
       localStorage.setItem(SIDEBAR_KEY, String(next));
+      // Keep the <html> class in sync so CSS always matches React state
+      if (next) document.documentElement.classList.add(HTML_CLASS);
+      else       document.documentElement.classList.remove(HTML_CLASS);
       return next;
     });
   }, []);
@@ -71,7 +90,7 @@ export default function AppShell({ children, activeVessel, activeVoyage }: AppSh
     setMobileOpen((prev) => !prev);
   }, []);
 
-  // On mobile the sidebar is always full-width when visible — never show the collapsed icon-only mode
+  // On mobile the sidebar is always full-width — never icon-only collapsed mode
   const effectiveCollapsed = isMobile ? false : collapsed;
 
   return (

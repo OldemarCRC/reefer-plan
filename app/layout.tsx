@@ -31,7 +31,18 @@ export default async function RootLayout({
   const session = await auth();
 
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable}`}>
+    // suppressHydrationWarning: the inline script below adds .sidebar-collapsed to <html>
+    // before React loads; suppressing the warning avoids a false mismatch complaint.
+    <html lang="en" suppressHydrationWarning className={`${spaceGrotesk.variable} ${inter.variable}`}>
+      <head>
+        {/*
+          Blocking script — executes synchronously before the browser's first paint.
+          Reads localStorage and adds .sidebar-collapsed to <html> immediately,
+          so the CSS can collapse the sidebar before React even hydrates.
+          Skipped on mobile (≤ 767 px) because those layouts use margin-left: 0.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var m=window.innerWidth<=767;if(!m&&localStorage.getItem('reefer-sidebar-collapsed')==='true'){document.documentElement.classList.add('sidebar-collapsed');}}catch(e){}})();` }} />
+      </head>
       <body>
         <Providers session={session}>
           {children}
