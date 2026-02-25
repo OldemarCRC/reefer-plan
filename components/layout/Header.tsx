@@ -55,6 +55,7 @@ function formatSegment(segment: string): string {
 
 interface HeaderProps {
   sidebarCollapsed: boolean;
+  onMobileMenuToggle: () => void;
   activeVessel?: string;
   activeVoyage?: string;
   userName?: string;
@@ -63,6 +64,7 @@ interface HeaderProps {
 
 export default function Header({
   sidebarCollapsed,
+  onMobileMenuToggle,
   activeVessel,
   activeVoyage,
   userName = '?',
@@ -102,6 +104,15 @@ export default function Header({
 
   return (
     <header className={`${styles.header} ${sidebarCollapsed ? styles['header--collapsed'] : ''}`}>
+      {/* Mobile hamburger — hidden on desktop via CSS */}
+      <button className={styles.menuToggle} onClick={onMobileMenuToggle} aria-label="Toggle navigation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="3" y1="18" x2="21" y2="18" />
+        </svg>
+      </button>
+
       {/* Breadcrumb */}
       <nav className={styles.breadcrumb} aria-label="Breadcrumb">
         {breadcrumbs.map((crumb, i) => {

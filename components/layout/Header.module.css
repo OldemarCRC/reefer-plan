@@ -15,6 +15,10 @@
   justify-content: space-between;
   padding: 0 var(--space-6);
   z-index: var(--z-header);
+}
+
+/* Left transition only enabled after initial state is painted */
+:global(.transitions-ready) .header {
   transition: left var(--transition-normal);
 }
 
@@ -228,4 +232,44 @@
 .accountLink:hover {
   background: var(--color-bg-hover);
   color: var(--color-text-primary);
+}
+
+/* ── Mobile hamburger toggle ─────────────────────────────────────────────── */
+
+.menuToggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.menuToggle:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.menuToggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* On mobile: show hamburger, reset header left edge to 0 */
+@media (max-width: 767px) {
+  .header,
+  .header--collapsed {
+    left: 0;
+  }
+
+  .menuToggle {
+    display: flex;
+  }
 }

@@ -113,6 +113,7 @@ function tempClass(temp: number): string {
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  mobileOpen?: boolean;
 }
 
 interface PortTemp {
@@ -128,7 +129,7 @@ interface FleetStatus {
   planned: number;
 }
 
-export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export default function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProps) {
   const pathname = usePathname();
 
   const [portTemps, setPortTemps] = useState<PortTemp[]>([]);
@@ -155,7 +156,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const totalActive = fleet ? fleet.inTransit + fleet.confirmed : 0;
 
   return (
-    <aside className={`${styles.sidebar} ${collapsed ? styles['sidebar--collapsed'] : ''}`}>
+    <aside className={`${styles.sidebar} ${collapsed ? styles['sidebar--collapsed'] : ''} ${mobileOpen ? styles['sidebar--mobileOpen'] : ''}`}>
       {/* Brand */}
       <div className={styles.brand}>
         <div className={styles.brandIcon}>

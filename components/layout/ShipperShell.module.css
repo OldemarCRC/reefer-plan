@@ -57,3 +57,15 @@
   max-width: 1400px;
   width: 100%;
 }
+
+/* Mobile: sidebar is collapsed by default — content fills full width */
+@media (max-width: 767px) {
+  .main,
+  .main--collapsed {
+    margin-left: 0;
+  }
+
+  .content {
+    padding: var(--space-4);
+  }
+}

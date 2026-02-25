@@ -258,10 +258,14 @@ input:focus, select:focus, textarea:focus {
   flex: 1;
   min-width: 0; /* prevent flex item from expanding body past viewport */
   margin-left: var(--sidebar-width);
-  transition: margin-left var(--transition-normal);
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+}
+
+/* Transition only enabled after initial persisted state is painted */
+.transitions-ready .app-main {
+  transition: margin-left var(--transition-normal);
 }
 
 .app-main--collapsed {
@@ -272,6 +276,26 @@ input:focus, select:focus, textarea:focus {
   flex: 1;
   padding: var(--space-6);
   margin-top: var(--header-height);
+}
+
+/* Mobile sidebar backdrop (rendered by AppShell when mobileOpen=true) */
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: calc(var(--z-sidebar) - 1);
+}
+
+/* Mobile layout — sidebar is an overlay, main content fills the full width */
+@media (max-width: 767px) {
+  .app-main,
+  .app-main--collapsed {
+    margin-left: 0;
+  }
+
+  .app-content {
+    padding: var(--space-4); /* tighter padding on small screens */
+  }
 }
 
 

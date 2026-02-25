@@ -13,8 +13,12 @@
   display: flex;
   flex-direction: column;
   z-index: var(--z-sidebar);
-  transition: width var(--transition-normal);
   overflow: hidden;
+}
+
+/* Width transition only enabled after initial state is painted */
+:global(.transitions-ready) .sidebar {
+  transition: width var(--transition-normal);
 }
 
 .sidebar--collapsed {
@@ -375,4 +379,28 @@
 
 .tempCold {
   color: #60A5FA;  /* blue-400 */
+}
+
+/* ── Mobile overlay behavior ─────────────────────────────────────────────── */
+
+@media (max-width: 767px) {
+  .sidebar {
+    /* Slide off-screen by default — overlay mode */
+    transform: translateX(-100%);
+    /* Always full-width on mobile regardless of collapsed state */
+    width: var(--sidebar-width) !important;
+  }
+
+  :global(.transitions-ready) .sidebar {
+    transition: transform var(--transition-normal);
+  }
+
+  .sidebar--mobileOpen {
+    transform: translateX(0);
+  }
+
+  /* Hide the desktop collapse toggle — mobile uses backdrop/nav to close */
+  .collapseBtn {
+    display: none;
+  }
 }
