@@ -169,6 +169,7 @@ export interface ShipperCounterparty {
   shipperCode: string;
   weeklyEstimate: number;
   cargoTypes: CargoType[];
+  active?: boolean;  // false = deactivated on this contract; no new bookings allowed
 }
 
 export interface Contract {

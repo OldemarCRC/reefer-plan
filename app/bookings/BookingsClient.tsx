@@ -90,6 +90,7 @@ interface ShipperCounterpartyInfo {
   shipperCode: string;
   weeklyEstimate: number;
   cargoTypes: CargoType[];
+  active?: boolean;
 }
 
 export interface ContractOption {
@@ -417,8 +418,8 @@ function CreateBookingModal({
     const rows: BookingRow[] = [];
 
     if (selectedContract.counterparties && selectedContract.counterparties.length > 0) {
-      // New format: use counterparties[] from Shipper collection
-      for (const cp of selectedContract.counterparties) {
+      // New format: use counterparties[] from Shipper collection (active only)
+      for (const cp of selectedContract.counterparties.filter((cp) => cp.active !== false)) {
         for (const cargoType of cp.cargoTypes) {
           rows.push({
             counterpartyName: cp.shipperName,
@@ -561,23 +562,36 @@ function CreateBookingModal({
                 ))}
               </select>
             </div>
-            {selectedContract && (
-              <div className={styles.contractInfo}>
-                <span>Service: {selectedContract.serviceCode}</span>
-                <span>Office: {selectedContract.officeCode}</span>
-                <span>Route: {selectedContract.originPort.portCode} → {selectedContract.destinationPort.portCode}</span>
-                <span>
-                  {selectedContract.clientType === 'CONSIGNEE'
-                    ? `${selectedContract.shippers.length} shipper(s)`
-                    : `${selectedContract.consignees.length} consignee(s)`}
-                </span>
-              </div>
-            )}
+            {selectedContract && (() => {
+              const isLegacy = selectedContract.shippers.length > 0 || selectedContract.consignees.length > 0;
+              const activeCounterparties = (selectedContract.counterparties ?? []).filter((cp) => cp.active !== false);
+              const noShippers = !isLegacy && activeCounterparties.length === 0;
+              return (
+                <>
+                  <div className={styles.contractInfo}>
+                    <span>Service: {selectedContract.serviceCode}</span>
+                    <span>Office: {selectedContract.officeCode}</span>
+                    <span>Route: {selectedContract.originPort.portCode} → {selectedContract.destinationPort.portCode}</span>
+                    <span>{activeCounterparties.length} shipper(s) assigned</span>
+                  </div>
+                  {noShippers && (
+                    <p className={styles.noVoyagesMsg}>
+                      No shippers assigned to this contract. Add shippers in contract settings first.
+                    </p>
+                  )}
+                </>
+              );
+            })()}
             <div className={styles.modalActions}>
               <button className={styles.btnModalCancel} onClick={onClose}>Cancel</button>
               <button
                 className={styles.btnPrimary}
-                disabled={!selectedContractId}
+                disabled={!selectedContractId || (() => {
+                  if (!selectedContract) return true;
+                  const isLegacy = selectedContract.shippers.length > 0 || selectedContract.consignees.length > 0;
+                  if (isLegacy) return false;
+                  return (selectedContract.counterparties ?? []).filter((cp) => cp.active !== false).length === 0;
+                })()}
                 onClick={goToStep2}
               >
                 Next
@@ -634,7 +648,9 @@ function CreateBookingModal({
                 {' '}— {selectedContract?.contractNumber} → {selectedVoyage?.voyageNumber}
               </p>
               {bookingRows.length === 0 ? (
-                <p className={styles.noVoyagesMsg}>No counterparties found on this contract.</p>
+                <p className={styles.noVoyagesMsg}>
+                  No shippers assigned to this contract. Add shippers in contract settings first.
+                </p>
               ) : (
                 bookingRows.map((row, i) => (
                   <div key={`${row.counterpartyCode}-${row.cargoType}-${i}`} className={styles.counterpartyRow}>

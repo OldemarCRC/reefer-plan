@@ -160,6 +160,7 @@ const ContractCounterpartySchema = new Schema({
   shipperCode:    { type: String, required: true },
   weeklyEstimate: { type: Number, required: true, min: 0 },
   cargoTypes:     [{ type: String }],
+  active:         { type: Boolean, default: true },
 }, { _id: false });
 
 const ContractSchema = new Schema({

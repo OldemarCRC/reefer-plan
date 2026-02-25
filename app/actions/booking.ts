@@ -107,18 +107,32 @@ export async function createBookingFromContract(data: unknown) {
     let shipperCode: string;
     let resolvedShipperId: string | undefined = validated.shipperId;
 
-    // Try new counterparties[] first, then legacy shippers[], then client
-    const cpMatch = contract.counterparties?.find((cp: any) => cp.shipperCode === validated.shipperCode);
-    if (cpMatch) {
+    if (contract.counterparties && (contract.counterparties as any[]).length > 0) {
+      // New system: shipper must be in active counterparties[]
+      const activeCounterparties = (contract.counterparties as any[]).filter((cp) => cp.active !== false);
+      if (activeCounterparties.length === 0) {
+        return {
+          success: false,
+          error: 'No shippers assigned to this contract. Add shippers in contract settings first.',
+        };
+      }
+      const cpMatch = activeCounterparties.find((cp: any) => cp.shipperCode === validated.shipperCode);
+      if (!cpMatch) {
+        return {
+          success: false,
+          error: `Shipper ${validated.shipperCode} is not authorized for this contract`,
+        };
+      }
       shipperName = cpMatch.shipperName;
       shipperCode = cpMatch.shipperCode;
       resolvedShipperId = resolvedShipperId ?? cpMatch.shipperId?.toString();
     } else if (contract.client.type === 'SHIPPER') {
+      // Legacy: client is the shipper
       shipperName = contract.client.name;
       shipperCode = validated.shipperCode;
     } else {
       // Legacy: look up from shippers array
-      const shipper = contract.shippers?.find((s: any) => s.code === validated.shipperCode);
+      const shipper = (contract.shippers as any[])?.find((s: any) => s.code === validated.shipperCode);
       if (!shipper) {
         return { success: false, error: `Shipper with code ${validated.shipperCode} not found in contract` };
       }

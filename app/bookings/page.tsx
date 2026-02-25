@@ -46,7 +46,14 @@ export default async function BookingsPage() {
     destinationPort: c.destinationPort,
     shippers: c.shippers || [],
     consignees: c.consignees || [],
-    counterparties: c.counterparties || [],
+    counterparties: (c.counterparties || []).map((cp: any) => ({
+      shipperId: cp.shipperId?.toString(),
+      shipperName: cp.shipperName,
+      shipperCode: cp.shipperCode,
+      weeklyEstimate: cp.weeklyEstimate,
+      cargoTypes: cp.cargoTypes,
+      active: cp.active !== false,
+    })),
     validFrom: c.validFrom,
     validTo: c.validTo,
   }));

@@ -1,9 +1,11 @@
 import AppShell from '@/components/layout/AppShell';
 import { getContractById } from '@/app/actions/contract';
+import { getActiveShippers } from '@/app/actions/shipper';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import styles from './page.module.css';
 import DeactivateButton from './DeactivateButton';
+import ContractShippersPanel from './ContractShippersPanel';
 
 function fmtDate(d?: string) {
   if (!d) return '—';
@@ -24,20 +26,50 @@ export default async function ContractDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const result = await getContractById(id);
 
-  if (!result.success || !result.data) {
+  const [contractResult, shippersResult] = await Promise.all([
+    getContractById(id),
+    getActiveShippers(),
+  ]);
+
+  if (!contractResult.success || !contractResult.data) {
     notFound();
   }
 
-  const c = result.data as any;
+  const c = contractResult.data as any;
   const clientType = c.client?.type || 'SHIPPER';
-  const counterparties = clientType === 'SHIPPER' ? c.consignees : c.shippers;
-  const counterpartyLabel = clientType === 'SHIPPER' ? 'Consignees' : 'Shippers';
-  const totalWeekly = (counterparties || []).reduce(
-    (sum: number, cp: any) => sum + (cp.weeklyEstimate || 0),
-    0
-  );
+
+  // Legacy counterparties section (shippers[] or consignees[])
+  const legacyCounterparties = clientType === 'SHIPPER' ? c.consignees : c.shippers;
+  const legacyLabel = clientType === 'SHIPPER' ? 'Consignees' : 'Shippers (legacy)';
+  const showLegacy = legacyCounterparties && legacyCounterparties.length > 0;
+
+  // New counterparties[] section
+  const counterparties: {
+    shipperId?: string;
+    shipperName: string;
+    shipperCode: string;
+    weeklyEstimate: number;
+    cargoTypes: string[];
+    active?: boolean;
+  }[] = (c.counterparties || []).map((cp: any) => ({
+    shipperId: cp.shipperId?.toString(),
+    shipperName: cp.shipperName,
+    shipperCode: cp.shipperCode,
+    weeklyEstimate: cp.weeklyEstimate,
+    cargoTypes: cp.cargoTypes || [],
+    active: cp.active !== false,
+  }));
+
+  const totalWeekly = counterparties
+    .filter((cp) => cp.active !== false)
+    .reduce((sum, cp) => sum + (cp.weeklyEstimate || 0), 0);
+
+  const availableShippers = (shippersResult.success ? shippersResult.data : []) as {
+    _id: string;
+    name: string;
+    code: string;
+  }[];
 
   const serviceName = c.serviceId?.serviceName || c.serviceCode || '—';
   const serviceCode = c.serviceId?.serviceCode || c.serviceCode || '—';
@@ -138,19 +170,29 @@ export default async function ContractDetailPage({
                 <span className={styles.detailValue}>{fmtDate(c.validTo)}</span>
               </div>
               <div className={styles.detailItem}>
-                <span className={styles.detailLabel}>Total Weekly Estimate</span>
+                <span className={styles.detailLabel}>Active Weekly Estimate</span>
                 <span className={styles.detailValueHighlight}>{totalWeekly} pallets</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Counterparties */}
-        <div className={styles.card}>
-          <h2 className={styles.cardTitle}>{counterpartyLabel}</h2>
-          {!counterparties || counterparties.length === 0 ? (
-            <p className={styles.emptyText}>No {counterpartyLabel.toLowerCase()} registered.</p>
-          ) : (
+        {/* Authorized Shippers — new system */}
+        <ContractShippersPanel
+          contractId={c._id}
+          contractActive={c.active}
+          counterparties={counterparties}
+          availableShippers={availableShippers.map((s) => ({
+            id: s._id,
+            name: s.name,
+            code: s.code,
+          }))}
+        />
+
+        {/* Legacy counterparties — shown only if old data exists */}
+        {showLegacy && (
+          <div className={styles.card}>
+            <h2 className={styles.cardTitle}>{legacyLabel}</h2>
             <div className={styles.tableCard}>
               <table className={styles.table}>
                 <thead>
@@ -162,7 +204,7 @@ export default async function ContractDetailPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {counterparties.map((cp: any, idx: number) => (
+                  {legacyCounterparties.map((cp: any, idx: number) => (
                     <tr key={idx}>
                       <td>{cp.name}</td>
                       <td className={styles.cellMono}>{cp.code}</td>
@@ -179,8 +221,8 @@ export default async function ContractDetailPage({
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </AppShell>
   );

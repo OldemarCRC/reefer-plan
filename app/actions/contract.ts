@@ -8,7 +8,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { ContractModel, ServiceModel, OfficeModel, ShipperModel } from '@/lib/db/schemas';
+import { ContractModel, ServiceModel, OfficeModel, ShipperModel, BookingModel } from '@/lib/db/schemas';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -405,5 +405,152 @@ export async function getShipperCodes(): Promise<{ success: boolean; data: { cod
   } catch (error) {
     console.error('Error fetching shipper codes:', error);
     return { success: false, data: [], error: 'Failed to fetch shipper codes' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// ADD SHIPPER TO CONTRACT
+// Appends a new entry to contract.counterparties[] after verifying the shipper
+// exists in the Shipper collection and is not already assigned.
+// ----------------------------------------------------------------------------
+
+const AddContractShipperSchema = z.object({
+  shipperId:      z.string().min(1, 'Shipper is required'),
+  weeklyEstimate: z.number().int().min(0),
+  cargoTypes:     z.array(CargoTypeSchema).min(1, 'At least one cargo type is required'),
+});
+
+export async function addShipperToContract(contractId: unknown, data: unknown) {
+  try {
+    const id = ContractIdSchema.parse(contractId);
+    const validated = AddContractShipperSchema.parse(data);
+    await connectDB();
+
+    const contract = await ContractModel.findById(id).lean();
+    if (!contract) return { success: false, error: 'Contract not found' };
+    if (!contract.active) return { success: false, error: 'Contract is not active' };
+
+    const shipper = await ShipperModel.findById(validated.shipperId).lean();
+    if (!shipper) return { success: false, error: 'Shipper not found' };
+
+    // Prevent duplicates (by shipperId or shipperCode)
+    const alreadyIn = (contract.counterparties as any[])?.find(
+      (cp: any) => cp.shipperId?.toString() === validated.shipperId || cp.shipperCode === (shipper as any).code
+    );
+    if (alreadyIn) {
+      return { success: false, error: `${(shipper as any).name} is already assigned to this contract` };
+    }
+
+    const updated = await ContractModel.findByIdAndUpdate(
+      id,
+      {
+        $push: {
+          counterparties: {
+            shipperId: validated.shipperId,
+            shipperName: (shipper as any).name,
+            shipperCode: (shipper as any).code,
+            weeklyEstimate: validated.weeklyEstimate,
+            cargoTypes: validated.cargoTypes,
+            active: true,
+          },
+        },
+      },
+      { new: true }
+    );
+
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(updated)),
+      message: `${(shipper as any).name} added to contract`,
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: `Validation error: ${error.issues[0].message}` };
+    }
+    console.error('Error adding shipper to contract:', error);
+    return { success: false, error: 'Failed to add shipper to contract' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// TOGGLE SHIPPER ACTIVE ON CONTRACT
+// Deactivates or reactivates a shipper within a specific contract without
+// removing them. Deactivated shippers cannot create new bookings on this
+// contract but their existing bookings are preserved.
+// ----------------------------------------------------------------------------
+
+export async function toggleContractShipperActive(
+  contractId: unknown,
+  shipperCode: unknown,
+  active: unknown
+) {
+  try {
+    const id = ContractIdSchema.parse(contractId);
+    const code = z.string().min(1).parse(shipperCode);
+    const isActive = z.boolean().parse(active);
+    await connectDB();
+
+    const updated = await ContractModel.findByIdAndUpdate(
+      id,
+      { $set: { 'counterparties.$[elem].active': isActive } },
+      { arrayFilters: [{ 'elem.shipperCode': code }], new: true }
+    );
+
+    if (!updated) return { success: false, error: 'Contract not found' };
+
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(updated)),
+      message: `Shipper ${code} ${isActive ? 'reactivated' : 'deactivated'} on this contract`,
+    };
+  } catch (error) {
+    console.error('Error toggling shipper active status:', error);
+    return { success: false, error: 'Failed to update shipper status' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// REMOVE SHIPPER FROM CONTRACT
+// Permanently removes a shipper from contract.counterparties[].
+// Blocked if any non-cancelled/non-rejected bookings exist for this shipper
+// under this contract. Use toggleContractShipperActive to deactivate instead.
+// ----------------------------------------------------------------------------
+
+export async function removeShipperFromContract(contractId: unknown, shipperCode: unknown) {
+  try {
+    const id = ContractIdSchema.parse(contractId);
+    const code = z.string().min(1).parse(shipperCode);
+    await connectDB();
+
+    // Block removal if active bookings exist for this contract + shipper
+    const activeBookings = await BookingModel.countDocuments({
+      contractId: id,
+      'shipper.code': code,
+      status: { $nin: ['CANCELLED', 'REJECTED'] },
+    });
+
+    if (activeBookings > 0) {
+      return {
+        success: false,
+        error: `Cannot remove: ${activeBookings} active booking(s) exist for this shipper. Deactivate instead.`,
+      };
+    }
+
+    const updated = await ContractModel.findByIdAndUpdate(
+      id,
+      { $pull: { counterparties: { shipperCode: code } } },
+      { new: true }
+    );
+
+    if (!updated) return { success: false, error: 'Contract not found' };
+
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(updated)),
+      message: `Shipper ${code} removed from contract`,
+    };
+  } catch (error) {
+    console.error('Error removing shipper from contract:', error);
+    return { success: false, error: 'Failed to remove shipper from contract' };
   }
 }
