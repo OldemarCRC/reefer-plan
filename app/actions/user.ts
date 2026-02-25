@@ -11,6 +11,7 @@ import bcrypt from 'bcryptjs';
 import connectDB from '@/lib/db/connect';
 import { UserModel } from '@/lib/db/schemas';
 import { sendUserConfirmationEmail } from '@/lib/email';
+import { auth } from '@/auth';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -46,6 +47,10 @@ const UpdateUserSchema = z.object({
 
 export async function getUsers() {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, data: [], error: 'Unauthorized' };
+    if ((session.user as any).role !== 'ADMIN') return { success: false, data: [], error: 'Forbidden' };
+
     await connectDB();
 
     const users = await UserModel.find()
@@ -81,6 +86,10 @@ export async function getUsers() {
 
 export async function createUser(input: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    if ((session.user as any).role !== 'ADMIN') return { success: false, error: 'Forbidden' };
+
     const data = CreateUserSchema.parse(input);
 
     await connectDB();
@@ -148,6 +157,10 @@ export async function createUser(input: unknown) {
 
 export async function updateUser(id: unknown, input: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    if ((session.user as any).role !== 'ADMIN') return { success: false, error: 'Forbidden' };
+
     const userId = UserIdSchema.parse(id);
     const data = UpdateUserSchema.parse(input);
 
@@ -196,6 +209,10 @@ export async function updateUser(id: unknown, input: unknown) {
 
 export async function deleteUser(id: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    if ((session.user as any).role !== 'ADMIN') return { success: false, error: 'Forbidden' };
+
     const userId = UserIdSchema.parse(id);
 
     await connectDB();
@@ -225,6 +242,10 @@ export async function deleteUser(id: unknown) {
 
 export async function resendUserConfirmation(id: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    if ((session.user as any).role !== 'ADMIN') return { success: false, error: 'Forbidden' };
+
     const userId = UserIdSchema.parse(id);
 
     await connectDB();

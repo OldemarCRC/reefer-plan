@@ -38,7 +38,8 @@ async function connectDB() {
     cached.conn = await cached.promise;
   } catch (e) {
     cached.promise = null;
-    throw e;
+    console.error('[db] Connection failed:', e);
+    throw new Error('Failed to connect to database');
   }
 
   return cached.conn;

@@ -9,6 +9,7 @@
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
 import { ContractModel, ServiceModel, OfficeModel, ShipperModel, BookingModel } from '@/lib/db/schemas';
+import { auth } from '@/auth';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -117,6 +118,11 @@ async function generateContractNumber(
 
 export async function createContract(data: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
     const validated = CreateContractSchema.parse(data);
     await connectDB();
 
@@ -191,6 +197,11 @@ export async function createContract(data: unknown) {
 
 export async function updateContract(contractId: unknown, updates: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
     const id = ContractIdSchema.parse(contractId);
     const validated = UpdateContractSchema.parse(updates);
     await connectDB();
@@ -225,6 +236,11 @@ export async function updateContract(contractId: unknown, updates: unknown) {
 
 export async function deactivateContract(contractId: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
     const id = ContractIdSchema.parse(contractId);
     await connectDB();
 
@@ -422,6 +438,11 @@ const AddContractShipperSchema = z.object({
 
 export async function addShipperToContract(contractId: unknown, data: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
     const id = ContractIdSchema.parse(contractId);
     const validated = AddContractShipperSchema.parse(data);
     await connectDB();
@@ -485,6 +506,11 @@ export async function toggleContractShipperActive(
   active: unknown
 ) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
     const id = ContractIdSchema.parse(contractId);
     const code = z.string().min(1).parse(shipperCode);
     const isActive = z.boolean().parse(active);
@@ -518,6 +544,11 @@ export async function toggleContractShipperActive(
 
 export async function removeShipperFromContract(contractId: unknown, shipperCode: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
     const id = ContractIdSchema.parse(contractId);
     const code = z.string().min(1).parse(shipperCode);
     await connectDB();

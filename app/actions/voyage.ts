@@ -13,6 +13,7 @@ import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
 import { VoyageModel, VesselModel, StowagePlanModel, BookingModel } from '@/lib/db/schemas';
 import type { Voyage, VoyagePortCall } from '@/types/models';
+import { auth } from '@/auth';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -72,6 +73,11 @@ const CreateVoyageFromWizardSchema = z.object({
 
 export async function createVoyageFromWizard(data: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
     const validated = CreateVoyageFromWizardSchema.parse(data);
 
     await connectDB();
@@ -135,6 +141,11 @@ export async function createVoyageFromWizard(data: unknown) {
 
 export async function createVoyage(data: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
     const validated = CreateVoyageSchema.parse(data);
     
     await connectDB();
@@ -212,6 +223,11 @@ export async function lockPort(
   portCode: unknown
 ) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
     const id = VoyageIdSchema.parse(voyageId);
     const code = z.string().parse(portCode);
     
@@ -271,6 +287,10 @@ export async function unlockPort(
   portCode: unknown
 ) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    if ((session.user as any).role !== 'ADMIN') return { success: false, error: 'Forbidden' };
+
     const id = VoyageIdSchema.parse(voyageId);
     const code = z.string().parse(portCode);
     
@@ -415,6 +435,11 @@ export async function updateVoyage(
   updates: unknown
 ) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
     const id = VoyageIdSchema.parse(voyageId);
     const validated = UpdateVoyageSchema.parse(updates);
     
@@ -472,6 +497,11 @@ export async function updateVoyage(
 
 export async function deleteVoyage(voyageId: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
     const id = VoyageIdSchema.parse(voyageId);
 
     await connectDB();
@@ -523,6 +553,10 @@ export async function deleteVoyage(voyageId: unknown) {
 
 export async function hardDeleteVoyage(voyageId: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    if ((session.user as any).role !== 'ADMIN') return { success: false, error: 'Forbidden' };
+
     const id = VoyageIdSchema.parse(voyageId);
 
     await connectDB();
@@ -587,6 +621,11 @@ export async function updatePortRotation(
   globalReason?: string,
 ) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
     const id = z.string().min(1).parse(voyageId);
     await connectDB();
 
@@ -595,7 +634,7 @@ export async function updatePortRotation(
     if (!voyage) return { success: false, error: 'Voyage not found' };
 
     const now = new Date();
-    const changedBy = 'SYSTEM'; // TODO: replace with session user when auth added
+    const changedBy = (session.user as any).name ?? (session.user as any).email ?? 'SYSTEM';
     const changelogEntries: object[] = [];
 
     // Work on a mutable copy of portCalls (plain objects from lean)
@@ -756,6 +795,11 @@ export async function updatePortRotation(
 
 export async function resequencePortCallsByEta(voyageId: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
     const id = z.string().min(1).parse(voyageId);
     await connectDB();
 
@@ -1058,6 +1102,10 @@ export async function getVoyagePortSequence(voyageId: unknown) {
 
 export async function cancelVoyage(voyageId: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    if ((session.user as any).role !== 'ADMIN') return { success: false, error: 'Forbidden' };
+
     const id = VoyageIdSchema.parse(voyageId);
     await connectDB();
 
@@ -1087,6 +1135,10 @@ export async function cancelVoyage(voyageId: unknown) {
 
 export async function getAdminVoyages() {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, data: [], error: 'Unauthorized' };
+    if ((session.user as any).role !== 'ADMIN') return { success: false, data: [], error: 'Forbidden' };
+
     await connectDB();
 
     const voyages = await VoyageModel.find()

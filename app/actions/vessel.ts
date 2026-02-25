@@ -9,6 +9,7 @@ import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
 import { VesselModel, VoyageModel, StowagePlanModel } from '@/lib/db/schemas';
 import type { Vessel } from '@/types/models';
+import { auth } from '@/auth';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -354,6 +355,10 @@ export async function validateCoolingSectionTemperature(
 
 export async function createVessel(input: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    if ((session.user as any).role !== 'ADMIN') return { success: false, error: 'Forbidden' };
+
     const data = CreateVesselSchema.parse(input);
 
     await connectDB();
@@ -424,6 +429,10 @@ export async function createVessel(input: unknown) {
 
 export async function updateVessel(id: unknown, input: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    if ((session.user as any).role !== 'ADMIN') return { success: false, error: 'Forbidden' };
+
     const vesselId = VesselIdSchema.parse(id);
     const data = UpdateVesselSchema.parse(input);
 
@@ -500,6 +509,10 @@ export async function updateVessel(id: unknown, input: unknown) {
 
 export async function deleteVessel(vesselId: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    if ((session.user as any).role !== 'ADMIN') return { success: false, error: 'Forbidden' };
+
     const id = VesselIdSchema.parse(vesselId);
 
     await connectDB();
@@ -629,6 +642,10 @@ export async function recalculateHistoricalFactors(voyageId: unknown) {
 
 export async function getAdminVessels() {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, data: [], error: 'Unauthorized' };
+    if ((session.user as any).role !== 'ADMIN') return { success: false, data: [], error: 'Forbidden' };
+
     await connectDB();
 
     const vessels = await VesselModel.find()
