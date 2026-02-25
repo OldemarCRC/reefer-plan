@@ -256,6 +256,7 @@ input:focus, select:focus, textarea:focus {
 
 .app-main {
   flex: 1;
+  min-width: 0; /* prevent flex item from expanding body past viewport */
   margin-left: var(--sidebar-width);
   transition: margin-left var(--transition-normal);
   display: flex;

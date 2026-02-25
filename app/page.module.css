@@ -45,6 +45,7 @@
   align-items: flex-start;
   gap: var(--space-4);
   transition: all var(--transition-fast);
+  min-width: 0;
 }
 
 .statCard:hover {
@@ -97,6 +98,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  min-width: 0;
 }
 
 .cardHeader {
@@ -125,6 +127,7 @@
 
 .tableWrap {
   overflow-x: auto;
+  min-width: 0;
 }
 
 .table {
@@ -278,7 +281,7 @@
 
 /* --- Responsive --- */
 
-@media (max-width: 1200px) {
+@media (max-width: 1440px) {
   .statsGrid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -287,7 +290,7 @@
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 840px) {
   .statsGrid {
     grid-template-columns: 1fr;
   }
