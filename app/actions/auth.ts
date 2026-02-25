@@ -10,10 +10,23 @@ export async function loginAction(
   formData: FormData
 ): Promise<{ error: string | null }> {
   try {
+    // Look up the user's role to determine the correct post-login destination.
+    // This avoids a double-redirect (signIn → '/' → middleware → '/shipper')
+    // that causes a client-side crash for EXPORTER accounts.
+    const email = (formData.get('email') as string | null)?.toLowerCase() ?? '';
+    let redirectTo = '/';
+    if (email) {
+      await connectDB();
+      const user = await UserModel.findOne({ email }).select('role').lean();
+      if (user && (user as any).role === 'EXPORTER') {
+        redirectTo = '/shipper';
+      }
+    }
+
     await signIn('credentials', {
       email: formData.get('email'),
       password: formData.get('password'),
-      redirectTo: '/',
+      redirectTo,
     });
   } catch (error) {
     if (error instanceof AuthError) {
