@@ -7,13 +7,14 @@ import { getAdminPlans } from '@/app/actions/stowage-plan';
 import { getAdminVessels } from '@/app/actions/vessel';
 import { getUsers } from '@/app/actions/user';
 import { getPorts } from '@/app/actions/port';
+import { getShippers } from '@/app/actions/shipper';
 import AdminClient from './AdminClient';
 import type { DisplayContract } from '@/app/contracts/ContractsClient';
 
 export const metadata = { title: 'Admin — Reefer Planner' };
 
 export default async function AdminPage() {
-  const [voyagesResult, contractsRes, officesRes, servicesRes, plansRes, vesselsRes, usersRes, portsRes] = await Promise.all([
+  const [voyagesResult, contractsRes, officesRes, servicesRes, plansRes, vesselsRes, usersRes, portsRes, shippersRes] = await Promise.all([
     getAdminVoyages(),
     getContracts(),
     getActiveOffices(),
@@ -22,6 +23,7 @@ export default async function AdminPage() {
     getAdminVessels(),
     getUsers(),
     getPorts(),
+    getShippers(),
   ]);
 
   const voyages = voyagesResult.success ? voyagesResult.data : [];
@@ -32,6 +34,7 @@ export default async function AdminPage() {
   const vessels = vesselsRes.success ? vesselsRes.data : [];
   const users = usersRes.success ? usersRes.data : [];
   const ports = portsRes.success ? portsRes.data : [];
+  const shippers = shippersRes.success ? shippersRes.data : [];
 
   const displayContracts: DisplayContract[] = contracts.map((c: any) => {
     const counterparties = c.client?.type === 'SHIPPER' ? c.consignees : c.shippers;
@@ -68,6 +71,7 @@ export default async function AdminPage() {
         vessels={vessels}
         users={users}
         ports={ports}
+        shippers={shippers}
       />
     </AppShell>
   );

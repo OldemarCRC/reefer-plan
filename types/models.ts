@@ -6,7 +6,7 @@
 // ============================================================================
 
 // ----------------------------------------------------------------------------
-// CARGO TYPES
+// CARGO TYPES + WEIGHT LOOKUP
 // ----------------------------------------------------------------------------
 
 export type CargoType =
@@ -30,6 +30,15 @@ export type CargoType =
   | 'MANGOES'
   | 'OTHER_FROZEN'
   | 'OTHER_CHILLED';
+
+export const CARGO_WEIGHT_PER_UNIT: Partial<Record<CargoType, number>> = {
+  BANANAS: 1100, ORGANIC_BANANAS: 1100, PLANTAINS: 950,
+  TABLE_GRAPES: 950, CITRUS: 1000, AVOCADOS: 1000,
+  BERRIES: 900, KIWIS: 950, PINEAPPLES: 1050,
+  FROZEN_FISH: 1200, CHERRIES: 850, BLUEBERRIES: 900,
+  PLUMS: 950, PEACHES: 1000, APPLES: 1000, PEARS: 1000,
+  PAPAYA: 1050, MANGOES: 1050, OTHER_FROZEN: 1200, OTHER_CHILLED: 1000,
+};
 
 // ----------------------------------------------------------------------------
 // SERVICE (Servicio de Línea Naviera)
@@ -153,6 +162,15 @@ export interface ContractCounterparty {
   cargoTypes: CargoType[];
 }
 
+// New counterparty format that references the Shipper collection
+export interface ShipperCounterparty {
+  shipperId: string;
+  shipperName: string;
+  shipperCode: string;
+  weeklyEstimate: number;
+  cargoTypes: CargoType[];
+}
+
 export interface Contract {
   _id: string;
   contractNumber: string;  // "RTMCBX2026C012001"
@@ -166,8 +184,9 @@ export interface Contract {
     email: string;
     country: string;
   };
-  shippers: ContractCounterparty[];   // populated when client.type === 'CONSIGNEE'
-  consignees: ContractCounterparty[]; // populated when client.type === 'SHIPPER'
+  shippers: ContractCounterparty[];     // legacy: kept for backward compat
+  consignees: ContractCounterparty[];   // legacy: kept for backward compat
+  counterparties: ShipperCounterparty[]; // new: refs Shipper collection
   serviceId: string;
   serviceCode: string;
   originPort: { portCode: string; portName: string; country: string };
@@ -211,6 +230,15 @@ export interface Booking {
   pol: { portCode: string; portName: string; country: string };
   pod: { portCode: string; portName: string; country: string };
   estimateSource: 'CONTRACT_DEFAULT' | 'SHIPPER_CONFIRMED';
+  // New fields (Phase 10 refactor)
+  shipperId?: string;
+  cargoMode: 'HOLD' | 'CONTAINER';
+  weekNumber?: number;
+  estimatedWeightPerUnit?: number;
+  totalEstimatedWeight?: number;
+  containerType?: '20FT' | '40FT' | '40HC';
+  shipperEmailDate?: Date;
+  shipperEmailNotes?: string;
   status: BookingStatus;
   requestedDate: Date;
   confirmedDate?: Date;
@@ -234,12 +262,29 @@ export type ShipmentStatus =
   | 'DELIVERED'
   | 'CANCELLED';
 
-export interface Shipper {
+// Embedded shipper info inside a Shipment document
+export interface ShipmentShipper {
   name: string;
   code: string;
   contact: string;
   email: string;
   address?: string;
+}
+
+// Top-level Shipper collection document
+export interface Shipper {
+  _id: string;
+  name: string;
+  code: string;
+  contact: string;
+  email: string;
+  phone?: string;
+  country: string;
+  portCode?: string;
+  portName?: string;
+  active: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface CargoUnit {
@@ -262,8 +307,8 @@ export interface Shipment {
   bookingId: string;
   contractId: string;
   
-  shipper: Shipper;
-  
+  shipper: ShipmentShipper;
+
   // CAMBIO #5: Consignee
   consignee: {
     name: string;
@@ -431,6 +476,7 @@ export interface Vessel {
     serviceNotations: string;
   };
   built: Date;
+  captainEmail?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -575,25 +621,6 @@ export interface StowagePlan {
   }[];
 
   createdBy: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-// ----------------------------------------------------------------------------
-// CAPTAIN CONTACT
-// ----------------------------------------------------------------------------
-
-export interface CaptainContact {
-  _id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  vesselId: string;
-  vesselName: string;
-  preferredLanguage?: 'en' | 'es' | 'pt';
-  ccEmails?: string[];
-  notes?: string;
-  active: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

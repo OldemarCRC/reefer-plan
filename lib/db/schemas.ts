@@ -153,6 +153,15 @@ const CounterpartySchema = new Schema({
   cargoTypes: [{ type: String }],
 }, { _id: false });
 
+// New counterparties array — references ShipperModel by ID
+const ContractCounterpartySchema = new Schema({
+  shipperId:      { type: Schema.Types.ObjectId, ref: 'Shipper' },
+  shipperName:    { type: String, required: true },
+  shipperCode:    { type: String, required: true },
+  weeklyEstimate: { type: Number, required: true, min: 0 },
+  cargoTypes:     [{ type: String }],
+}, { _id: false });
+
 const ContractSchema = new Schema({
   contractNumber: { type: String, required: true, unique: true },
   officeId: { type: Schema.Types.ObjectId, ref: 'Office', required: true },
@@ -165,8 +174,9 @@ const ContractSchema = new Schema({
     email: { type: String, required: true },
     country: { type: String, required: true },
   },
-  shippers: [CounterpartySchema],
-  consignees: [CounterpartySchema],
+  shippers: [CounterpartySchema],       // kept for backward compat with existing docs
+  consignees: [CounterpartySchema],     // kept for backward compat with existing docs
+  counterparties: [ContractCounterpartySchema], // new: refs Shipper collection
   serviceId: { type: Schema.Types.ObjectId, ref: 'Service', required: true },
   serviceCode: { type: String, required: true },
   originPort: {
@@ -237,6 +247,15 @@ const BookingSchema = new Schema({
     enum: ['CONTRACT_DEFAULT', 'SHIPPER_CONFIRMED'],
     default: 'CONTRACT_DEFAULT',
   },
+  // New fields (Phase 10 refactor)
+  shipperId:              { type: Schema.Types.ObjectId, ref: 'Shipper' },
+  cargoMode:              { type: String, enum: ['HOLD', 'CONTAINER'], default: 'HOLD' },
+  weekNumber:             { type: Number, min: 1, max: 52 },
+  estimatedWeightPerUnit: { type: Number },
+  totalEstimatedWeight:   { type: Number },
+  containerType:          { type: String, enum: ['20FT', '40FT', '40HC'] },
+  shipperEmailDate:       { type: Date },
+  shipperEmailNotes:      { type: String },
   status: {
     type: String,
     required: true,
@@ -257,10 +276,29 @@ BookingSchema.index({ status: 1 });
 BookingSchema.index({ officeCode: 1 });
 
 // ============================================================================
+// SHIPPER COLLECTION SCHEMA — top-level shipper/exporter master record
+// ============================================================================
+
+const ShipperCollectionSchema = new Schema({
+  name:      { type: String, required: true },
+  code:      { type: String, required: true, unique: true, uppercase: true },
+  contact:   { type: String, required: true },
+  email:     { type: String, required: true },
+  phone:     { type: String },
+  country:   { type: String, required: true },
+  portCode:  { type: String },
+  portName:  { type: String },
+  active:    { type: Boolean, default: true },
+}, { timestamps: true });
+
+ShipperCollectionSchema.index({ code: 1 }, { unique: true });
+ShipperCollectionSchema.index({ active: 1 });
+
+// ============================================================================
 // SHIPMENT SCHEMA
 // ============================================================================
 
-const ShipperSchema = new Schema({
+const ShipmentShipperSchema = new Schema({
   name: { type: String, required: true },
   code: { type: String, required: true },
   contact: { type: String, required: true },
@@ -286,7 +324,7 @@ const ShipmentSchema = new Schema({
   voyageNumber: { type: String, required: true },
   bookingId: { type: Schema.Types.ObjectId, ref: 'Booking', required: true },
   contractId: { type: Schema.Types.ObjectId, ref: 'Contract', required: true },
-  shipper: ShipperSchema,
+  shipper: ShipmentShipperSchema,
   consignee: {
     name: { type: String, required: true },
     code: { type: String, required: true },
@@ -447,6 +485,7 @@ const VesselSchema = new Schema({
     serviceNotations: { type: String },
   },
   built: { type: Date },
+  captainEmail: { type: String },
 }, {
   timestamps: true,
 });
@@ -598,31 +637,6 @@ StowagePlanSchema.index({ vesselId: 1 });
 StowagePlanSchema.index({ status: 1 });
 
 // ============================================================================
-// CAPTAIN CONTACT SCHEMA
-// ============================================================================
-
-const CaptainContactSchema = new Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  phone: { type: String },
-  vesselId: { type: Schema.Types.ObjectId, ref: 'Vessel', required: true },
-  vesselName: { type: String, required: true },
-  preferredLanguage: {
-    type: String,
-    enum: ['en', 'es', 'pt'],
-    default: 'en',
-  },
-  ccEmails: [{ type: String }],
-  notes: { type: String },
-  active: { type: Boolean, default: true },
-}, {
-  timestamps: true,
-});
-
-CaptainContactSchema.index({ vesselId: 1 });
-CaptainContactSchema.index({ active: 1 });
-
-// ============================================================================
 // USER SCHEMA
 // ============================================================================
 
@@ -663,6 +677,9 @@ type AnyModel = Model<any>;
 export const PortModel: AnyModel =
   mongoose.models.Port || mongoose.model('Port', PortSchema);
 
+export const ShipperModel: AnyModel =
+  mongoose.models.Shipper || mongoose.model('Shipper', ShipperCollectionSchema);
+
 export const OfficeModel: AnyModel =
   mongoose.models.Office || mongoose.model('Office', OfficeSchema);
 
@@ -687,9 +704,6 @@ export const VesselModel: AnyModel =
 // Delete cached model so schema changes take effect without server restart
 delete mongoose.models.StowagePlan;
 export const StowagePlanModel: AnyModel = mongoose.model('StowagePlan', StowagePlanSchema);
-
-export const CaptainContactModel: AnyModel =
-  mongoose.models.CaptainContact || mongoose.model('CaptainContact', CaptainContactSchema);
 
 export const UserModel: AnyModel =
   mongoose.models.User || mongoose.model('User', UserSchema);

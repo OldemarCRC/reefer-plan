@@ -5,8 +5,131 @@
 
 'use server'
 
+import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { BookingModel, VoyageModel, ServiceModel } from '@/lib/db/schemas';
+import { BookingModel, VoyageModel, ServiceModel, ShipperModel } from '@/lib/db/schemas';
+
+// ============================================================================
+// SHIPPER CRUD
+// ============================================================================
+
+const CreateShipperSchema = z.object({
+  name:     z.string().min(1).max(200),
+  code:     z.string().min(1).max(20),
+  contact:  z.string().min(1).max(200),
+  email:    z.string().email(),
+  phone:    z.string().max(50).optional(),
+  country:  z.string().min(1).max(100),
+  portCode: z.string().max(10).optional(),
+  portName: z.string().max(200).optional(),
+});
+
+const UpdateShipperSchema = CreateShipperSchema.partial();
+
+export async function createShipper(data: unknown) {
+  try {
+    const validated = CreateShipperSchema.parse(data);
+    await connectDB();
+
+    const exists = await ShipperModel.findOne({ code: validated.code.toUpperCase() });
+    if (exists) {
+      return { success: false, error: `Shipper code ${validated.code.toUpperCase()} already exists` };
+    }
+
+    const shipper = await ShipperModel.create({
+      ...validated,
+      code: validated.code.toUpperCase(),
+    });
+
+    return { success: true, data: JSON.parse(JSON.stringify(shipper)) };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: `Validation error: ${error.issues[0].message}` };
+    }
+    console.error('Error creating shipper:', error);
+    return { success: false, error: 'Failed to create shipper' };
+  }
+}
+
+export async function getShippers() {
+  try {
+    await connectDB();
+    const shippers = await ShipperModel.find().sort({ name: 1 }).lean();
+    return { success: true, data: JSON.parse(JSON.stringify(shippers)) };
+  } catch (error) {
+    console.error('Error fetching shippers:', error);
+    return { success: false, data: [], error: 'Failed to fetch shippers' };
+  }
+}
+
+export async function getActiveShippers() {
+  try {
+    await connectDB();
+    const shippers = await ShipperModel.find({ active: true }).sort({ name: 1 }).lean();
+    return { success: true, data: JSON.parse(JSON.stringify(shippers)) };
+  } catch (error) {
+    console.error('Error fetching active shippers:', error);
+    return { success: false, data: [], error: 'Failed to fetch active shippers' };
+  }
+}
+
+export async function getShipperById(id: string) {
+  try {
+    await connectDB();
+    const shipper = await ShipperModel.findById(id).lean();
+    if (!shipper) return { success: false, error: 'Shipper not found' };
+    return { success: true, data: JSON.parse(JSON.stringify(shipper)) };
+  } catch (error) {
+    console.error('Error fetching shipper:', error);
+    return { success: false, error: 'Failed to fetch shipper' };
+  }
+}
+
+export async function updateShipper(id: string, data: unknown) {
+  try {
+    const validated = UpdateShipperSchema.parse(data);
+    await connectDB();
+
+    if (validated.code) {
+      validated.code = validated.code.toUpperCase();
+      const conflict = await ShipperModel.findOne({ code: validated.code, _id: { $ne: id } });
+      if (conflict) {
+        return { success: false, error: `Shipper code ${validated.code} already exists` };
+      }
+    }
+
+    const shipper = await ShipperModel.findByIdAndUpdate(
+      id,
+      { $set: validated },
+      { new: true, runValidators: true }
+    );
+
+    if (!shipper) return { success: false, error: 'Shipper not found' };
+    return { success: true, data: JSON.parse(JSON.stringify(shipper)) };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: `Validation error: ${error.issues[0].message}` };
+    }
+    console.error('Error updating shipper:', error);
+    return { success: false, error: 'Failed to update shipper' };
+  }
+}
+
+export async function deactivateShipper(id: string) {
+  try {
+    await connectDB();
+    const shipper = await ShipperModel.findByIdAndUpdate(
+      id,
+      { $set: { active: false } },
+      { new: true }
+    );
+    if (!shipper) return { success: false, error: 'Shipper not found' };
+    return { success: true, data: JSON.parse(JSON.stringify(shipper)) };
+  } catch (error) {
+    console.error('Error deactivating shipper:', error);
+    return { success: false, error: 'Failed to deactivate shipper' };
+  }
+}
 
 // ----------------------------------------------------------------------------
 // GET SHIPPER DASHBOARD
@@ -171,12 +294,14 @@ export async function getContractsForShipper(shipperCode: string) {
   try {
     await connectDB();
 
-    // Match contracts where:
-    // - client.type = SHIPPER and client.clientNumber = shipperCode, OR
-    // - shippers array has an entry with code = shipperCode
+    // Match contracts where shipper appears in any of:
+    // - new counterparties[] (shipperCode field)
+    // - legacy shippers[] (code field)
+    // - client itself (SHIPPER type + clientNumber = shipperCode)
     const contracts = await ContractModel.find({
       active: true,
       $or: [
+        { 'counterparties.shipperCode': shipperCode },
         { 'shippers.code': shipperCode },
         { 'client.type': 'SHIPPER', 'client.clientNumber': shipperCode },
       ],

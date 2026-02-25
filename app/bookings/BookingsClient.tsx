@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import styles from './page.module.css';
 import { createBookingFromContract, approveBooking, rejectBooking } from '@/app/actions/booking';
 import type { CargoType } from '@/types/models';
+import { CARGO_WEIGHT_PER_UNIT } from '@/types/models';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -83,6 +84,14 @@ interface CounterpartyInfo {
   cargoTypes: CargoType[];
 }
 
+interface ShipperCounterpartyInfo {
+  shipperId?: string;
+  shipperName: string;
+  shipperCode: string;
+  weeklyEstimate: number;
+  cargoTypes: CargoType[];
+}
+
 export interface ContractOption {
   id: string;
   contractNumber: string;
@@ -95,6 +104,9 @@ export interface ContractOption {
   destinationPort: { portCode: string; portName: string; country: string };
   shippers: CounterpartyInfo[];
   consignees: CounterpartyInfo[];
+  counterparties?: ShipperCounterpartyInfo[];
+  validFrom?: string;
+  validTo?: string;
 }
 
 export interface VoyageOption {
@@ -110,11 +122,14 @@ export interface VoyageOption {
 interface BookingRow {
   counterpartyName: string;
   counterpartyCode: string;
+  shipperId?: string;
   shipperCode: string;
   consigneeCode: string;
   cargoType: CargoType;
+  cargoMode: 'HOLD' | 'CONTAINER';
   weeklyEstimate: number;
   requestedQuantity: number;
+  estimatedWeightPerUnit: number;
   estimateSource: 'CONTRACT_DEFAULT' | 'SHIPPER_CONFIRMED';
 }
 
@@ -399,36 +414,59 @@ function CreateBookingModal({
 
   function goToStep3() {
     if (!selectedContract || !selectedVoyageId) return;
-    // Build rows from counterparties × cargoTypes
     const rows: BookingRow[] = [];
-    if (selectedContract.clientType === 'CONSIGNEE') {
-      // counterparties are shippers
+
+    if (selectedContract.counterparties && selectedContract.counterparties.length > 0) {
+      // New format: use counterparties[] from Shipper collection
+      for (const cp of selectedContract.counterparties) {
+        for (const cargoType of cp.cargoTypes) {
+          rows.push({
+            counterpartyName: cp.shipperName,
+            counterpartyCode: cp.shipperCode,
+            shipperId: cp.shipperId,
+            shipperCode: cp.shipperCode,
+            consigneeCode: selectedContract.clientType === 'CONSIGNEE' ? selectedContract.clientName : cp.shipperCode,
+            cargoType,
+            cargoMode: 'HOLD',
+            weeklyEstimate: cp.weeklyEstimate,
+            requestedQuantity: cp.weeklyEstimate,
+            estimatedWeightPerUnit: CARGO_WEIGHT_PER_UNIT[cargoType] ?? 1000,
+            estimateSource: 'CONTRACT_DEFAULT',
+          });
+        }
+      }
+    } else if (selectedContract.clientType === 'CONSIGNEE') {
+      // Legacy: counterparties are shippers
       for (const shipper of selectedContract.shippers) {
         for (const cargoType of shipper.cargoTypes) {
           rows.push({
             counterpartyName: shipper.name,
             counterpartyCode: shipper.code,
             shipperCode: shipper.code,
-            consigneeCode: selectedContract.clientName, // client is consignee
+            consigneeCode: selectedContract.clientName,
             cargoType,
+            cargoMode: 'HOLD',
             weeklyEstimate: shipper.weeklyEstimate,
             requestedQuantity: shipper.weeklyEstimate,
+            estimatedWeightPerUnit: CARGO_WEIGHT_PER_UNIT[cargoType] ?? 1000,
             estimateSource: 'CONTRACT_DEFAULT',
           });
         }
       }
     } else {
-      // client is SHIPPER, counterparties are consignees
+      // Legacy: client is SHIPPER, counterparties are consignees
       for (const consignee of selectedContract.consignees) {
         for (const cargoType of consignee.cargoTypes) {
           rows.push({
             counterpartyName: consignee.name,
             counterpartyCode: consignee.code,
-            shipperCode: selectedContract.clientName, // client is shipper
+            shipperCode: selectedContract.clientName,
             consigneeCode: consignee.code,
             cargoType,
+            cargoMode: 'HOLD',
             weeklyEstimate: consignee.weeklyEstimate,
             requestedQuantity: consignee.weeklyEstimate,
+            estimatedWeightPerUnit: CARGO_WEIGHT_PER_UNIT[cargoType] ?? 1000,
             estimateSource: 'CONTRACT_DEFAULT',
           });
         }
@@ -451,29 +489,20 @@ function CreateBookingModal({
     if (!selectedContract || !selectedVoyageId) return;
     setError('');
 
-    // Determine actual shipper/consignee codes
     const requests = bookingRows
       .filter((r) => r.requestedQuantity > 0)
-      .map((row) => {
-        let shipperCode: string;
-        let consigneeCode: string;
-        if (selectedContract.clientType === 'CONSIGNEE') {
-          shipperCode = row.counterpartyCode;
-          consigneeCode = row.counterpartyCode; // server resolves from contract client
-        } else {
-          shipperCode = row.counterpartyCode; // server resolves from contract client
-          consigneeCode = row.counterpartyCode;
-        }
-        return {
-          contractId: selectedContract.id,
-          voyageId: selectedVoyageId,
-          shipperCode,
-          consigneeCode,
-          cargoType: row.cargoType,
-          requestedQuantity: row.requestedQuantity,
-          estimateSource: row.estimateSource,
-        };
-      });
+      .map((row) => ({
+        contractId: selectedContract.id,
+        voyageId: selectedVoyageId,
+        shipperId: row.shipperId,
+        shipperCode: row.shipperCode,
+        consigneeCode: row.consigneeCode,
+        cargoType: row.cargoType,
+        cargoMode: row.cargoMode,
+        requestedQuantity: row.requestedQuantity,
+        estimatedWeightPerUnit: row.estimatedWeightPerUnit || undefined,
+        estimateSource: row.estimateSource,
+      }));
 
     if (requests.length === 0) {
       setError('At least one row must have a quantity greater than 0');
@@ -628,6 +657,28 @@ function CreateBookingModal({
                           max={10000}
                           value={row.requestedQuantity}
                           onChange={(e) => updateRow(i, 'requestedQuantity', parseInt(e.target.value) || 0)}
+                        />
+                      </div>
+                      <div className={styles.fieldGroup}>
+                        <label className={styles.fieldLabel}>Cargo Mode</label>
+                        <select
+                          className={styles.formSelect}
+                          value={row.cargoMode}
+                          onChange={(e) => updateRow(i, 'cargoMode', e.target.value as 'HOLD' | 'CONTAINER')}
+                        >
+                          <option value="HOLD">Hold</option>
+                          <option value="CONTAINER">Container</option>
+                        </select>
+                      </div>
+                      <div className={styles.fieldGroup}>
+                        <label className={styles.fieldLabel}>Wt/Unit (kg)</label>
+                        <input
+                          type="number"
+                          className={styles.formInput}
+                          min={0}
+                          step={50}
+                          value={row.estimatedWeightPerUnit}
+                          onChange={(e) => updateRow(i, 'estimatedWeightPerUnit', parseInt(e.target.value) || 0)}
                         />
                       </div>
                       <div className={styles.fieldGroup}>

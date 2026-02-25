@@ -25,14 +25,21 @@ const CargoTypeSchema = z.enum([
 ]);
 
 const CreateBookingFromContractSchema = z.object({
-  contractId: z.string().min(1, 'Contract ID is required'),
-  voyageId: z.string().min(1, 'Voyage ID is required'),
-  shipperCode: z.string().min(1, 'Shipper code is required'),
-  consigneeCode: z.string().min(1, 'Consignee code is required'),
-  cargoType: CargoTypeSchema,
-  requestedQuantity: z.number().int().positive().max(10000),
-  requestedTemperature: z.number().optional(),
-  estimateSource: z.enum(['CONTRACT_DEFAULT', 'SHIPPER_CONFIRMED']).default('CONTRACT_DEFAULT'),
+  contractId:             z.string().min(1, 'Contract ID is required'),
+  voyageId:               z.string().min(1, 'Voyage ID is required'),
+  shipperId:              z.string().optional(),
+  shipperCode:            z.string().min(1, 'Shipper code is required'),
+  consigneeCode:          z.string().min(1, 'Consignee code is required'),
+  cargoType:              CargoTypeSchema,
+  cargoMode:              z.enum(['HOLD', 'CONTAINER']).default('HOLD'),
+  weekNumber:             z.number().int().min(1).max(52).optional(),
+  requestedQuantity:      z.number().int().positive().max(10000),
+  requestedTemperature:   z.number().optional(),
+  estimatedWeightPerUnit: z.number().optional(),
+  containerType:          z.enum(['20FT', '40FT', '40HC']).optional(),
+  estimateSource:         z.enum(['CONTRACT_DEFAULT', 'SHIPPER_CONFIRMED']).default('CONTRACT_DEFAULT'),
+  shipperEmailDate:       z.coerce.date().optional(),
+  shipperEmailNotes:      z.string().optional(),
 });
 
 const ApproveBookingSchema = z.object({
@@ -98,12 +105,19 @@ export async function createBookingFromContract(data: unknown) {
     // Resolve shipper from contract counterparties or client
     let shipperName: string;
     let shipperCode: string;
-    if (contract.client.type === 'SHIPPER') {
-      // Client is the shipper — use client info
+    let resolvedShipperId: string | undefined = validated.shipperId;
+
+    // Try new counterparties[] first, then legacy shippers[], then client
+    const cpMatch = contract.counterparties?.find((cp: any) => cp.shipperCode === validated.shipperCode);
+    if (cpMatch) {
+      shipperName = cpMatch.shipperName;
+      shipperCode = cpMatch.shipperCode;
+      resolvedShipperId = resolvedShipperId ?? cpMatch.shipperId?.toString();
+    } else if (contract.client.type === 'SHIPPER') {
       shipperName = contract.client.name;
       shipperCode = validated.shipperCode;
     } else {
-      // Client is consignee — look up shipper from shippers array
+      // Legacy: look up from shippers array
       const shipper = contract.shippers?.find((s: any) => s.code === validated.shipperCode);
       if (!shipper) {
         return { success: false, error: `Shipper with code ${validated.shipperCode} not found in contract` };
@@ -137,6 +151,10 @@ export async function createBookingFromContract(data: unknown) {
       validated.voyageId
     );
 
+    const totalEstimatedWeight = validated.estimatedWeightPerUnit
+      ? 0  // will be updated when confirmed; starts at 0
+      : undefined;
+
     const booking = await BookingModel.create({
       bookingNumber,
       contractId: validated.contractId,
@@ -159,6 +177,15 @@ export async function createBookingFromContract(data: unknown) {
       pol: contract.originPort,
       pod: contract.destinationPort,
       estimateSource: validated.estimateSource,
+      // New fields
+      shipperId: resolvedShipperId,
+      cargoMode: validated.cargoMode,
+      weekNumber: validated.weekNumber ?? voyage.weekNumber,
+      estimatedWeightPerUnit: validated.estimatedWeightPerUnit,
+      totalEstimatedWeight,
+      containerType: validated.containerType,
+      shipperEmailDate: validated.shipperEmailDate,
+      shipperEmailNotes: validated.shipperEmailNotes,
       status: 'PENDING',
       requestedDate: new Date(),
     });

@@ -64,6 +64,7 @@ export default function StowagePlanDetailPage() {
     planNumber: '...',
     voyageNumber: '...',
     vesselName: '...',
+    captainEmail: undefined as string | undefined,
     status: 'DRAFT',
   });
 
@@ -101,6 +102,7 @@ export default function StowagePlanDetailPage() {
           planNumber: p.planNumber || `PLAN-${planId.slice(-6)}`,
           voyageNumber: p.voyageId?.voyageNumber || p.voyageNumber || 'N/A',
           vesselName: p.vesselId?.name || p.vesselName || 'Unknown Vessel',
+          captainEmail: p.vesselId?.captainEmail ?? undefined,
           status: p.status || 'DRAFT',
         });
         // Extract stowage factor data from the populated vessel (vesselId is populate()'d)
@@ -1437,6 +1439,7 @@ export default function StowagePlanDetailPage() {
           planId={planId}
           planNumber={plan.planNumber}
           vesselName={plan.vesselName}
+          captainEmail={plan.captainEmail}
           onClose={() => setShowSentModal(false)}
           onSuccess={() => {
             setShowSentModal(false);

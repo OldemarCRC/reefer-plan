@@ -46,6 +46,9 @@ export default async function BookingsPage() {
     destinationPort: c.destinationPort,
     shippers: c.shippers || [],
     consignees: c.consignees || [],
+    counterparties: c.counterparties || [],
+    validFrom: c.validFrom,
+    validTo: c.validTo,
   }));
 
   const voyages: VoyageOption[] = rawVoyages.map((v: any) => ({

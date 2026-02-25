@@ -42,6 +42,7 @@ const CreateVesselSchema = z.object({
     totalSqm: z.number().positive().optional(),
   }).optional(),
   temperatureZones: z.array(TemperatureZoneEntrySchema).optional().default([]),
+  captainEmail: z.string().email().optional(),
   active: z.boolean().optional(),
 });
 
@@ -56,6 +57,7 @@ const UpdateVesselSchema = z.object({
     totalSqm: z.number().positive().optional(),
   }).optional(),
   temperatureZones: z.array(TemperatureZoneEntrySchema).optional(),
+  captainEmail: z.string().email().optional().or(z.literal('')),
   active: z.boolean().optional(),
 });
 
@@ -379,6 +381,7 @@ export async function createVessel(input: unknown) {
       capacity: data.capacity,
       temperatureZones: zones,
       maxTemperatureZones: zones.length,
+      captainEmail: data.captainEmail?.trim() || undefined,
       active: data.active !== false,
       holds: [],
     });
@@ -401,6 +404,7 @@ export async function createVessel(input: unknown) {
             designStowageFactor: s.designStowageFactor,
           })),
         })),
+        captainEmail: vessel.captainEmail,
         active: vessel.active !== false,
         voyageCount: 0,
       },
@@ -444,6 +448,7 @@ export async function updateVessel(id: unknown, input: unknown) {
     if (data.built !== undefined) update.built = new Date(Date.UTC(data.built, 0, 1));
     if (data.capacity !== undefined) update.capacity = data.capacity;
     if (data.active !== undefined) update.active = data.active;
+    if (data.captainEmail !== undefined) update.captainEmail = data.captainEmail?.trim() || undefined;
     if (data.temperatureZones !== undefined) {
       update.temperatureZones = data.temperatureZones.map((z: any) => ({
         zoneId: z.zoneId.toUpperCase(),
@@ -474,6 +479,7 @@ export async function updateVessel(id: unknown, input: unknown) {
             designStowageFactor: s.designStowageFactor,
           })),
         })),
+        captainEmail: vessel.captainEmail,
         active: vessel.active !== false,
       },
     };
@@ -657,6 +663,7 @@ export async function getAdminVessels() {
           designStowageFactor: s.designStowageFactor,
         })),
       })),
+      captainEmail: v.captainEmail,
       active: v.active !== false,
       voyageCount: countMap[v._id.toString()] ?? 0,
     }));

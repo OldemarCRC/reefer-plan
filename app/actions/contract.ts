@@ -8,7 +8,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { ContractModel, ServiceModel, OfficeModel } from '@/lib/db/schemas';
+import { ContractModel, ServiceModel, OfficeModel, ShipperModel } from '@/lib/db/schemas';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -36,6 +36,14 @@ const PortInfoSchema = z.object({
   country: z.string().min(1),
 });
 
+const ContractCounterpartyInputSchema = z.object({
+  shipperId:      z.string().min(1),
+  shipperName:    z.string().min(1).max(200),
+  shipperCode:    z.string().min(1).max(20),
+  weeklyEstimate: z.number().int().min(0),
+  cargoTypes:     z.array(CargoTypeSchema).min(1),
+});
+
 const CreateContractSchema = z.object({
   officeId: z.string().min(1, 'Office ID is required'),
   client: z.object({
@@ -45,8 +53,9 @@ const CreateContractSchema = z.object({
     email: z.string().email(),
     country: z.string().min(1),
   }),
-  shippers: z.array(CounterpartySchema).default([]),
-  consignees: z.array(CounterpartySchema).default([]),
+  shippers:       z.array(CounterpartySchema).default([]),
+  consignees:     z.array(CounterpartySchema).default([]),
+  counterparties: z.array(ContractCounterpartyInputSchema).default([]),
   serviceId: z.string().min(1, 'Service ID is required'),
   originPort: PortInfoSchema,
   destinationPort: PortInfoSchema,
@@ -153,6 +162,7 @@ export async function createContract(data: unknown) {
       },
       shippers: validated.shippers,
       consignees: validated.consignees,
+      counterparties: validated.counterparties,
       serviceId: validated.serviceId,
       serviceCode: service.serviceCode,
       originPort: validated.originPort,
@@ -349,7 +359,8 @@ export async function getContractsByService(serviceId: unknown) {
 
 // ----------------------------------------------------------------------------
 // GET SHIPPER CODES
-// Returns all unique {code, name} pairs from shippers+consignees across active contracts.
+// Returns {code, name} pairs — pulls from Shipper collection first, then
+// falls back to scanning contracts for legacy shippers.
 // Used by admin when assigning shipperCode to EXPORTER users.
 // ----------------------------------------------------------------------------
 
@@ -357,25 +368,32 @@ export async function getShipperCodes(): Promise<{ success: boolean; data: { cod
   try {
     await connectDB();
 
-    const contracts = await ContractModel.find({ active: true })
-      .select('client shippers consignees')
-      .lean();
-
     const map = new Map<string, string>();
 
+    // Primary source: Shipper collection
+    const shippers = await ShipperModel.find({ active: true }).select('code name').lean();
+    for (const s of shippers as any[]) {
+      if (s.code && s.name) map.set(s.code, s.name);
+    }
+
+    // Fallback: scan active contracts for legacy shippers arrays
+    const contracts = await ContractModel.find({ active: true })
+      .select('client shippers consignees counterparties')
+      .lean();
+
     for (const c of contracts as any[]) {
-      // If the primary client is a shipper, include them
       if (c.client?.type === 'SHIPPER' && c.client?.name) {
         const code = c.client?.clientNumber ?? c.client?.name.slice(0, 10).toUpperCase().replace(/\s/g, '');
-        map.set(code, c.client.name);
+        if (!map.has(code)) map.set(code, c.client.name);
       }
-      // Shippers array
       for (const s of c.shippers ?? []) {
-        if (s.code && s.name) map.set(s.code, s.name);
+        if (s.code && s.name && !map.has(s.code)) map.set(s.code, s.name);
       }
-      // Consignees array — sometimes shippers are in the consignee side
       for (const s of c.consignees ?? []) {
-        if (s.code && s.name) map.set(s.code, s.name);
+        if (s.code && s.name && !map.has(s.code)) map.set(s.code, s.name);
+      }
+      for (const s of c.counterparties ?? []) {
+        if (s.shipperCode && s.shipperName && !map.has(s.shipperCode)) map.set(s.shipperCode, s.shipperName);
       }
     }
 

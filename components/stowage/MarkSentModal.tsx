@@ -17,6 +17,7 @@ interface MarkSentModalProps {
   planId: string;
   planNumber: string;
   vesselName: string;
+  captainEmail?: string;
   onSuccess: () => void;
   onClose: () => void;
 }
@@ -25,7 +26,7 @@ function vesselSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 }
 
-function buildRecipients(vesselName: string): Recipient[] {
+function buildRecipients(vesselName: string, captainEmail?: string): Recipient[] {
   const base = 'oldemar.chaves';
   const domain = 'gmail.com';
   const slug = vesselSlug(vesselName);
@@ -35,7 +36,7 @@ function buildRecipients(vesselName: string): Recipient[] {
       id: 'captain',
       label: 'Captain',
       sublabel: vesselName,
-      email: `${base}+${slug}@${domain}`,
+      email: captainEmail ?? `${base}+${slug}@${domain}`,
       role: 'CAPTAIN',
       checked: true,
     },
@@ -62,10 +63,11 @@ export default function MarkSentModal({
   planId,
   planNumber,
   vesselName,
+  captainEmail,
   onSuccess,
   onClose,
 }: MarkSentModalProps) {
-  const [recipients, setRecipients] = useState<Recipient[]>(() => buildRecipients(vesselName));
+  const [recipients, setRecipients] = useState<Recipient[]>(() => buildRecipients(vesselName, captainEmail));
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();

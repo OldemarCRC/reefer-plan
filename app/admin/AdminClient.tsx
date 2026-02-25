@@ -10,6 +10,7 @@ import { deleteService, createService, updateService } from '@/app/actions/servi
 import { createUser, updateUser, deleteUser, resendUserConfirmation } from '@/app/actions/user';
 import { getPorts, createPort, updatePort } from '@/app/actions/port';
 import { getShipperCodes } from '@/app/actions/contract';
+import { createShipper, updateShipper, deactivateShipper } from '@/app/actions/shipper';
 import ContractsClient from '@/app/contracts/ContractsClient';
 import type { DisplayContract } from '@/app/contracts/ContractsClient';
 import styles from './page.module.css';
@@ -62,8 +63,22 @@ interface AdminVessel {
   built?: number;
   capacity?: { totalPallets?: number; totalSqm?: number };
   temperatureZones?: VesselZone[];
+  captainEmail?: string;
   active?: boolean;
   voyageCount: number;
+}
+
+interface AdminShipper {
+  _id: string;
+  name: string;
+  code: string;
+  contact: string;
+  email: string;
+  phone?: string;
+  country: string;
+  portCode?: string;
+  portName?: string;
+  active: boolean;
 }
 
 // Form-level zone types (string values for number inputs during editing)
@@ -142,7 +157,7 @@ interface AdminPort {
   active: boolean;
 }
 
-type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users' | 'ports';
+type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users' | 'ports' | 'shippers';
 
 type ConfirmAction =
   | { type: 'cancel'; voyage: AdminVoyage }
@@ -769,6 +784,7 @@ function CreateVesselModal({ onClose, onCreated }: {
   const [builtYear, setBuiltYear] = useState('');
   const [totalPallets, setTotalPallets] = useState('');
   const [totalSqm, setTotalSqm] = useState('');
+  const [captainEmail, setCaptainEmail] = useState('');
   const [zones, setZones] = useState<FormZone[]>([]);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -790,6 +806,7 @@ function CreateVesselModal({ onClose, onCreated }: {
           totalPallets: totalPallets ? Number(totalPallets) : undefined,
           totalSqm: totalSqm ? Number(totalSqm) : undefined,
         } : undefined,
+        captainEmail: captainEmail.trim() || undefined,
         temperatureZones: fromFormZones(zones),
       });
       if (result.success) {
@@ -860,6 +877,16 @@ function CreateVesselModal({ onClose, onCreated }: {
               max={2100}
             />
           </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Captain Email <span style={{ fontWeight: 'normal', opacity: 0.6 }}>(optional)</span></label>
+            <input
+              className={styles.formInput}
+              type="email"
+              value={captainEmail}
+              onChange={e => setCaptainEmail(e.target.value)}
+              placeholder="captain@vessel.com"
+            />
+          </div>
         </div>
 
         {/* Capacity */}
@@ -928,6 +955,7 @@ function EditVesselModal({ vessel, onClose, onUpdated }: {
   const [builtYear, setBuiltYear] = useState(vessel.built ? String(vessel.built) : '');
   const [totalPallets, setTotalPallets] = useState(String(vessel.capacity?.totalPallets ?? ''));
   const [totalSqm, setTotalSqm] = useState(String(vessel.capacity?.totalSqm ?? ''));
+  const [captainEmailEdit, setCaptainEmailEdit] = useState(vessel.captainEmail ?? '');
   const [zones, setZones] = useState<FormZone[]>(() => toFormZones(vessel.temperatureZones));
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -949,6 +977,7 @@ function EditVesselModal({ vessel, onClose, onUpdated }: {
           totalPallets: totalPallets ? Number(totalPallets) : undefined,
           totalSqm: totalSqm ? Number(totalSqm) : undefined,
         } : undefined,
+        captainEmail: captainEmailEdit.trim() || undefined,
         temperatureZones: fromFormZones(zones),
       });
       if (result.success) {
@@ -1013,6 +1042,16 @@ function EditVesselModal({ vessel, onClose, onUpdated }: {
               placeholder="2010"
               min={1900}
               max={2100}
+            />
+          </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Captain Email <span style={{ fontWeight: 'normal', opacity: 0.6 }}>(optional)</span></label>
+            <input
+              className={styles.formInput}
+              type="email"
+              value={captainEmailEdit}
+              onChange={e => setCaptainEmailEdit(e.target.value)}
+              placeholder="captain@vessel.com"
             />
           </div>
         </div>
@@ -2438,6 +2477,309 @@ function PortsTab({ initialPorts }: { initialPorts: AdminPort[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// Shippers Tab
+// ---------------------------------------------------------------------------
+
+function CreateShipperModal({ onClose, onCreated }: {
+  onClose: () => void;
+  onCreated: (s: AdminShipper) => void;
+}) {
+  const [name, setName] = useState('');
+  const [code, setCode] = useState('');
+  const [contact, setContact] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [country, setCountry] = useState('');
+  const [portCode, setPortCode] = useState('');
+  const [portName, setPortName] = useState('');
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = () => {
+    if (!name.trim() || !code.trim() || !contact.trim() || !email.trim() || !country.trim()) {
+      setError('Name, Code, Contact, Email and Country are required');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await createShipper({
+        name: name.trim(),
+        code: code.trim().toUpperCase(),
+        contact: contact.trim(),
+        email: email.trim(),
+        phone: phone.trim() || undefined,
+        country: country.trim(),
+        portCode: portCode.trim() || undefined,
+        portName: portName.trim() || undefined,
+      });
+      if (result.success) {
+        onCreated(result.data as AdminShipper);
+      } else {
+        setError(result.error ?? 'Failed to create shipper');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h3 className={styles.modalTitle}>New Shipper</h3>
+        <div className={styles.formGrid}>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Company Name *</label>
+            <input className={styles.formInput} value={name} onChange={e => setName(e.target.value)} placeholder="Frutas Caribe S.A." maxLength={200} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Code * (unique)</label>
+            <input className={`${styles.formInput} ${styles.formInputMono}`} value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="FRUTCAR" maxLength={20} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Country *</label>
+            <input className={`${styles.formInput} ${styles.formInputMono}`} value={country} onChange={e => setCountry(e.target.value.toUpperCase())} placeholder="CO" maxLength={100} />
+          </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Contact Person *</label>
+            <input className={styles.formInput} value={contact} onChange={e => setContact(e.target.value)} placeholder="Juan García" maxLength={200} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Email *</label>
+            <input className={styles.formInput} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="contact@shipper.com" />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Phone</label>
+            <input className={styles.formInput} value={phone} onChange={e => setPhone(e.target.value)} placeholder="+57 310 000 0000" maxLength={50} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Main Port Code</label>
+            <input className={`${styles.formInput} ${styles.formInputMono}`} value={portCode} onChange={e => setPortCode(e.target.value.toUpperCase())} placeholder="COSMA" maxLength={10} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Port Name</label>
+            <input className={styles.formInput} value={portName} onChange={e => setPortName(e.target.value)} placeholder="Santa Marta" maxLength={200} />
+          </div>
+        </div>
+        {error && <div className={styles.modalError}>{error}</div>}
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
+          <button className={styles.btnPrimary} onClick={handleSubmit} disabled={isPending || !name.trim() || !code.trim() || !email.trim()}>
+            {isPending ? 'Creating…' : 'Create Shipper'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditShipperModal({ shipper, onClose, onUpdated }: {
+  shipper: AdminShipper;
+  onClose: () => void;
+  onUpdated: (s: AdminShipper) => void;
+}) {
+  const [name, setName] = useState(shipper.name);
+  const [code, setCode] = useState(shipper.code);
+  const [contact, setContact] = useState(shipper.contact);
+  const [email, setEmail] = useState(shipper.email);
+  const [phone, setPhone] = useState(shipper.phone ?? '');
+  const [country, setCountry] = useState(shipper.country);
+  const [portCode, setPortCode] = useState(shipper.portCode ?? '');
+  const [portName, setPortName] = useState(shipper.portName ?? '');
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = () => {
+    if (!name.trim() || !code.trim() || !contact.trim() || !email.trim() || !country.trim()) {
+      setError('Name, Code, Contact, Email and Country are required');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await updateShipper(shipper._id, {
+        name: name.trim(),
+        code: code.trim().toUpperCase(),
+        contact: contact.trim(),
+        email: email.trim(),
+        phone: phone.trim() || undefined,
+        country: country.trim(),
+        portCode: portCode.trim() || undefined,
+        portName: portName.trim() || undefined,
+      });
+      if (result.success) {
+        onUpdated(result.data as AdminShipper);
+      } else {
+        setError(result.error ?? 'Failed to save shipper');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h3 className={styles.modalTitle}>Edit Shipper — {shipper.name}</h3>
+        <div className={styles.formGrid}>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Company Name *</label>
+            <input className={styles.formInput} value={name} onChange={e => setName(e.target.value)} maxLength={200} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Code *</label>
+            <input className={`${styles.formInput} ${styles.formInputMono}`} value={code} onChange={e => setCode(e.target.value.toUpperCase())} maxLength={20} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Country *</label>
+            <input className={`${styles.formInput} ${styles.formInputMono}`} value={country} onChange={e => setCountry(e.target.value.toUpperCase())} maxLength={100} />
+          </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Contact Person *</label>
+            <input className={styles.formInput} value={contact} onChange={e => setContact(e.target.value)} maxLength={200} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Email *</label>
+            <input className={styles.formInput} type="email" value={email} onChange={e => setEmail(e.target.value)} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Phone</label>
+            <input className={styles.formInput} value={phone} onChange={e => setPhone(e.target.value)} maxLength={50} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Main Port Code</label>
+            <input className={`${styles.formInput} ${styles.formInputMono}`} value={portCode} onChange={e => setPortCode(e.target.value.toUpperCase())} maxLength={10} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Port Name</label>
+            <input className={styles.formInput} value={portName} onChange={e => setPortName(e.target.value)} maxLength={200} />
+          </div>
+        </div>
+        {error && <div className={styles.modalError}>{error}</div>}
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
+          <button className={styles.btnPrimary} onClick={handleSave} disabled={isPending}>
+            {isPending ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShippersTab({ initialShippers }: { initialShippers: AdminShipper[] }) {
+  const router = useRouter();
+  const [shippers, setShippers] = useState<AdminShipper[]>(initialShippers);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editingShipper, setEditingShipper] = useState<AdminShipper | null>(null);
+  const [confirmDeactivate, setConfirmDeactivate] = useState<AdminShipper | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleDeactivate = () => {
+    if (!confirmDeactivate) return;
+    setErrorMsg(null);
+    startTransition(async () => {
+      const result = await deactivateShipper(confirmDeactivate._id);
+      if (result.success) {
+        setShippers(prev => prev.map(s => s._id === confirmDeactivate._id ? { ...s, active: false } : s));
+        setConfirmDeactivate(null);
+        router.refresh();
+      } else {
+        setErrorMsg(result.error ?? 'Failed to deactivate shipper');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.tabContent}>
+      <div className={styles.toolbar}>
+        <div className={styles.toolbarLeft}>
+          <span className={styles.toolbarCount}>{shippers.length} shippers</span>
+        </div>
+        <button className={styles.btnPrimary} onClick={() => setShowCreate(true)}>+ New Shipper</button>
+      </div>
+
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Code</th>
+              <th>Country</th>
+              <th>Port</th>
+              <th>Contact</th>
+              <th>Email</th>
+              <th>Status</th>
+              <th className={styles.thActions}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shippers.map(s => (
+              <tr key={s._id} style={{ opacity: s.active ? 1 : 0.5 }}>
+                <td style={{ fontWeight: 'var(--weight-medium)' }}>{s.name}</td>
+                <td><code>{s.code}</code></td>
+                <td>{s.country}</td>
+                <td className={styles.cellSecondary}>{s.portCode ? `${s.portCode}${s.portName ? ` — ${s.portName}` : ''}` : '—'}</td>
+                <td className={styles.cellSecondary}>{s.contact}</td>
+                <td className={styles.cellMono}>{s.email}</td>
+                <td>
+                  <span className={styles.badge} style={{
+                    background: s.active ? 'var(--color-success-muted)' : 'var(--color-bg-tertiary)',
+                    color: s.active ? 'var(--color-success)' : 'var(--color-text-tertiary)',
+                  }}>
+                    {s.active ? 'Active' : 'Inactive'}
+                  </span>
+                </td>
+                <td className={styles.cellActions}>
+                  <button className={styles.btnSm} onClick={() => setEditingShipper(s)}>Edit</button>
+                  {s.active && (
+                    <button className={styles.btnWarn} onClick={() => { setConfirmDeactivate(s); setErrorMsg(null); }}>Deactivate</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {shippers.length === 0 && (
+              <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '2rem' }}>No shippers yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {confirmDeactivate && (
+        <div className={styles.overlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Deactivate Shipper</h3>
+            <div className={styles.modalVoyageInfo}>
+              <span className={styles.modalVoyageNumber}>{confirmDeactivate.name}</span>
+              <code style={{ fontSize: '0.8em', opacity: 0.7 }}>{confirmDeactivate.code}</code>
+            </div>
+            <p className={styles.modalBody}>
+              Deactivating this shipper hides it from dropdown menus. Existing bookings and contracts are not affected.
+            </p>
+            {errorMsg && <div className={styles.modalError}>{errorMsg}</div>}
+            <div className={styles.modalActions}>
+              <button className={styles.btnModalCancel} onClick={() => setConfirmDeactivate(null)} disabled={isPending}>Cancel</button>
+              <button className={styles.btnModalWarn} onClick={handleDeactivate} disabled={isPending}>
+                {isPending ? 'Deactivating…' : 'Yes, Deactivate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreate && (
+        <CreateShipperModal
+          onClose={() => setShowCreate(false)}
+          onCreated={s => { setShippers(prev => [...prev, s].sort((a, b) => a.name.localeCompare(b.name))); setShowCreate(false); router.refresh(); }}
+        />
+      )}
+      {editingShipper && (
+        <EditShipperModal
+          shipper={editingShipper}
+          onClose={() => setEditingShipper(null)}
+          onUpdated={s => { setShippers(prev => prev.map(x => x._id === s._id ? s : x)); setEditingShipper(null); router.refresh(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -2449,6 +2791,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'services',  label: 'Services'      },
   { id: 'users',     label: 'Users'         },
   { id: 'ports',     label: 'Ports'         },
+  { id: 'shippers',  label: 'Shippers'      },
 ];
 
 interface AdminClientProps {
@@ -2460,9 +2803,10 @@ interface AdminClientProps {
   vessels: AdminVessel[];
   users: AdminUser[];
   ports: AdminPort[];
+  shippers: AdminShipper[];
 }
 
-export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports }: AdminClientProps) {
+export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports, shippers }: AdminClientProps) {
   const [activeTab, setActiveTab] = useState<Tab>('voyages');
 
   return (
@@ -2502,6 +2846,7 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
       {activeTab === 'services' && <ServicesTab initialServices={services as AdminService[]} />}
       {activeTab === 'users'    && <UsersTab initialUsers={users} />}
       {activeTab === 'ports'    && <PortsTab initialPorts={ports} />}
+      {activeTab === 'shippers' && <ShippersTab initialShippers={shippers} />}
     </div>
   );
 }
