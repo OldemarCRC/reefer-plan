@@ -76,8 +76,6 @@ interface AdminShipper {
   email: string;
   phone?: string;
   country: string;
-  portCode?: string;
-  portName?: string;
   active: boolean;
 }
 
@@ -154,6 +152,11 @@ interface AdminPort {
   name: string;
   country: string;
   city: string;
+  puerto?: string;
+  pais_sigla?: string;
+  unlocode?: string;
+  latitud?: number;
+  longitud?: number;
   active: boolean;
 }
 
@@ -2281,21 +2284,35 @@ function CreatePortModal({ onClose, onCreated }: {
   onClose: () => void;
   onCreated: (p: AdminPort) => void;
 }) {
-  const [code, setCode]       = useState('');
-  const [name, setName]       = useState('');
-  const [country, setCountry] = useState('');
-  const [city, setCity]       = useState('');
+  const [code, setCode]           = useState('');
+  const [name, setName]           = useState('');
+  const [country, setCountry]     = useState('');
+  const [city, setCity]           = useState('');
+  const [puerto, setPuerto]       = useState('');
+  const [paisSigla, setPaisSigla] = useState('');
+  const [latitud, setLatitud]     = useState('');
+  const [longitud, setLongitud]   = useState('');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = () => {
     if (!code.trim() || !name.trim() || !country.trim() || !city.trim()) {
-      setError('All fields are required');
+      setError('UNLOCODE, Port Name, Country and City are required');
       return;
     }
     setError(null);
     startTransition(async () => {
-      const result = await createPort({ code: code.toUpperCase().trim(), name: name.trim(), country: country.toUpperCase().trim(), city: city.trim() });
+      const result = await createPort({
+        code: code.toUpperCase().trim(),
+        name: name.trim(),
+        country: country.toUpperCase().trim(),
+        city: city.trim(),
+        puerto: puerto.trim() || undefined,
+        pais_sigla: paisSigla.toUpperCase().trim() || undefined,
+        unlocode: code.toUpperCase().trim(), // mirror code as unlocode
+        latitud: latitud ? parseFloat(latitud) : undefined,
+        longitud: longitud ? parseFloat(longitud) : undefined,
+      });
       if (result.success) {
         onCreated(result.data as AdminPort);
       } else {
@@ -2322,9 +2339,25 @@ function CreatePortModal({ onClose, onCreated }: {
             <input className={styles.formInput} value={name} onChange={e => setName(e.target.value)} placeholder="Valparaíso" maxLength={100} />
           </div>
           <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Puerto (nombre en español)</label>
+            <input className={styles.formInput} value={puerto} onChange={e => setPuerto(e.target.value)} placeholder="Valparaíso" maxLength={200} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>País Sigla</label>
+            <input className={`${styles.formInput} ${styles.formInputMono}`} value={paisSigla} onChange={e => setPaisSigla(e.target.value.toUpperCase())} placeholder="CL" maxLength={5} />
+          </div>
+          <div className={styles.formGroup}>
             <label className={styles.formLabel}>City (for weather data) *</label>
             <input className={styles.formInput} value={city} onChange={e => setCity(e.target.value)} placeholder="Valparaíso" maxLength={100} />
-            <span className={styles.formHint}>City name used to fetch weather forecasts via OpenWeatherMap API.</span>
+            <span className={styles.formHint}>Used for weather forecasts.</span>
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Latitud</label>
+            <input className={styles.formInput} type="number" step="0.0001" value={latitud} onChange={e => setLatitud(e.target.value)} placeholder="-33.0333" />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Longitud</label>
+            <input className={styles.formInput} type="number" step="0.0001" value={longitud} onChange={e => setLongitud(e.target.value)} placeholder="-71.6167" />
           </div>
         </div>
         {error && <div className={styles.modalError}>{error}</div>}
@@ -2344,21 +2377,34 @@ function EditPortModal({ port, onClose, onUpdated }: {
   onClose: () => void;
   onUpdated: (p: AdminPort) => void;
 }) {
-  const [name, setName]       = useState(port.name);
-  const [country, setCountry] = useState(port.country);
-  const [city, setCity]       = useState(port.city);
-  const [active, setActive]   = useState(port.active);
+  const [name, setName]           = useState(port.name);
+  const [country, setCountry]     = useState(port.country);
+  const [city, setCity]           = useState(port.city);
+  const [puerto, setPuerto]       = useState(port.puerto ?? '');
+  const [paisSigla, setPaisSigla] = useState(port.pais_sigla ?? '');
+  const [latitud, setLatitud]     = useState(port.latitud != null ? String(port.latitud) : '');
+  const [longitud, setLongitud]   = useState(port.longitud != null ? String(port.longitud) : '');
+  const [active, setActive]       = useState(port.active);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const handleSave = () => {
     if (!name.trim() || !country.trim() || !city.trim()) {
-      setError('All fields are required');
+      setError('Port Name, Country and City are required');
       return;
     }
     setError(null);
     startTransition(async () => {
-      const result = await updatePort(port._id, { name: name.trim(), country: country.toUpperCase().trim(), city: city.trim(), active });
+      const result = await updatePort(port._id, {
+        name: name.trim(),
+        country: country.toUpperCase().trim(),
+        city: city.trim(),
+        active,
+        puerto: puerto.trim() || undefined,
+        pais_sigla: paisSigla.toUpperCase().trim() || undefined,
+        latitud: latitud ? parseFloat(latitud) : undefined,
+        longitud: longitud ? parseFloat(longitud) : undefined,
+      });
       if (result.success) {
         onUpdated(result.data as AdminPort);
       } else {
@@ -2376,13 +2422,29 @@ function EditPortModal({ port, onClose, onUpdated }: {
             <label className={styles.formLabel}>Port Name *</label>
             <input className={styles.formInput} value={name} onChange={e => setName(e.target.value)} maxLength={100} />
           </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Puerto (nombre en español)</label>
+            <input className={styles.formInput} value={puerto} onChange={e => setPuerto(e.target.value)} maxLength={200} />
+          </div>
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>Country (2-letter) *</label>
             <input className={`${styles.formInput} ${styles.formInputMono}`} value={country} onChange={e => setCountry(e.target.value.toUpperCase())} maxLength={2} />
           </div>
           <div className={styles.formGroup}>
+            <label className={styles.formLabel}>País Sigla</label>
+            <input className={`${styles.formInput} ${styles.formInputMono}`} value={paisSigla} onChange={e => setPaisSigla(e.target.value.toUpperCase())} maxLength={5} />
+          </div>
+          <div className={styles.formGroup}>
             <label className={styles.formLabel}>City (weather) *</label>
             <input className={styles.formInput} value={city} onChange={e => setCity(e.target.value)} maxLength={100} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Latitud</label>
+            <input className={styles.formInput} type="number" step="0.0001" value={latitud} onChange={e => setLatitud(e.target.value)} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Longitud</label>
+            <input className={styles.formInput} type="number" step="0.0001" value={longitud} onChange={e => setLongitud(e.target.value)} />
           </div>
           <div className={styles.formGroupFull}>
             <label className={styles.formLabel}>
@@ -2490,8 +2552,6 @@ function CreateShipperModal({ onClose, onCreated }: {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [country, setCountry] = useState('');
-  const [portCode, setPortCode] = useState('');
-  const [portName, setPortName] = useState('');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -2509,8 +2569,6 @@ function CreateShipperModal({ onClose, onCreated }: {
         email: email.trim(),
         phone: phone.trim() || undefined,
         country: country.trim(),
-        portCode: portCode.trim() || undefined,
-        portName: portName.trim() || undefined,
       });
       if (result.success) {
         onCreated(result.data as AdminShipper);
@@ -2549,14 +2607,6 @@ function CreateShipperModal({ onClose, onCreated }: {
             <label className={styles.formLabel}>Phone</label>
             <input className={styles.formInput} value={phone} onChange={e => setPhone(e.target.value)} placeholder="+57 310 000 0000" maxLength={50} />
           </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Main Port Code</label>
-            <input className={`${styles.formInput} ${styles.formInputMono}`} value={portCode} onChange={e => setPortCode(e.target.value.toUpperCase())} placeholder="COSMA" maxLength={10} />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Port Name</label>
-            <input className={styles.formInput} value={portName} onChange={e => setPortName(e.target.value)} placeholder="Santa Marta" maxLength={200} />
-          </div>
         </div>
         {error && <div className={styles.modalError}>{error}</div>}
         <div className={styles.modalActions}>
@@ -2581,8 +2631,6 @@ function EditShipperModal({ shipper, onClose, onUpdated }: {
   const [email, setEmail] = useState(shipper.email);
   const [phone, setPhone] = useState(shipper.phone ?? '');
   const [country, setCountry] = useState(shipper.country);
-  const [portCode, setPortCode] = useState(shipper.portCode ?? '');
-  const [portName, setPortName] = useState(shipper.portName ?? '');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -2600,8 +2648,6 @@ function EditShipperModal({ shipper, onClose, onUpdated }: {
         email: email.trim(),
         phone: phone.trim() || undefined,
         country: country.trim(),
-        portCode: portCode.trim() || undefined,
-        portName: portName.trim() || undefined,
       });
       if (result.success) {
         onUpdated(result.data as AdminShipper);
@@ -2639,14 +2685,6 @@ function EditShipperModal({ shipper, onClose, onUpdated }: {
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>Phone</label>
             <input className={styles.formInput} value={phone} onChange={e => setPhone(e.target.value)} maxLength={50} />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Main Port Code</label>
-            <input className={`${styles.formInput} ${styles.formInputMono}`} value={portCode} onChange={e => setPortCode(e.target.value.toUpperCase())} maxLength={10} />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Port Name</label>
-            <input className={styles.formInput} value={portName} onChange={e => setPortName(e.target.value)} maxLength={200} />
           </div>
         </div>
         {error && <div className={styles.modalError}>{error}</div>}
@@ -2701,7 +2739,6 @@ function ShippersTab({ initialShippers }: { initialShippers: AdminShipper[] }) {
               <th>Name</th>
               <th>Code</th>
               <th>Country</th>
-              <th>Port</th>
               <th>Contact</th>
               <th>Email</th>
               <th>Status</th>
@@ -2714,7 +2751,6 @@ function ShippersTab({ initialShippers }: { initialShippers: AdminShipper[] }) {
                 <td style={{ fontWeight: 'var(--weight-medium)' }}>{s.name}</td>
                 <td><code>{s.code}</code></td>
                 <td>{s.country}</td>
-                <td className={styles.cellSecondary}>{s.portCode ? `${s.portCode}${s.portName ? ` — ${s.portName}` : ''}` : '—'}</td>
                 <td className={styles.cellSecondary}>{s.contact}</td>
                 <td className={styles.cellMono}>{s.email}</td>
                 <td>
@@ -2734,7 +2770,7 @@ function ShippersTab({ initialShippers }: { initialShippers: AdminShipper[] }) {
               </tr>
             ))}
             {shippers.length === 0 && (
-              <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '2rem' }}>No shippers yet.</td></tr>
+              <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '2rem' }}>No shippers yet.</td></tr>
             )}
           </tbody>
         </table>
@@ -2838,7 +2874,7 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
       {activeTab === 'voyages'   && <VoyagesTab initialVoyages={voyages} />}
       {activeTab === 'contracts' && (
         <div className={styles.tabContent}>
-          <ContractsClient contracts={contracts} offices={offices} services={services} />
+          <ContractsClient contracts={contracts} offices={offices} services={services} shippers={shippers} />
         </div>
       )}
       {activeTab === 'plans'    && <PlansTab initialPlans={plans} />}

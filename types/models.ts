@@ -272,6 +272,23 @@ export interface ShipmentShipper {
   address?: string;
 }
 
+// Top-level Port collection document
+export interface Port {
+  _id: string;
+  code: string;       // UNLOCODE e.g. "CLVAP"
+  name: string;       // "Valparaíso"
+  country: string;    // "CL"
+  city: string;       // city for weather API
+  puerto?: string;    // port name in Spanish
+  pais_sigla?: string;
+  unlocode?: string;  // UN/LOCODE (unique)
+  latitud?: number;
+  longitud?: number;
+  active: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 // Top-level Shipper collection document
 export interface Shipper {
   _id: string;
@@ -281,8 +298,6 @@ export interface Shipper {
   email: string;
   phone?: string;
   country: string;
-  portCode?: string;
-  portName?: string;
   active: boolean;
   createdAt: Date;
   updatedAt: Date;

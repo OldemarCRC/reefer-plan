@@ -10,15 +10,22 @@ import mongoose, { Schema, Model } from 'mongoose';
 // ============================================================================
 
 const PortSchema = new Schema({
-  code:    { type: String, required: true, unique: true }, // UNLOCODE e.g. "CLVAP"
-  name:    { type: String, required: true },               // "Valparaíso"
-  country: { type: String, required: true },               // "CL"
-  city:    { type: String, required: true },               // city name for weather API e.g. "Valparaíso"
-  active:  { type: Boolean, default: true },
+  code:       { type: String, required: true, unique: true }, // UNLOCODE e.g. "CLVAP"
+  name:       { type: String, required: true },               // "Valparaíso"
+  country:    { type: String, required: true },               // "CL"
+  city:       { type: String, required: true },               // city name for weather API e.g. "Valparaíso"
+  // Extended fields
+  puerto:     { type: String },                               // port name in Spanish
+  pais_sigla: { type: String },                               // country code e.g. "CL"
+  unlocode:   { type: String, unique: true, sparse: true },   // UN/LOCODE (unique identifier)
+  latitud:    { type: Number },                               // latitude
+  longitud:   { type: Number },                               // longitude
+  active:     { type: Boolean, default: true },
 }, { timestamps: true });
 
 PortSchema.index({ code: 1 });
 PortSchema.index({ active: 1 });
+PortSchema.index({ unlocode: 1 }, { sparse: true });
 
 // ============================================================================
 // SERVICE SCHEMA
@@ -287,8 +294,6 @@ const ShipperCollectionSchema = new Schema({
   email:     { type: String, required: true },
   phone:     { type: String },
   country:   { type: String, required: true },
-  portCode:  { type: String },
-  portName:  { type: String },
   active:    { type: Boolean, default: true },
 }, { timestamps: true });
 

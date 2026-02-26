@@ -54,10 +54,17 @@ interface CounterpartyForm {
   cargoTypes: CargoType[];
 }
 
+interface ShipperOption {
+  _id: string;
+  name: string;
+  code: string;
+}
+
 interface ContractsClientProps {
   contracts: DisplayContract[];
   offices: OfficeOption[];
   services: ServiceOption[];
+  shippers?: ShipperOption[];
 }
 
 // ---------------------------------------------------------------------------
@@ -110,10 +117,12 @@ function emptyCounterparty(): CounterpartyForm {
 function CreateContractModal({
   offices,
   services,
+  shippers = [],
   onClose,
 }: {
   offices: OfficeOption[];
   services: ServiceOption[];
+  shippers?: ShipperOption[];
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -133,6 +142,8 @@ function CreateContractModal({
   const [validFrom, setValidFrom] = useState('');
   const [validTo, setValidTo] = useState('');
   const [counterparties, setCounterparties] = useState<CounterpartyForm[]>([emptyCounterparty()]);
+  // Shipper selection for CONSIGNEE contracts (from Shippers collection)
+  const [selectedShipperId, setSelectedShipperId] = useState('');
 
   // Derive ports from selected service
   const selectedService = services.find((s) => s._id === serviceId);
@@ -179,8 +190,9 @@ function CreateContractModal({
     }
 
     const validCounterparties = counterparties.filter((cp) => cp.name && cp.code && cp.cargoTypes.length > 0);
-    if (validCounterparties.length === 0) {
-      setErrorMsg('Add at least one counterparty with name, code, and cargo types.');
+    // For SHIPPER contracts, consignees are required; for CONSIGNEE contracts, shippers are optional
+    if (clientType === 'SHIPPER' && validCounterparties.length === 0) {
+      setErrorMsg('Add at least one consignee with name, code, and cargo types.');
       return;
     }
 
@@ -345,49 +357,72 @@ function CreateContractModal({
             <label className={styles.formLabel}>{counterpartyLabel}</label>
           </div>
 
-          {counterparties.map((cp, idx) => (
-            <div key={idx} className={styles.counterpartyCard}>
-              <div className={styles.counterpartyHeader}>
-                <span className={styles.counterpartyIdx}>#{idx + 1}</span>
-                {counterparties.length > 1 && (
-                  <button type="button" className={styles.btnRemove} onClick={() => removeCounterparty(idx)}>Remove</button>
-                )}
-              </div>
-              <div className={styles.formGrid2}>
-                <div className={styles.formRow}>
-                  <label className={styles.formLabel}>Name</label>
-                  <input className={styles.formInput} value={cp.name} onChange={(e) => updateCounterparty(idx, 'name', e.target.value)} placeholder="Company name" maxLength={120} />
-                </div>
-                <div className={styles.formRow}>
-                  <label className={styles.formLabel}>Code</label>
-                  <input className={styles.formInput} value={cp.code} onChange={(e) => updateCounterparty(idx, 'code', e.target.value)} placeholder="e.g. SHP01" maxLength={20} />
-                </div>
-              </div>
+          {clientType === 'CONSIGNEE' ? (
+            /* CONSIGNEE contract: select shippers from the Shippers collection */
+            <div>
               <div className={styles.formRow}>
-                <label className={styles.formLabel}>Weekly Estimate (pallets)</label>
-                <input className={styles.formInput} type="number" min="0" value={cp.weeklyEstimate} onChange={(e) => updateCounterparty(idx, 'weeklyEstimate', e.target.value)} placeholder="0" />
-              </div>
-              <div className={styles.formRow}>
-                <label className={styles.formLabel}>Cargo Types</label>
-                <div className={styles.cargoChips}>
-                  {CARGO_TYPES.map((ct) => (
-                    <button
-                      key={ct}
-                      type="button"
-                      className={`${styles.cargoChip} ${cp.cargoTypes.includes(ct) ? styles['cargoChip--active'] : ''}`}
-                      onClick={() => toggleCargoType(idx, ct)}
-                    >
-                      {formatCargo(ct)}
-                    </button>
+                <select
+                  className={styles.formSelect}
+                  value={selectedShipperId}
+                  onChange={(e) => setSelectedShipperId(e.target.value)}
+                >
+                  <option value="">— Select a shipper (optional) —</option>
+                  {shippers.map((s) => (
+                    <option key={s._id} value={s._id}>{s.code} — {s.name}</option>
                   ))}
-                </div>
+                </select>
+                <span className={styles.formHint} style={{ marginTop: '0.4rem', display: 'block' }}>
+                  Shippers can be added later, but will be required to create Bookings.
+                </span>
               </div>
             </div>
-          ))}
-
-          <button type="button" className={styles.btnAddCp} onClick={addCounterparty}>
-            + Add {counterpartyLabel.slice(0, -1)}
-          </button>
+          ) : (
+            /* SHIPPER contract: free-text consignees */
+            <>
+              {counterparties.map((cp, idx) => (
+                <div key={idx} className={styles.counterpartyCard}>
+                  <div className={styles.counterpartyHeader}>
+                    <span className={styles.counterpartyIdx}>#{idx + 1}</span>
+                    {counterparties.length > 1 && (
+                      <button type="button" className={styles.btnRemove} onClick={() => removeCounterparty(idx)}>Remove</button>
+                    )}
+                  </div>
+                  <div className={styles.formGrid2}>
+                    <div className={styles.formRow}>
+                      <label className={styles.formLabel}>Name</label>
+                      <input className={styles.formInput} value={cp.name} onChange={(e) => updateCounterparty(idx, 'name', e.target.value)} placeholder="Company name" maxLength={120} />
+                    </div>
+                    <div className={styles.formRow}>
+                      <label className={styles.formLabel}>Code</label>
+                      <input className={styles.formInput} value={cp.code} onChange={(e) => updateCounterparty(idx, 'code', e.target.value)} placeholder="e.g. CNS01" maxLength={20} />
+                    </div>
+                  </div>
+                  <div className={styles.formRow}>
+                    <label className={styles.formLabel}>Weekly Estimate (pallets)</label>
+                    <input className={styles.formInput} type="number" min="0" value={cp.weeklyEstimate} onChange={(e) => updateCounterparty(idx, 'weeklyEstimate', e.target.value)} placeholder="0" />
+                  </div>
+                  <div className={styles.formRow}>
+                    <label className={styles.formLabel}>Cargo Types</label>
+                    <div className={styles.cargoChips}>
+                      {CARGO_TYPES.map((ct) => (
+                        <button
+                          key={ct}
+                          type="button"
+                          className={`${styles.cargoChip} ${cp.cargoTypes.includes(ct) ? styles['cargoChip--active'] : ''}`}
+                          onClick={() => toggleCargoType(idx, ct)}
+                        >
+                          {formatCargo(ct)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <button type="button" className={styles.btnAddCp} onClick={addCounterparty}>
+                + Add {counterpartyLabel.slice(0, -1)}
+              </button>
+            </>
+          )}
         </div>
 
         {errorMsg && <div className={styles.modalError}>{errorMsg}</div>}
@@ -407,7 +442,7 @@ function CreateContractModal({
 // Main Component
 // ---------------------------------------------------------------------------
 
-export default function ContractsClient({ contracts, offices, services }: ContractsClientProps) {
+export default function ContractsClient({ contracts, offices, services, shippers = [] }: ContractsClientProps) {
   const router = useRouter();
   const [searchText, setSearchText] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -543,6 +578,7 @@ export default function ContractsClient({ contracts, offices, services }: Contra
         <CreateContractModal
           offices={offices}
           services={services}
+          shippers={shippers}
           onClose={() => setShowCreate(false)}
         />
       )}

@@ -20,8 +20,6 @@ const CreateShipperSchema = z.object({
   email:    z.string().email(),
   phone:    z.string().max(50).optional(),
   country:  z.string().min(1).max(100),
-  portCode: z.string().max(10).optional(),
-  portName: z.string().max(200).optional(),
 });
 
 const UpdateShipperSchema = CreateShipperSchema.partial();

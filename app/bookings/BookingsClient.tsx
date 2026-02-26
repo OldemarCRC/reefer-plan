@@ -417,8 +417,12 @@ function CreateBookingModal({
     if (!selectedContract || !selectedVoyageId) return;
     const rows: BookingRow[] = [];
 
-    if (selectedContract.counterparties && selectedContract.counterparties.length > 0) {
-      // New format: use counterparties[] from Shipper collection (active only)
+    if (
+      selectedContract.counterparties &&
+      selectedContract.counterparties.length > 0 &&
+      selectedContract.clientType === 'CONSIGNEE'
+    ) {
+      // New format: CONSIGNEE contracts only — counterparties are shippers (active only)
       for (const cp of selectedContract.counterparties.filter((cp) => cp.active !== false)) {
         for (const cargoType of cp.cargoTypes) {
           rows.push({
@@ -426,7 +430,7 @@ function CreateBookingModal({
             counterpartyCode: cp.shipperCode,
             shipperId: cp.shipperId,
             shipperCode: cp.shipperCode,
-            consigneeCode: selectedContract.clientType === 'CONSIGNEE' ? selectedContract.clientName : cp.shipperCode,
+            consigneeCode: selectedContract.clientName,
             cargoType,
             cargoMode: 'HOLD',
             weeklyEstimate: cp.weeklyEstimate,
