@@ -275,9 +275,10 @@ export interface ShipmentShipper {
 // Top-level Port collection document
 export interface Port {
   _id: string;
-  code: string;        // UNLOCODE e.g. "CLVAP"
-  portName: string;    // port name in English e.g. "Valparaíso"
+  unlocode: string;    // UN/LOCODE e.g. "CLVAP"
   countryCode: string; // 2-letter ISO country code e.g. "CL"
+  country: string;     // full country name e.g. "Chile"
+  portName: string;    // port name in English e.g. "Valparaíso"
   weatherCity: string; // city name for weather API
   latitude?: number;
   longitude?: number;

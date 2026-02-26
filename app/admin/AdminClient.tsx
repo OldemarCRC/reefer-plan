@@ -148,9 +148,10 @@ interface PortEntry {
 
 interface AdminPort {
   _id: string;
-  code: string;
-  portName: string;
+  unlocode: string;
   countryCode: string;
+  country: string;
+  portName: string;
   weatherCity: string;
   latitude?: number;
   longitude?: number;
@@ -159,9 +160,10 @@ interface AdminPort {
 
 interface UnecePort {
   _id: string;
-  portName: string;
-  countryCode: string;
   unlocode: string;
+  countryCode: string;
+  country: string;
+  portName: string;
   latitude?: number;
   longitude?: number;
 }
@@ -1250,10 +1252,10 @@ function PortRotationEditor({ ports, onChange }: {
     if (!selectedCode) { setAddErr('Select a port from the list'); return; }
     if (newOps.length === 0) { setAddErr('Select at least one operation'); return; }
     if (ports.some(p => p.portCode === selectedCode)) { setAddErr('Port already in list'); return; }
-    const mp = masterPorts.find(p => p.code === selectedCode);
+    const mp = masterPorts.find(p => p.unlocode === selectedCode);
     if (!mp) { setAddErr('Port not found'); return; }
     onChange([...ports, {
-      portCode: mp.code,
+      portCode: mp.unlocode,
       portName: mp.portName,
       country: mp.countryCode,
       city: mp.weatherCity,
@@ -1265,7 +1267,7 @@ function PortRotationEditor({ ports, onChange }: {
     setAddErr('');
   };
 
-  const availablePorts = masterPorts.filter(mp => !ports.some(p => p.portCode === mp.code));
+  const availablePorts = masterPorts.filter(mp => !ports.some(p => p.portCode === mp.unlocode));
 
   return (
     <div>
@@ -1317,8 +1319,8 @@ function PortRotationEditor({ ports, onChange }: {
             >
               <option value="">— Select port —</option>
               {availablePorts.map(mp => (
-                <option key={mp.code} value={mp.code}>
-                  {mp.code} — {mp.portName} ({mp.countryCode})
+                <option key={mp.unlocode} value={mp.unlocode}>
+                  {mp.unlocode} — {mp.portName} ({mp.countryCode})
                 </option>
               ))}
             </select>
@@ -2333,12 +2335,13 @@ function CreatePortModal({ unecePorts, onClose, onCreated }: {
     setError(null);
     startTransition(async () => {
       const result = await createPort({
-        code: selected.unlocode,
-        portName: selected.portName,
+        unlocode:    selected.unlocode,
         countryCode: selected.countryCode,
+        country:     selected.country,
+        portName:    selected.portName,
         weatherCity: weatherCity.trim(),
-        latitude: selected.latitude,
-        longitude: selected.longitude,
+        latitude:    selected.latitude,
+        longitude:   selected.longitude,
       });
       if (result.success) {
         onCreated(result.data as AdminPort);
@@ -2447,7 +2450,7 @@ function EditPortModal({ port, onClose, onUpdated }: {
   onUpdated: (p: AdminPort) => void;
 }) {
   const [portName, setPortName]       = useState(port.portName);
-  const [countryCode, setCountryCode] = useState(port.countryCode);
+  const [country, setCountry]         = useState(port.country);
   const [weatherCity, setWeatherCity] = useState(port.weatherCity);
   const [latitude, setLatitude]       = useState(port.latitude != null ? String(port.latitude) : '');
   const [longitude, setLongitude]     = useState(port.longitude != null ? String(port.longitude) : '');
@@ -2456,18 +2459,18 @@ function EditPortModal({ port, onClose, onUpdated }: {
   const [error, setError] = useState<string | null>(null);
 
   const handleSave = () => {
-    if (!portName.trim() || !countryCode.trim() || !weatherCity.trim()) {
-      setError('Port Name, Country Code and City are required');
+    if (!portName.trim() || !weatherCity.trim()) {
+      setError('Port Name and Weather City are required');
       return;
     }
     setError(null);
     startTransition(async () => {
       const result = await updatePort(port._id, {
-        portName: portName.trim(),
-        countryCode: countryCode.toUpperCase().trim(),
+        portName:    portName.trim(),
+        country:     country.trim(),
         weatherCity: weatherCity.trim(),
-        latitude: latitude ? parseFloat(latitude) : undefined,
-        longitude: longitude ? parseFloat(longitude) : undefined,
+        latitude:    latitude ? parseFloat(latitude) : undefined,
+        longitude:   longitude ? parseFloat(longitude) : undefined,
         active,
       });
       if (result.success) {
@@ -2481,15 +2484,23 @@ function EditPortModal({ port, onClose, onUpdated }: {
   return (
     <div className={styles.overlay}>
       <div className={styles.modal}>
-        <h3 className={styles.modalTitle}>Edit Port — {port.code}</h3>
+        <h3 className={styles.modalTitle}>Edit Port — {port.unlocode}</h3>
         <div className={styles.formGrid}>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>UNLOCODE</label>
+            <input className={`${styles.formInput} ${styles.formInputMono}`} value={port.unlocode} readOnly disabled />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Country Code</label>
+            <input className={`${styles.formInput} ${styles.formInputMono}`} value={port.countryCode} readOnly disabled />
+          </div>
           <div className={styles.formGroupFull}>
             <label className={styles.formLabel}>Port Name *</label>
             <input className={styles.formInput} value={portName} onChange={e => setPortName(e.target.value)} maxLength={100} />
           </div>
           <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Country (2-letter) *</label>
-            <input className={`${styles.formInput} ${styles.formInputMono}`} value={countryCode} onChange={e => setCountryCode(e.target.value.toUpperCase())} maxLength={2} />
+            <label className={styles.formLabel}>Country (full name)</label>
+            <input className={styles.formInput} value={country} onChange={e => setCountry(e.target.value)} maxLength={100} />
           </div>
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>City (for weather data) *</label>
@@ -2543,7 +2554,7 @@ function PortsTab({ initialPorts, unecePorts }: { initialPorts: AdminPort[]; une
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Code</th>
+              <th>UNLOCODE</th>
               <th>Port Name</th>
               <th>Country</th>
               <th>City (weather)</th>
@@ -2554,9 +2565,9 @@ function PortsTab({ initialPorts, unecePorts }: { initialPorts: AdminPort[]; une
           <tbody>
             {ports.map(p => (
               <tr key={p._id} style={{ opacity: p.active ? 1 : 0.5 }}>
-                <td><code>{p.code}</code></td>
+                <td><code>{p.unlocode}</code></td>
                 <td>{p.portName}</td>
-                <td>{p.countryCode}</td>
+                <td>{p.country}</td>
                 <td>{p.weatherCity}</td>
                 <td>
                   <span className={styles.badge} style={{

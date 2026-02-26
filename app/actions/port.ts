@@ -16,9 +16,10 @@ import { PortModel, UnecePortModel } from '@/lib/db/schemas';
 const PortIdSchema = z.string().min(1, 'Port ID is required');
 
 const CreatePortSchema = z.object({
-  code:        z.string().min(2).max(10).toUpperCase().regex(/^[A-Z0-9]+$/, 'UNLOCODE must be uppercase letters/digits'),
-  portName:    z.string().min(2).max(100, 'Port name too long'),
+  unlocode:    z.string().min(2).max(10).toUpperCase().regex(/^[A-Z0-9]+$/, 'UNLOCODE must be uppercase letters/digits'),
   countryCode: z.string().length(2).toUpperCase().regex(/^[A-Z]+$/, '2-letter ISO country code required'),
+  country:     z.string().min(1).max(100, 'Country name too long'),
+  portName:    z.string().min(2).max(100, 'Port name too long'),
   weatherCity: z.string().min(1).max(100, 'City name too long'),
   latitude:    z.number().min(-90).max(90).optional(),
   longitude:   z.number().min(-180).max(180).optional(),
@@ -26,6 +27,7 @@ const CreatePortSchema = z.object({
 
 const UpdatePortSchema = z.object({
   portName:    z.string().min(2).max(100).optional(),
+  country:     z.string().min(1).max(100).optional(),
   countryCode: z.string().length(2).toUpperCase().regex(/^[A-Z]+$/).optional(),
   weatherCity: z.string().min(1).max(100).optional(),
   latitude:    z.number().min(-90).max(90).optional(),
@@ -40,14 +42,15 @@ const UpdatePortSchema = z.object({
 export async function getPorts() {
   try {
     await connectDB();
-    const ports = await PortModel.find().sort({ code: 1 }).lean();
+    const ports = await PortModel.find().sort({ unlocode: 1 }).lean();
     return {
       success: true,
       data: (ports as any[]).map((p: any) => ({
         _id:         p._id.toString(),
-        code:        p.code,
-        portName:    p.portName,
+        unlocode:    p.unlocode,
         countryCode: p.countryCode,
+        country:     p.country,
+        portName:    p.portName,
         weatherCity: p.weatherCity,
         latitude:    p.latitude,
         longitude:   p.longitude,
@@ -69,13 +72,14 @@ export async function createPort(input: unknown) {
     const data = CreatePortSchema.parse(input);
     await connectDB();
 
-    const exists = await PortModel.findOne({ code: data.code });
-    if (exists) return { success: false, error: `Port ${data.code} already exists` };
+    const exists = await PortModel.findOne({ unlocode: data.unlocode });
+    if (exists) return { success: false, error: `Port ${data.unlocode} already exists` };
 
     const port = await PortModel.create({
-      code:        data.code,
-      portName:    data.portName.trim(),
+      unlocode:    data.unlocode,
       countryCode: data.countryCode,
+      country:     data.country.trim(),
+      portName:    data.portName.trim(),
       weatherCity: data.weatherCity.trim(),
       latitude:    data.latitude,
       longitude:   data.longitude,
@@ -86,9 +90,10 @@ export async function createPort(input: unknown) {
       success: true,
       data: {
         _id:         port._id.toString(),
-        code:        port.code,
-        portName:    port.portName,
+        unlocode:    port.unlocode,
         countryCode: port.countryCode,
+        country:     port.country,
+        portName:    port.portName,
         weatherCity: port.weatherCity,
         latitude:    port.latitude,
         longitude:   port.longitude,
@@ -116,6 +121,7 @@ export async function updatePort(id: unknown, input: unknown) {
 
     const update: Record<string, any> = {};
     if (data.portName    !== undefined) update.portName    = data.portName.trim();
+    if (data.country     !== undefined) update.country     = data.country.trim();
     if (data.countryCode !== undefined) update.countryCode = data.countryCode;
     if (data.weatherCity !== undefined) update.weatherCity = data.weatherCity.trim();
     if (data.latitude    !== undefined) update.latitude    = data.latitude;
@@ -129,9 +135,10 @@ export async function updatePort(id: unknown, input: unknown) {
       success: true,
       data: {
         _id:         port._id.toString(),
-        code:        port.code,
-        portName:    port.portName,
+        unlocode:    port.unlocode,
         countryCode: port.countryCode,
+        country:     port.country,
+        portName:    port.portName,
         weatherCity: port.weatherCity,
         latitude:    port.latitude,
         longitude:   port.longitude,
@@ -159,9 +166,10 @@ export async function getUnecePorts() {
       success: true,
       data: (ports as any[]).map((p: any) => ({
         _id:         p._id.toString(),
-        portName:    p.portName,
-        countryCode: p.countryCode,
         unlocode:    p.unlocode,
+        countryCode: p.countryCode,
+        country:     p.country,
+        portName:    p.portName,
         latitude:    p.latitude,
         longitude:   p.longitude,
       })),

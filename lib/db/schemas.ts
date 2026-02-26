@@ -10,9 +10,10 @@ import mongoose, { Schema, Model } from 'mongoose';
 // ============================================================================
 
 const UnecePortSchema = new Schema({
-  portName:    { type: String, required: true },
-  countryCode: { type: String, required: true },
   unlocode:    { type: String, required: true, unique: true },
+  countryCode: { type: String, required: true },
+  country:     { type: String, required: true },
+  portName:    { type: String, required: true },
   latitude:    { type: Number },
   longitude:   { type: Number },
 }, { timestamps: false, collection: 'UNECE_PORTS' });
@@ -24,9 +25,10 @@ UnecePortSchema.index({ countryCode: 1 });
 // ============================================================================
 
 const PortSchema = new Schema({
-  code:        { type: String, required: true, unique: true }, // UNLOCODE e.g. "CLVAP"
-  portName:    { type: String, required: true },               // port name in English e.g. "Valparaíso"
+  unlocode:    { type: String, required: true, unique: true }, // UN/LOCODE e.g. "CLVAP"
   countryCode: { type: String, required: true },               // 2-letter ISO country code e.g. "CL"
+  country:     { type: String, required: true },               // full country name e.g. "Chile"
+  portName:    { type: String, required: true },               // port name in English e.g. "Valparaíso"
   weatherCity: { type: String, required: true },               // city name for weather API e.g. "Valparaíso"
   latitude:    { type: Number },                               // latitude
   longitude:   { type: Number },                               // longitude
