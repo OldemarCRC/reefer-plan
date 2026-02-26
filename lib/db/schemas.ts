@@ -307,8 +307,7 @@ const ShipperCollectionSchema = new Schema({
   active:    { type: Boolean, default: true },
 }, { timestamps: true });
 
-ShipperCollectionSchema.index({ code: 1 }, { unique: true });
-ShipperCollectionSchema.index({ active: 1 });
+ShipperCollectionSchema.index({ active: 1 }); // code: unique: true is already indexed inline
 
 // ============================================================================
 // SHIPMENT SCHEMA
@@ -506,8 +505,7 @@ const VesselSchema = new Schema({
   timestamps: true,
 });
 
-VesselSchema.index({ name: 1 });
-VesselSchema.index({ imoNumber: 1 });
+// name and imoNumber are unique: true inline — no separate index needed
 
 // ============================================================================
 // STOWAGE PLAN SCHEMA
@@ -680,8 +678,7 @@ const UserSchema = new Schema({
   timestamps: true,
 });
 
-UserSchema.index({ email: 1 });
-UserSchema.index({ role: 1 });
+UserSchema.index({ role: 1 }); // email: unique: true is already indexed inline
 
 // ============================================================================
 // MODELS EXPORT

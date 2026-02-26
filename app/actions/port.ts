@@ -8,6 +8,7 @@
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
 import { PortModel, UnecePortModel } from '@/lib/db/schemas';
+import { auth } from '@/auth';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -177,5 +178,84 @@ export async function getUnecePorts() {
   } catch (error) {
     console.error('Error fetching UNECE ports:', error);
     return { success: false, data: [], error: 'Failed to fetch UNECE ports' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// CLEAR ALL PORTS (ADMIN only — for database cleanup)
+// ----------------------------------------------------------------------------
+
+export async function clearAllPorts() {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    if ((session.user as any).role !== 'ADMIN') return { success: false, error: 'Forbidden' };
+
+    await connectDB();
+    const result = await PortModel.deleteMany({});
+    return { success: true, deleted: result.deletedCount };
+  } catch (error) {
+    console.error('Error clearing ports:', error);
+    return { success: false, error: 'Failed to clear ports' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// IMPORT ALL PORTS FROM UNECE (ADMIN only)
+// Clears operational ports and re-imports all entries from UNECE_PORTS.
+// weatherCity defaults to portName; special cases can be set here.
+// ----------------------------------------------------------------------------
+
+const WEATHER_CITY_OVERRIDES: Record<string, string> = {
+  ECPBO: 'Machala', // Puerto Bolívar — city reported by weather API
+};
+
+export async function importAllPortsFromUnece() {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    if ((session.user as any).role !== 'ADMIN') return { success: false, error: 'Forbidden' };
+
+    await connectDB();
+
+    const unecePorts = await UnecePortModel.find().lean() as any[];
+    if (unecePorts.length === 0) {
+      return { success: false, error: 'UNECE_PORTS collection is empty. Run the ports seed script first.' };
+    }
+
+    await PortModel.deleteMany({});
+
+    const docs = unecePorts.map((p: any) => ({
+      unlocode:    p.unlocode,
+      countryCode: p.countryCode,
+      country:     p.country,
+      portName:    p.portName,
+      weatherCity: WEATHER_CITY_OVERRIDES[p.unlocode] ?? p.portName,
+      latitude:    p.latitude,
+      longitude:   p.longitude,
+      active:      true,
+    }));
+
+    await PortModel.insertMany(docs);
+
+    const inserted = await PortModel.find().sort({ unlocode: 1 }).lean() as any[];
+    return {
+      success: true,
+      imported: inserted.length,
+      data: inserted.map((p: any) => ({
+        _id:         p._id.toString(),
+        unlocode:    p.unlocode,
+        countryCode: p.countryCode,
+        country:     p.country,
+        portName:    p.portName,
+        weatherCity: p.weatherCity,
+        latitude:    p.latitude,
+        longitude:   p.longitude,
+        active:      p.active ?? true,
+      })),
+    };
+  } catch (error) {
+    console.error('Error importing ports from UNECE:', error);
+    return { success: false, error: 'Failed to import ports from UNECE' };
   }
 }

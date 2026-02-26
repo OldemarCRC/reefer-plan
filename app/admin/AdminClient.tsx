@@ -8,7 +8,7 @@ import { deleteStowagePlan } from '@/app/actions/stowage-plan';
 import { createVessel, updateVessel } from '@/app/actions/vessel';
 import { deleteService, createService, updateService } from '@/app/actions/service';
 import { createUser, updateUser, deleteUser, resendUserConfirmation } from '@/app/actions/user';
-import { getPorts, createPort, updatePort } from '@/app/actions/port';
+import { getPorts, createPort, updatePort, importAllPortsFromUnece } from '@/app/actions/port';
 import { getShipperCodes } from '@/app/actions/contract';
 import { createShipper, updateShipper, deactivateShipper } from '@/app/actions/shipper';
 import ContractsClient from '@/app/contracts/ContractsClient';
@@ -2299,11 +2299,14 @@ function CreatePortModal({ unecePorts, onClose, onCreated }: {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Unique sorted country codes from UNECE reference data
-  const countries = useMemo(
-    () => [...new Set(unecePorts.map(p => p.countryCode))].sort(),
-    [unecePorts]
-  );
+  // Unique sorted countries from UNECE reference data — sorted by full country name
+  const countries = useMemo(() => {
+    const seen = new Set<string>();
+    return unecePorts
+      .filter(p => { if (seen.has(p.countryCode)) return false; seen.add(p.countryCode); return true; })
+      .map(p => ({ countryCode: p.countryCode, country: p.country }))
+      .sort((a, b) => a.country.localeCompare(b.country));
+  }, [unecePorts]);
 
   // Ports available for the selected country
   const portsForCountry = useMemo(
@@ -2362,8 +2365,8 @@ function CreatePortModal({ unecePorts, onClose, onCreated }: {
             <label className={styles.formLabel}>Country *</label>
             <select className={styles.formSelect} value={selectedCountry} onChange={e => handleCountryChange(e.target.value)}>
               <option value="">— Select country —</option>
-              {countries.map(cc => (
-                <option key={cc} value={cc}>{cc}</option>
+              {countries.map(c => (
+                <option key={c.countryCode} value={c.countryCode}>{c.country}</option>
               ))}
             </select>
           </div>
@@ -2538,17 +2541,53 @@ function PortsTab({ initialPorts, unecePorts }: { initialPorts: AdminPort[]; une
   const [ports, setPorts] = useState<AdminPort[]>(initialPorts);
   const [showCreate, setShowCreate] = useState(false);
   const [editingPort, setEditingPort] = useState<AdminPort | null>(null);
+  const [isImporting, startImport] = useTransition();
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const handleImportAll = () => {
+    if (!confirm(`This will DELETE all ${ports.length} current port records and re-import all ${unecePorts.length} ports from the UNECE master list. Continue?`)) return;
+    setImportError(null);
+    startImport(async () => {
+      const result = await importAllPortsFromUnece();
+      if (result.success && result.data) {
+        setPorts(result.data as AdminPort[]);
+        router.refresh();
+      } else {
+        setImportError((result as any).error ?? 'Import failed');
+      }
+    });
+  };
 
   return (
     <div className={styles.tabContent}>
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
           <span className={styles.toolbarCount}>{ports.length} ports</span>
+          {unecePorts.length > 0 && (
+            <button
+              className={styles.btnSm}
+              onClick={handleImportAll}
+              disabled={isImporting}
+              title={`Clear current ports and import all ${unecePorts.length} ports from UNECE master data`}
+            >
+              {isImporting ? 'Importing…' : `Import all from UNECE (${unecePorts.length})`}
+            </button>
+          )}
         </div>
         <button className={styles.btnPrimary} onClick={() => setShowCreate(true)}>
           + New Port
         </button>
       </div>
+
+      {importError && (
+        <div className={styles.modalError} style={{ marginBottom: '1rem' }}>{importError}</div>
+      )}
+
+      {unecePorts.length === 0 && (
+        <div style={{ padding: '0.75rem 1rem', marginBottom: '1rem', background: 'var(--color-warning-muted, #fef3c7)', borderRadius: '6px', fontSize: 'var(--text-sm)', color: 'var(--color-warning, #92400e)' }}>
+          UNECE master data is not loaded. Run <code>npm run db:seed:ports</code> to populate the reference list, then refresh.
+        </div>
+      )}
 
       <div className={styles.tableWrap}>
         <table className={styles.table}>
@@ -2583,7 +2622,7 @@ function PortsTab({ initialPorts, unecePorts }: { initialPorts: AdminPort[]; une
               </tr>
             ))}
             {ports.length === 0 && (
-              <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '2rem' }}>No ports yet. Create the first one.</td></tr>
+              <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '2rem' }}>No ports yet. Use "Import all from UNECE" or create one manually.</td></tr>
             )}
           </tbody>
         </table>

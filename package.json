@@ -10,6 +10,7 @@
     "db:seed": "tsx scripts/seed-database.ts",
     "db:seed:minimal": "tsx scripts/seed-minimal.ts",
     "db:seed:reset": "tsx scripts/seed-minimal.ts --force",
+    "db:seed:ports": "tsx scripts/seed-ports.ts",
     "db:test": "tsx scripts/test-connection.ts"
   },
   "dependencies": {
