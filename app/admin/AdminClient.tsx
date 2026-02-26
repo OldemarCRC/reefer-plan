@@ -11,6 +11,8 @@ import { createUser, updateUser, deleteUser, resendUserConfirmation } from '@/ap
 import { getPorts, createPort, updatePort } from '@/app/actions/port';
 import { getShipperCodes } from '@/app/actions/contract';
 import { createShipper, updateShipper, deactivateShipper } from '@/app/actions/shipper';
+import ContractsClient from '@/app/contracts/ContractsClient';
+import type { DisplayContract } from '@/app/contracts/ContractsClient';
 import styles from './page.module.css';
 
 // ---------------------------------------------------------------------------
@@ -147,18 +149,15 @@ interface PortEntry {
 interface AdminPort {
   _id: string;
   code: string;
-  name: string;
-  country: string;
-  city: string;
-  puerto?: string;
-  pais_sigla?: string;
-  unlocode?: string;
-  latitud?: number;
-  longitud?: number;
+  portName: string;
+  countryCode: string;
+  weatherCity: string;
+  latitude?: number;
+  longitude?: number;
   active: boolean;
 }
 
-type Tab = 'voyages' | 'plans' | 'vessels' | 'services' | 'users' | 'ports' | 'shippers';
+type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users' | 'ports' | 'shippers';
 
 type ConfirmAction =
   | { type: 'cancel'; voyage: AdminVoyage }
@@ -1246,9 +1245,9 @@ function PortRotationEditor({ ports, onChange }: {
     if (!mp) { setAddErr('Port not found'); return; }
     onChange([...ports, {
       portCode: mp.code,
-      portName: mp.name,
-      country: mp.country,
-      city: mp.city,
+      portName: mp.portName,
+      country: mp.countryCode,
+      city: mp.weatherCity,
       operations: newOps,
       weeksFromStart: ports.length,
     }]);
@@ -1310,7 +1309,7 @@ function PortRotationEditor({ ports, onChange }: {
               <option value="">— Select port —</option>
               {availablePorts.map(mp => (
                 <option key={mp.code} value={mp.code}>
-                  {mp.code} — {mp.name} ({mp.country})
+                  {mp.code} — {mp.portName} ({mp.countryCode})
                 </option>
               ))}
             </select>
@@ -2282,34 +2281,29 @@ function CreatePortModal({ onClose, onCreated }: {
   onClose: () => void;
   onCreated: (p: AdminPort) => void;
 }) {
-  const [code, setCode]           = useState('');
-  const [name, setName]           = useState('');
-  const [country, setCountry]     = useState('');
-  const [city, setCity]           = useState('');
-  const [puerto, setPuerto]       = useState('');
-  const [paisSigla, setPaisSigla] = useState('');
-  const [latitud, setLatitud]     = useState('');
-  const [longitud, setLongitud]   = useState('');
+  const [code, setCode]               = useState('');
+  const [portName, setPortName]       = useState('');
+  const [countryCode, setCountryCode] = useState('');
+  const [weatherCity, setWeatherCity] = useState('');
+  const [latitude, setLatitude]       = useState('');
+  const [longitude, setLongitude]     = useState('');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = () => {
-    if (!code.trim() || !name.trim() || !country.trim() || !city.trim()) {
-      setError('UNLOCODE, Port Name, Country and City are required');
+    if (!code.trim() || !portName.trim() || !countryCode.trim() || !weatherCity.trim()) {
+      setError('UNLOCODE, Port Name, Country Code and City are required');
       return;
     }
     setError(null);
     startTransition(async () => {
       const result = await createPort({
         code: code.toUpperCase().trim(),
-        name: name.trim(),
-        country: country.toUpperCase().trim(),
-        city: city.trim(),
-        puerto: puerto.trim() || undefined,
-        pais_sigla: paisSigla.toUpperCase().trim() || undefined,
-        unlocode: code.toUpperCase().trim(), // mirror code as unlocode
-        latitud: latitud ? parseFloat(latitud) : undefined,
-        longitud: longitud ? parseFloat(longitud) : undefined,
+        portName: portName.trim(),
+        countryCode: countryCode.toUpperCase().trim(),
+        weatherCity: weatherCity.trim(),
+        latitude: latitude ? parseFloat(latitude) : undefined,
+        longitude: longitude ? parseFloat(longitude) : undefined,
       });
       if (result.success) {
         onCreated(result.data as AdminPort);
@@ -2326,42 +2320,34 @@ function CreatePortModal({ onClose, onCreated }: {
         <div className={styles.formGrid}>
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>UNLOCODE *</label>
-            <input className={`${styles.formInput} ${styles.formInputMono}`} value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="CLVAP" maxLength={6} />
+            <input className={`${styles.formInput} ${styles.formInputMono}`} value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="CLVAP" maxLength={10} />
           </div>
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>Country (2-letter) *</label>
-            <input className={`${styles.formInput} ${styles.formInputMono}`} value={country} onChange={e => setCountry(e.target.value.toUpperCase())} placeholder="CL" maxLength={2} />
+            <input className={`${styles.formInput} ${styles.formInputMono}`} value={countryCode} onChange={e => setCountryCode(e.target.value.toUpperCase())} placeholder="CL" maxLength={2} />
           </div>
           <div className={styles.formGroupFull}>
             <label className={styles.formLabel}>Port Name *</label>
-            <input className={styles.formInput} value={name} onChange={e => setName(e.target.value)} placeholder="Valparaíso" maxLength={100} />
+            <input className={styles.formInput} value={portName} onChange={e => setPortName(e.target.value)} placeholder="Valparaíso" maxLength={100} />
           </div>
           <div className={styles.formGroupFull}>
-            <label className={styles.formLabel}>Puerto (nombre en español)</label>
-            <input className={styles.formInput} value={puerto} onChange={e => setPuerto(e.target.value)} placeholder="Valparaíso" maxLength={200} />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>País Sigla</label>
-            <input className={`${styles.formInput} ${styles.formInputMono}`} value={paisSigla} onChange={e => setPaisSigla(e.target.value.toUpperCase())} placeholder="CL" maxLength={5} />
-          </div>
-          <div className={styles.formGroup}>
             <label className={styles.formLabel}>City (for weather data) *</label>
-            <input className={styles.formInput} value={city} onChange={e => setCity(e.target.value)} placeholder="Valparaíso" maxLength={100} />
+            <input className={styles.formInput} value={weatherCity} onChange={e => setWeatherCity(e.target.value)} placeholder="Valparaíso" maxLength={100} />
             <span className={styles.formHint}>Used for weather forecasts.</span>
           </div>
           <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Latitud</label>
-            <input className={styles.formInput} type="number" step="0.0001" value={latitud} onChange={e => setLatitud(e.target.value)} placeholder="-33.0333" />
+            <label className={styles.formLabel}>Latitude</label>
+            <input className={styles.formInput} type="number" step="0.0001" value={latitude} onChange={e => setLatitude(e.target.value)} placeholder="-33.0333" />
           </div>
           <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Longitud</label>
-            <input className={styles.formInput} type="number" step="0.0001" value={longitud} onChange={e => setLongitud(e.target.value)} placeholder="-71.6167" />
+            <label className={styles.formLabel}>Longitude</label>
+            <input className={styles.formInput} type="number" step="0.0001" value={longitude} onChange={e => setLongitude(e.target.value)} placeholder="-71.6167" />
           </div>
         </div>
         {error && <div className={styles.modalError}>{error}</div>}
         <div className={styles.modalActions}>
           <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
-          <button className={styles.btnPrimary} onClick={handleSubmit} disabled={isPending || !code.trim() || !name.trim() || !country.trim() || !city.trim()}>
+          <button className={styles.btnPrimary} onClick={handleSubmit} disabled={isPending || !code.trim() || !portName.trim() || !countryCode.trim() || !weatherCity.trim()}>
             {isPending ? 'Creating…' : 'Create Port'}
           </button>
         </div>
@@ -2375,33 +2361,29 @@ function EditPortModal({ port, onClose, onUpdated }: {
   onClose: () => void;
   onUpdated: (p: AdminPort) => void;
 }) {
-  const [name, setName]           = useState(port.name);
-  const [country, setCountry]     = useState(port.country);
-  const [city, setCity]           = useState(port.city);
-  const [puerto, setPuerto]       = useState(port.puerto ?? '');
-  const [paisSigla, setPaisSigla] = useState(port.pais_sigla ?? '');
-  const [latitud, setLatitud]     = useState(port.latitud != null ? String(port.latitud) : '');
-  const [longitud, setLongitud]   = useState(port.longitud != null ? String(port.longitud) : '');
-  const [active, setActive]       = useState(port.active);
+  const [portName, setPortName]       = useState(port.portName);
+  const [countryCode, setCountryCode] = useState(port.countryCode);
+  const [weatherCity, setWeatherCity] = useState(port.weatherCity);
+  const [latitude, setLatitude]       = useState(port.latitude != null ? String(port.latitude) : '');
+  const [longitude, setLongitude]     = useState(port.longitude != null ? String(port.longitude) : '');
+  const [active, setActive]           = useState(port.active);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const handleSave = () => {
-    if (!name.trim() || !country.trim() || !city.trim()) {
-      setError('Port Name, Country and City are required');
+    if (!portName.trim() || !countryCode.trim() || !weatherCity.trim()) {
+      setError('Port Name, Country Code and City are required');
       return;
     }
     setError(null);
     startTransition(async () => {
       const result = await updatePort(port._id, {
-        name: name.trim(),
-        country: country.toUpperCase().trim(),
-        city: city.trim(),
+        portName: portName.trim(),
+        countryCode: countryCode.toUpperCase().trim(),
+        weatherCity: weatherCity.trim(),
+        latitude: latitude ? parseFloat(latitude) : undefined,
+        longitude: longitude ? parseFloat(longitude) : undefined,
         active,
-        puerto: puerto.trim() || undefined,
-        pais_sigla: paisSigla.toUpperCase().trim() || undefined,
-        latitud: latitud ? parseFloat(latitud) : undefined,
-        longitud: longitud ? parseFloat(longitud) : undefined,
       });
       if (result.success) {
         onUpdated(result.data as AdminPort);
@@ -2418,31 +2400,23 @@ function EditPortModal({ port, onClose, onUpdated }: {
         <div className={styles.formGrid}>
           <div className={styles.formGroupFull}>
             <label className={styles.formLabel}>Port Name *</label>
-            <input className={styles.formInput} value={name} onChange={e => setName(e.target.value)} maxLength={100} />
-          </div>
-          <div className={styles.formGroupFull}>
-            <label className={styles.formLabel}>Puerto (nombre en español)</label>
-            <input className={styles.formInput} value={puerto} onChange={e => setPuerto(e.target.value)} maxLength={200} />
+            <input className={styles.formInput} value={portName} onChange={e => setPortName(e.target.value)} maxLength={100} />
           </div>
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>Country (2-letter) *</label>
-            <input className={`${styles.formInput} ${styles.formInputMono}`} value={country} onChange={e => setCountry(e.target.value.toUpperCase())} maxLength={2} />
+            <input className={`${styles.formInput} ${styles.formInputMono}`} value={countryCode} onChange={e => setCountryCode(e.target.value.toUpperCase())} maxLength={2} />
           </div>
           <div className={styles.formGroup}>
-            <label className={styles.formLabel}>País Sigla</label>
-            <input className={`${styles.formInput} ${styles.formInputMono}`} value={paisSigla} onChange={e => setPaisSigla(e.target.value.toUpperCase())} maxLength={5} />
+            <label className={styles.formLabel}>City (for weather data) *</label>
+            <input className={styles.formInput} value={weatherCity} onChange={e => setWeatherCity(e.target.value)} maxLength={100} />
           </div>
           <div className={styles.formGroup}>
-            <label className={styles.formLabel}>City (weather) *</label>
-            <input className={styles.formInput} value={city} onChange={e => setCity(e.target.value)} maxLength={100} />
+            <label className={styles.formLabel}>Latitude</label>
+            <input className={styles.formInput} type="number" step="0.0001" value={latitude} onChange={e => setLatitude(e.target.value)} />
           </div>
           <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Latitud</label>
-            <input className={styles.formInput} type="number" step="0.0001" value={latitud} onChange={e => setLatitud(e.target.value)} />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Longitud</label>
-            <input className={styles.formInput} type="number" step="0.0001" value={longitud} onChange={e => setLongitud(e.target.value)} />
+            <label className={styles.formLabel}>Longitude</label>
+            <input className={styles.formInput} type="number" step="0.0001" value={longitude} onChange={e => setLongitude(e.target.value)} />
           </div>
           <div className={styles.formGroupFull}>
             <label className={styles.formLabel}>
@@ -2496,9 +2470,9 @@ function PortsTab({ initialPorts }: { initialPorts: AdminPort[] }) {
             {ports.map(p => (
               <tr key={p._id} style={{ opacity: p.active ? 1 : 0.5 }}>
                 <td><code>{p.code}</code></td>
-                <td>{p.name}</td>
-                <td>{p.country}</td>
-                <td>{p.city}</td>
+                <td>{p.portName}</td>
+                <td>{p.countryCode}</td>
+                <td>{p.weatherCity}</td>
                 <td>
                   <span className={styles.badge} style={{
                     background: p.active ? 'var(--color-success-muted)' : 'var(--color-bg-tertiary)',
@@ -2817,9 +2791,9 @@ function ShippersTab({ initialShippers }: { initialShippers: AdminShipper[] }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-const TABS: { id: Tab | null; label: string; href?: string }[] = [
+const TABS: { id: Tab; label: string }[] = [
   { id: 'voyages',   label: 'Voyages'       },
-  { id: null,        label: 'Contracts',    href: '/contracts' },
+  { id: 'contracts', label: 'Contracts'     },
   { id: 'plans',     label: 'Stowage Plans' },
   { id: 'vessels',   label: 'Vessels'       },
   { id: 'services',  label: 'Services'      },
@@ -2830,6 +2804,8 @@ const TABS: { id: Tab | null; label: string; href?: string }[] = [
 
 interface AdminClientProps {
   voyages: AdminVoyage[];
+  contracts: DisplayContract[];
+  offices: any[];
   services: any[];
   plans: AdminPlan[];
   vessels: AdminVessel[];
@@ -2838,7 +2814,7 @@ interface AdminClientProps {
   shippers: AdminShipper[];
 }
 
-export default function AdminClient({ voyages, services, plans, vessels, users, ports, shippers }: AdminClientProps) {
+export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports, shippers }: AdminClientProps) {
   const [activeTab, setActiveTab] = useState<Tab>('voyages');
 
   return (
@@ -2855,25 +2831,24 @@ export default function AdminClient({ voyages, services, plans, vessels, users, 
 
       {/* Tab bar */}
       <div className={styles.tabBar}>
-        {TABS.map((t) =>
-          t.href ? (
-            <Link key={t.label} href={t.href} className={styles.tabBtn}>
-              {t.label}
-            </Link>
-          ) : (
-            <button
-              key={t.id}
-              className={`${styles.tabBtn} ${activeTab === t.id ? styles['tabBtn--active'] : ''}`}
-              onClick={() => setActiveTab(t.id as Tab)}
-            >
-              {t.label}
-            </button>
-          )
-        )}
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            className={`${styles.tabBtn} ${activeTab === t.id ? styles['tabBtn--active'] : ''}`}
+            onClick={() => setActiveTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {/* Tab content */}
       {activeTab === 'voyages'   && <VoyagesTab initialVoyages={voyages} />}
+      {activeTab === 'contracts' && (
+        <div className={styles.tabContent}>
+          <ContractsClient contracts={contracts} offices={offices} services={services} shippers={shippers} />
+        </div>
+      )}
       {activeTab === 'plans'    && <PlansTab initialPlans={plans} />}
       {activeTab === 'vessels'  && <VesselsTab initialVessels={vessels} />}
       {activeTab === 'services' && <ServicesTab initialServices={services as AdminService[]} />}

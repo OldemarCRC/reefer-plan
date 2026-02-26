@@ -2,7 +2,6 @@ import AppShell from '@/components/layout/AppShell';
 import { getContractById } from '@/app/actions/contract';
 import { getActiveShippers } from '@/app/actions/shipper';
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
 import styles from './page.module.css';
 import DeactivateButton from './DeactivateButton';
 import ContractShippersPanel from './ContractShippersPanel';
@@ -81,9 +80,6 @@ export default async function ContractDetailPage({
         {/* Header */}
         <div className={styles.header}>
           <div className={styles.headerLeft}>
-            <Link href="/contracts" className={styles.backLink}>
-              ← Back to Contracts
-            </Link>
             <div className={styles.headerTitle}>
               <h1 className={styles.contractNumber}>{c.contractNumber}</h1>
               <span

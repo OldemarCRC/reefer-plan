@@ -10,17 +10,13 @@ import mongoose, { Schema, Model } from 'mongoose';
 // ============================================================================
 
 const PortSchema = new Schema({
-  code:       { type: String, required: true, unique: true }, // UNLOCODE e.g. "CLVAP"
-  name:       { type: String, required: true },               // "Valparaíso"
-  country:    { type: String, required: true },               // "CL"
-  city:       { type: String, required: true },               // city name for weather API e.g. "Valparaíso"
-  // Extended fields
-  puerto:     { type: String },                               // port name in Spanish
-  pais_sigla: { type: String },                               // country code e.g. "CL"
-  unlocode:   { type: String, unique: true, sparse: true },   // UN/LOCODE (unique identifier)
-  latitud:    { type: Number },                               // latitude
-  longitud:   { type: Number },                               // longitude
-  active:     { type: Boolean, default: true },
+  code:        { type: String, required: true, unique: true }, // UNLOCODE e.g. "CLVAP"
+  portName:    { type: String, required: true },               // port name in English e.g. "Valparaíso"
+  countryCode: { type: String, required: true },               // 2-letter ISO country code e.g. "CL"
+  weatherCity: { type: String, required: true },               // city name for weather API e.g. "Valparaíso"
+  latitude:    { type: Number },                               // latitude
+  longitude:   { type: Number },                               // longitude
+  active:      { type: Boolean, default: true },
 }, { timestamps: true });
 
 PortSchema.index({ active: 1 });
