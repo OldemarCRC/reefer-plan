@@ -23,9 +23,7 @@ const PortSchema = new Schema({
   active:     { type: Boolean, default: true },
 }, { timestamps: true });
 
-PortSchema.index({ code: 1 });
 PortSchema.index({ active: 1 });
-PortSchema.index({ unlocode: 1 }, { sparse: true });
 
 // ============================================================================
 // SERVICE SCHEMA

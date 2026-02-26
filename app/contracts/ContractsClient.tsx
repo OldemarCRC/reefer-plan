@@ -478,9 +478,13 @@ export default function ContractsClient({ contracts, offices, services, shippers
   }, [contracts]);
 
   return (
-    <>
-      {/* Create button */}
-      <div className={styles.actionBar}>
+    <div className={styles.page}>
+      {/* Page header */}
+      <div className={styles.pageHeader}>
+        <div>
+          <h1 className={styles.pageTitle}>Contracts</h1>
+          <p className={styles.pageSubtitle}>Commercial agreements with shippers and consignees</p>
+        </div>
         <button className={styles.btnPrimary} onClick={() => setShowCreate(true)}>+ New Contract</button>
       </div>
 
@@ -582,6 +586,6 @@ export default function ContractsClient({ contracts, offices, services, shippers
           onClose={() => setShowCreate(false)}
         />
       )}
-    </>
+    </div>
   );
 }

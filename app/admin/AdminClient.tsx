@@ -11,8 +11,6 @@ import { createUser, updateUser, deleteUser, resendUserConfirmation } from '@/ap
 import { getPorts, createPort, updatePort } from '@/app/actions/port';
 import { getShipperCodes } from '@/app/actions/contract';
 import { createShipper, updateShipper, deactivateShipper } from '@/app/actions/shipper';
-import ContractsClient from '@/app/contracts/ContractsClient';
-import type { DisplayContract } from '@/app/contracts/ContractsClient';
 import styles from './page.module.css';
 
 // ---------------------------------------------------------------------------
@@ -160,7 +158,7 @@ interface AdminPort {
   active: boolean;
 }
 
-type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users' | 'ports' | 'shippers';
+type Tab = 'voyages' | 'plans' | 'vessels' | 'services' | 'users' | 'ports' | 'shippers';
 
 type ConfirmAction =
   | { type: 'cancel'; voyage: AdminVoyage }
@@ -2819,9 +2817,9 @@ function ShippersTab({ initialShippers }: { initialShippers: AdminShipper[] }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-const TABS: { id: Tab; label: string }[] = [
+const TABS: { id: Tab | null; label: string; href?: string }[] = [
   { id: 'voyages',   label: 'Voyages'       },
-  { id: 'contracts', label: 'Contracts'     },
+  { id: null,        label: 'Contracts',    href: '/contracts' },
   { id: 'plans',     label: 'Stowage Plans' },
   { id: 'vessels',   label: 'Vessels'       },
   { id: 'services',  label: 'Services'      },
@@ -2832,8 +2830,6 @@ const TABS: { id: Tab; label: string }[] = [
 
 interface AdminClientProps {
   voyages: AdminVoyage[];
-  contracts: DisplayContract[];
-  offices: any[];
   services: any[];
   plans: AdminPlan[];
   vessels: AdminVessel[];
@@ -2842,7 +2838,7 @@ interface AdminClientProps {
   shippers: AdminShipper[];
 }
 
-export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports, shippers }: AdminClientProps) {
+export default function AdminClient({ voyages, services, plans, vessels, users, ports, shippers }: AdminClientProps) {
   const [activeTab, setActiveTab] = useState<Tab>('voyages');
 
   return (
@@ -2859,24 +2855,25 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
 
       {/* Tab bar */}
       <div className={styles.tabBar}>
-        {TABS.map((t: any) => (
-          <button
-            key={t.id}
-            className={`${styles.tabBtn} ${activeTab === t.id ? styles['tabBtn--active'] : ''}`}
-            onClick={() => setActiveTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
+        {TABS.map((t) =>
+          t.href ? (
+            <Link key={t.label} href={t.href} className={styles.tabBtn}>
+              {t.label}
+            </Link>
+          ) : (
+            <button
+              key={t.id}
+              className={`${styles.tabBtn} ${activeTab === t.id ? styles['tabBtn--active'] : ''}`}
+              onClick={() => setActiveTab(t.id as Tab)}
+            >
+              {t.label}
+            </button>
+          )
+        )}
       </div>
 
       {/* Tab content */}
       {activeTab === 'voyages'   && <VoyagesTab initialVoyages={voyages} />}
-      {activeTab === 'contracts' && (
-        <div className={styles.tabContent}>
-          <ContractsClient contracts={contracts} offices={offices} services={services} shippers={shippers} />
-        </div>
-      )}
       {activeTab === 'plans'    && <PlansTab initialPlans={plans} />}
       {activeTab === 'vessels'  && <VesselsTab initialVessels={vessels} />}
       {activeTab === 'services' && <ServicesTab initialServices={services as AdminService[]} />}
