@@ -6,7 +6,21 @@ import mongoose, { Schema, Model } from 'mongoose';
 // Type imports no longer needed for Schema generics — type safety lives in server actions
 
 // ============================================================================
-// PORT SCHEMA — Master list of ports, chosen when building service rotations
+// UNECE PORTS — Reference/master-data collection (read-only after seed)
+// ============================================================================
+
+const UnecePortSchema = new Schema({
+  portName:    { type: String, required: true },
+  countryCode: { type: String, required: true },
+  unlocode:    { type: String, required: true, unique: true },
+  latitude:    { type: Number },
+  longitude:   { type: Number },
+}, { timestamps: false, collection: 'UNECE_PORTS' });
+
+UnecePortSchema.index({ countryCode: 1 });
+
+// ============================================================================
+// PORT SCHEMA — Operational ports used by services, voyages, weather widgets
 // ============================================================================
 
 const PortSchema = new Schema({
@@ -673,6 +687,9 @@ UserSchema.index({ role: 1 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mongoose schemas are untyped; type safety lives in server actions
 type AnyModel = Model<any>;
+
+export const UnecePortModel: AnyModel =
+  mongoose.models.UnecePort || mongoose.model('UnecePort', UnecePortSchema);
 
 export const PortModel: AnyModel =
   mongoose.models.Port || mongoose.model('Port', PortSchema);

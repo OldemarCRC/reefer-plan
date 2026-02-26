@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { PortModel } from '@/lib/db/schemas';
+import { PortModel, UnecePortModel } from '@/lib/db/schemas';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -144,5 +144,30 @@ export async function updatePort(id: unknown, input: unknown) {
     }
     console.error('Error updating port:', error);
     return { success: false, error: 'Failed to update port' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// GET ALL UNECE REFERENCE PORTS (for the Add Port form dropdowns)
+// ----------------------------------------------------------------------------
+
+export async function getUnecePorts() {
+  try {
+    await connectDB();
+    const ports = await UnecePortModel.find().sort({ countryCode: 1, portName: 1 }).lean();
+    return {
+      success: true,
+      data: (ports as any[]).map((p: any) => ({
+        _id:         p._id.toString(),
+        portName:    p.portName,
+        countryCode: p.countryCode,
+        unlocode:    p.unlocode,
+        latitude:    p.latitude,
+        longitude:   p.longitude,
+      })),
+    };
+  } catch (error) {
+    console.error('Error fetching UNECE ports:', error);
+    return { success: false, data: [], error: 'Failed to fetch UNECE ports' };
   }
 }

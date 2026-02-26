@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useTransition } from 'react';
+import { useState, useEffect, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { cancelVoyage, hardDeleteVoyage } from '@/app/actions/voyage';
@@ -155,6 +155,15 @@ interface AdminPort {
   latitude?: number;
   longitude?: number;
   active: boolean;
+}
+
+interface UnecePort {
+  _id: string;
+  portName: string;
+  countryCode: string;
+  unlocode: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users' | 'ports' | 'shippers';
@@ -2277,38 +2286,64 @@ function UsersTab({ initialUsers }: { initialUsers: AdminUser[] }) {
 // Ports Tab
 // ---------------------------------------------------------------------------
 
-function CreatePortModal({ onClose, onCreated }: {
+function CreatePortModal({ unecePorts, onClose, onCreated }: {
+  unecePorts: UnecePort[];
   onClose: () => void;
   onCreated: (p: AdminPort) => void;
 }) {
-  const [code, setCode]               = useState('');
-  const [portName, setPortName]       = useState('');
-  const [countryCode, setCountryCode] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState('');
+  const [selectedUnlocode, setSelectedUnlocode] = useState('');
   const [weatherCity, setWeatherCity] = useState('');
-  const [latitude, setLatitude]       = useState('');
-  const [longitude, setLongitude]     = useState('');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // Unique sorted country codes from UNECE reference data
+  const countries = useMemo(
+    () => [...new Set(unecePorts.map(p => p.countryCode))].sort(),
+    [unecePorts]
+  );
+
+  // Ports available for the selected country
+  const portsForCountry = useMemo(
+    () => unecePorts.filter(p => p.countryCode === selectedCountry).sort((a, b) => a.portName.localeCompare(b.portName)),
+    [unecePorts, selectedCountry]
+  );
+
+  // The selected UNECE record
+  const selected = useMemo(
+    () => unecePorts.find(p => p.unlocode === selectedUnlocode) ?? null,
+    [unecePorts, selectedUnlocode]
+  );
+
+  const handleCountryChange = (cc: string) => {
+    setSelectedCountry(cc);
+    setSelectedUnlocode('');
+    setWeatherCity('');
+  };
+
+  const handlePortChange = (unlocode: string) => {
+    setSelectedUnlocode(unlocode);
+    const port = unecePorts.find(p => p.unlocode === unlocode);
+    if (port) setWeatherCity(port.portName);
+  };
+
   const handleSubmit = () => {
-    if (!code.trim() || !portName.trim() || !countryCode.trim() || !weatherCity.trim()) {
-      setError('UNLOCODE, Port Name, Country Code and City are required');
-      return;
-    }
+    if (!selected) { setError('Select a port'); return; }
+    if (!weatherCity.trim()) { setError('Weather city is required'); return; }
     setError(null);
     startTransition(async () => {
       const result = await createPort({
-        code: code.toUpperCase().trim(),
-        portName: portName.trim(),
-        countryCode: countryCode.toUpperCase().trim(),
+        code: selected.unlocode,
+        portName: selected.portName,
+        countryCode: selected.countryCode,
         weatherCity: weatherCity.trim(),
-        latitude: latitude ? parseFloat(latitude) : undefined,
-        longitude: longitude ? parseFloat(longitude) : undefined,
+        latitude: selected.latitude,
+        longitude: selected.longitude,
       });
       if (result.success) {
         onCreated(result.data as AdminPort);
       } else {
-        setError(result.error ?? 'Failed to create port');
+        setError(result.error ?? 'Failed to add port');
       }
     });
   };
@@ -2316,39 +2351,89 @@ function CreatePortModal({ onClose, onCreated }: {
   return (
     <div className={styles.overlay}>
       <div className={styles.modal}>
-        <h3 className={styles.modalTitle}>New Port</h3>
+        <h3 className={styles.modalTitle}>Add Port</h3>
         <div className={styles.formGrid}>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>UNLOCODE *</label>
-            <input className={`${styles.formInput} ${styles.formInputMono}`} value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="CLVAP" maxLength={10} />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Country (2-letter) *</label>
-            <input className={`${styles.formInput} ${styles.formInputMono}`} value={countryCode} onChange={e => setCountryCode(e.target.value.toUpperCase())} placeholder="CL" maxLength={2} />
-          </div>
+
+          {/* Step 1: Country */}
           <div className={styles.formGroupFull}>
-            <label className={styles.formLabel}>Port Name *</label>
-            <input className={styles.formInput} value={portName} onChange={e => setPortName(e.target.value)} placeholder="Valparaíso" maxLength={100} />
+            <label className={styles.formLabel}>Country *</label>
+            <select className={styles.formSelect} value={selectedCountry} onChange={e => handleCountryChange(e.target.value)}>
+              <option value="">— Select country —</option>
+              {countries.map(cc => (
+                <option key={cc} value={cc}>{cc}</option>
+              ))}
+            </select>
           </div>
+
+          {/* Step 2: Port (dependent on country) */}
           <div className={styles.formGroupFull}>
-            <label className={styles.formLabel}>City (for weather data) *</label>
-            <input className={styles.formInput} value={weatherCity} onChange={e => setWeatherCity(e.target.value)} placeholder="Valparaíso" maxLength={100} />
-            <span className={styles.formHint}>Used for weather forecasts.</span>
+            <label className={styles.formLabel}>Select Port *</label>
+            <select
+              className={styles.formSelect}
+              value={selectedUnlocode}
+              onChange={e => handlePortChange(e.target.value)}
+              disabled={!selectedCountry}
+            >
+              <option value="">— Select port —</option>
+              {portsForCountry.map(p => (
+                <option key={p.unlocode} value={p.unlocode}>{p.portName}</option>
+              ))}
+            </select>
           </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Latitude</label>
-            <input className={styles.formInput} type="number" step="0.0001" value={latitude} onChange={e => setLatitude(e.target.value)} placeholder="-33.0333" />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Longitude</label>
-            <input className={styles.formInput} type="number" step="0.0001" value={longitude} onChange={e => setLongitude(e.target.value)} placeholder="-71.6167" />
-          </div>
+
+          {/* Auto-filled fields — shown once a port is selected */}
+          {selected && (
+            <>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>UNLOCODE</label>
+                <input
+                  className={`${styles.formInput} ${styles.formInputMono}`}
+                  value={selected.unlocode}
+                  readOnly
+                  style={{ opacity: 0.7 }}
+                />
+              </div>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Weather City *</label>
+                <input
+                  className={styles.formInput}
+                  value={weatherCity}
+                  onChange={e => setWeatherCity(e.target.value)}
+                  maxLength={100}
+                />
+                <span className={styles.formHint}>Auto-filled from port name. Edit only if city differs.</span>
+              </div>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Latitude</label>
+                <input
+                  className={`${styles.formInput} ${styles.formInputMono}`}
+                  value={selected.latitude ?? ''}
+                  readOnly
+                  style={{ opacity: 0.7 }}
+                />
+              </div>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Longitude</label>
+                <input
+                  className={`${styles.formInput} ${styles.formInputMono}`}
+                  value={selected.longitude ?? ''}
+                  readOnly
+                  style={{ opacity: 0.7 }}
+                />
+              </div>
+            </>
+          )}
+
         </div>
         {error && <div className={styles.modalError}>{error}</div>}
         <div className={styles.modalActions}>
           <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
-          <button className={styles.btnPrimary} onClick={handleSubmit} disabled={isPending || !code.trim() || !portName.trim() || !countryCode.trim() || !weatherCity.trim()}>
-            {isPending ? 'Creating…' : 'Create Port'}
+          <button
+            className={styles.btnPrimary}
+            onClick={handleSubmit}
+            disabled={isPending || !selected || !weatherCity.trim()}
+          >
+            {isPending ? 'Adding…' : 'Add Port'}
           </button>
         </div>
       </div>
@@ -2437,7 +2522,7 @@ function EditPortModal({ port, onClose, onUpdated }: {
   );
 }
 
-function PortsTab({ initialPorts }: { initialPorts: AdminPort[] }) {
+function PortsTab({ initialPorts, unecePorts }: { initialPorts: AdminPort[]; unecePorts: UnecePort[] }) {
   const router = useRouter();
   const [ports, setPorts] = useState<AdminPort[]>(initialPorts);
   const [showCreate, setShowCreate] = useState(false);
@@ -2495,6 +2580,7 @@ function PortsTab({ initialPorts }: { initialPorts: AdminPort[] }) {
 
       {showCreate && (
         <CreatePortModal
+          unecePorts={unecePorts}
           onClose={() => setShowCreate(false)}
           onCreated={p => { setPorts(prev => [...prev, p]); setShowCreate(false); router.refresh(); }}
         />
@@ -2812,9 +2898,10 @@ interface AdminClientProps {
   users: AdminUser[];
   ports: AdminPort[];
   shippers: AdminShipper[];
+  unecePorts: UnecePort[];
 }
 
-export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports, shippers }: AdminClientProps) {
+export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports, shippers, unecePorts }: AdminClientProps) {
   const [activeTab, setActiveTab] = useState<Tab>('voyages');
 
   return (
@@ -2853,7 +2940,7 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
       {activeTab === 'vessels'  && <VesselsTab initialVessels={vessels} />}
       {activeTab === 'services' && <ServicesTab initialServices={services as AdminService[]} />}
       {activeTab === 'users'    && <UsersTab initialUsers={users} />}
-      {activeTab === 'ports'    && <PortsTab initialPorts={ports} />}
+      {activeTab === 'ports'    && <PortsTab initialPorts={ports} unecePorts={unecePorts} />}
       {activeTab === 'shippers' && <ShippersTab initialShippers={shippers} />}
     </div>
   );
