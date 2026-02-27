@@ -11,6 +11,7 @@ import { createUser, updateUser, deleteUser, resendUserConfirmation } from '@/ap
 import { getPorts, createPort, updatePort, importAllPortsFromUnece } from '@/app/actions/port';
 import { getShipperCodes } from '@/app/actions/contract';
 import { createShipper, updateShipper, deactivateShipper } from '@/app/actions/shipper';
+import { createOffice, updateOffice, deleteOffice } from '@/app/actions/office';
 import ContractsClient from '@/app/contracts/ContractsClient';
 import type { DisplayContract } from '@/app/contracts/ContractsClient';
 import styles from './page.module.css';
@@ -168,7 +169,16 @@ interface UnecePort {
   longitude?: number;
 }
 
-type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users' | 'ports' | 'shippers';
+interface AdminOffice {
+  _id: string;
+  code: string;
+  name: string;
+  country: string;
+  active: boolean;
+  createdAt?: string;
+}
+
+type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users' | 'ports' | 'shippers' | 'offices';
 
 type ConfirmAction =
   | { type: 'cancel'; voyage: AdminVoyage }
@@ -2924,6 +2934,288 @@ function ShippersTab({ initialShippers }: { initialShippers: AdminShipper[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// Offices Tab
+// ---------------------------------------------------------------------------
+
+function CreateOfficeModal({ onClose, onCreated }: {
+  onClose: () => void;
+  onCreated: (o: AdminOffice) => void;
+}) {
+  const [code, setCode] = useState('');
+  const [name, setName] = useState('');
+  const [country, setCountry] = useState('');
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = () => {
+    if (!code.trim() || !name.trim() || !country.trim()) {
+      setError('Code, Name and Country are required');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await createOffice({ code: code.trim(), name: name.trim(), country: country.trim() });
+      if (result.success) {
+        onCreated(result.data as AdminOffice);
+      } else {
+        setError(result.error ?? 'Failed to create office');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h3 className={styles.modalTitle}>New Office</h3>
+        <div className={styles.formGrid}>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Code * <span style={{ fontWeight: 400, opacity: 0.6 }}>(3 chars)</span></label>
+            <input
+              className={`${styles.formInput} ${styles.formInputMono}`}
+              value={code}
+              onChange={e => setCode(e.target.value.toUpperCase())}
+              placeholder="VLP"
+              maxLength={3}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Country *</label>
+            <input
+              className={styles.formInput}
+              value={country}
+              onChange={e => setCountry(e.target.value)}
+              placeholder="Chile"
+              maxLength={100}
+            />
+          </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Name *</label>
+            <input
+              className={styles.formInput}
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Valparaíso Office"
+              maxLength={100}
+            />
+          </div>
+        </div>
+        {error && <div className={styles.modalError}>{error}</div>}
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
+          <button
+            className={styles.btnPrimary}
+            onClick={handleSubmit}
+            disabled={isPending || !code.trim() || !name.trim() || !country.trim()}
+          >
+            {isPending ? 'Creating…' : 'Create Office'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditOfficeModal({ office, onClose, onUpdated }: {
+  office: AdminOffice;
+  onClose: () => void;
+  onUpdated: (o: AdminOffice) => void;
+}) {
+  const [name, setName] = useState(office.name);
+  const [country, setCountry] = useState(office.country);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = () => {
+    if (!name.trim() || !country.trim()) {
+      setError('Name and Country are required');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await updateOffice(office._id, { name: name.trim(), country: country.trim() });
+      if (result.success) {
+        onUpdated(result.data as AdminOffice);
+      } else {
+        setError(result.error ?? 'Failed to save office');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h3 className={styles.modalTitle}>Edit Office — <code>{office.code}</code></h3>
+        <div className={styles.formGrid}>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Code</label>
+            <input
+              className={`${styles.formInput} ${styles.formInputMono}`}
+              value={office.code}
+              disabled
+              style={{ opacity: 0.5 }}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Country *</label>
+            <input
+              className={styles.formInput}
+              value={country}
+              onChange={e => setCountry(e.target.value)}
+              maxLength={100}
+            />
+          </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Name *</label>
+            <input
+              className={styles.formInput}
+              value={name}
+              onChange={e => setName(e.target.value)}
+              maxLength={100}
+            />
+          </div>
+        </div>
+        {error && <div className={styles.modalError}>{error}</div>}
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
+          <button className={styles.btnPrimary} onClick={handleSave} disabled={isPending}>
+            {isPending ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OfficesTab({ initialOffices }: { initialOffices: AdminOffice[] }) {
+  const router = useRouter();
+  const [offices, setOffices] = useState<AdminOffice[]>(initialOffices);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editingOffice, setEditingOffice] = useState<AdminOffice | null>(null);
+  const [confirmDeactivate, setConfirmDeactivate] = useState<AdminOffice | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleDeactivate = () => {
+    if (!confirmDeactivate) return;
+    setErrorMsg(null);
+    startTransition(async () => {
+      const result = await deleteOffice(confirmDeactivate._id);
+      if (result.success) {
+        setOffices(prev => prev.map(o => o._id === confirmDeactivate._id ? { ...o, active: false } : o));
+        setConfirmDeactivate(null);
+        router.refresh();
+      } else {
+        setErrorMsg(result.error ?? 'Failed to deactivate office');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.tabContent}>
+      <div className={styles.toolbar}>
+        <div className={styles.toolbarLeft}>
+          <span className={styles.toolbarCount}>{offices.length} offices</span>
+        </div>
+        <button className={styles.btnPrimary} onClick={() => setShowCreate(true)}>+ New Office</button>
+      </div>
+
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Name</th>
+              <th>Country</th>
+              <th>Status</th>
+              <th className={styles.thActions}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {offices.map(o => (
+              <tr key={o._id} style={{ opacity: o.active ? 1 : 0.5 }}>
+                <td><code style={{ fontFamily: 'monospace', fontWeight: 700 }}>{o.code}</code></td>
+                <td style={{ fontWeight: 'var(--weight-medium)' }}>{o.name}</td>
+                <td className={styles.cellSecondary}>{o.country}</td>
+                <td>
+                  <span className={styles.badge} style={{
+                    background: o.active ? 'var(--color-success-muted)' : 'var(--color-bg-tertiary)',
+                    color: o.active ? 'var(--color-success)' : 'var(--color-text-tertiary)',
+                  }}>
+                    {o.active ? 'Active' : 'Inactive'}
+                  </span>
+                </td>
+                <td className={styles.cellActions}>
+                  <button className={styles.btnSm} onClick={() => setEditingOffice(o)}>Edit</button>
+                  {o.active && (
+                    <button
+                      className={styles.btnWarn}
+                      onClick={() => { setConfirmDeactivate(o); setErrorMsg(null); }}
+                    >
+                      Deactivate
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {offices.length === 0 && (
+              <tr>
+                <td colSpan={5} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '2rem' }}>
+                  No offices yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {confirmDeactivate && (
+        <div className={styles.overlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Deactivate Office</h3>
+            <div className={styles.modalVoyageInfo}>
+              <code className={styles.modalVoyageNumber}>{confirmDeactivate.code}</code>
+              <span style={{ opacity: 0.7 }}>{confirmDeactivate.name}</span>
+            </div>
+            <p className={styles.modalBody}>
+              Deactivating this office hides it from dropdown menus. Existing contracts are not affected.
+            </p>
+            {errorMsg && <div className={styles.modalError}>{errorMsg}</div>}
+            <div className={styles.modalActions}>
+              <button className={styles.btnModalCancel} onClick={() => setConfirmDeactivate(null)} disabled={isPending}>Cancel</button>
+              <button className={styles.btnModalWarn} onClick={handleDeactivate} disabled={isPending}>
+                {isPending ? 'Deactivating…' : 'Yes, Deactivate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreate && (
+        <CreateOfficeModal
+          onClose={() => setShowCreate(false)}
+          onCreated={o => {
+            setOffices(prev => [...prev, o].sort((a, b) => a.code.localeCompare(b.code)));
+            setShowCreate(false);
+            router.refresh();
+          }}
+        />
+      )}
+      {editingOffice && (
+        <EditOfficeModal
+          office={editingOffice}
+          onClose={() => setEditingOffice(null)}
+          onUpdated={o => {
+            setOffices(prev => prev.map(x => x._id === o._id ? o : x));
+            setEditingOffice(null);
+            router.refresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -2936,12 +3228,13 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'users',     label: 'Users'         },
   { id: 'ports',     label: 'Ports'         },
   { id: 'shippers',  label: 'Shippers'      },
+  { id: 'offices',   label: 'Offices'       },
 ];
 
 interface AdminClientProps {
   voyages: AdminVoyage[];
   contracts: DisplayContract[];
-  offices: any[];
+  offices: AdminOffice[];
   services: any[];
   plans: AdminPlan[];
   vessels: AdminVessel[];
@@ -2983,7 +3276,7 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
       {activeTab === 'voyages'   && <VoyagesTab initialVoyages={voyages} />}
       {activeTab === 'contracts' && (
         <div className={styles.tabContent}>
-          <ContractsClient contracts={contracts} offices={offices} services={services} shippers={shippers} />
+          <ContractsClient contracts={contracts} offices={offices.filter(o => o.active)} services={services} shippers={shippers} />
         </div>
       )}
       {activeTab === 'plans'    && <PlansTab initialPlans={plans} />}
@@ -2992,6 +3285,7 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
       {activeTab === 'users'    && <UsersTab initialUsers={users} />}
       {activeTab === 'ports'    && <PortsTab initialPorts={ports} unecePorts={unecePorts} />}
       {activeTab === 'shippers' && <ShippersTab initialShippers={shippers} />}
+      {activeTab === 'offices'  && <OfficesTab initialOffices={offices} />}
     </div>
   );
 }

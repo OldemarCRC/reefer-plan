@@ -6,7 +6,7 @@ import Link from 'next/link';
 import AppShell from '@/components/layout/AppShell';
 import { getActiveServices } from '@/app/actions/service';
 import { getVessels } from '@/app/actions/vessel';
-import { createVoyageFromWizard } from '@/app/actions/voyage';
+import { createVoyageFromWizard, checkVoyageNumberExists } from '@/app/actions/voyage';
 import styles from './page.module.css';
 
 // ---------------------------------------------------------------------------
@@ -83,6 +83,8 @@ export default function NewVoyagePage() {
   const [portSchedule, setPortSchedule] = useState<PortScheduleEntry[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [voyageNumberError, setVoyageNumberError] = useState<string | null>(null);
+  const [isCheckingNumber, setIsCheckingNumber] = useState(false);
 
   useEffect(() => {
     const today = new Date();
@@ -131,6 +133,21 @@ export default function NewVoyagePage() {
     );
   };
 
+  const handleVoyageNumberBlur = async () => {
+    if (!voyageNumber || voyageNumber.length < 4) return;
+    setIsCheckingNumber(true);
+    try {
+      const result = await checkVoyageNumberExists(voyageNumber);
+      if (result.exists) {
+        setVoyageNumberError(`Voyage number "${voyageNumber}" already exists. Enter a unique number.`);
+      } else {
+        setVoyageNumberError(null);
+      }
+    } finally {
+      setIsCheckingNumber(false);
+    }
+  };
+
   const handleCreate = async () => {
     if (!selectedService || !selectedVessel || !voyageNumber) return;
     setIsSubmitting(true);
@@ -168,7 +185,7 @@ export default function NewVoyagePage() {
   const nextEnabled =
     (step === 1 && !!selectedService) ||
     (step === 2 && !!selectedVessel) ||
-    (step === 3 && !!voyageNumber && voyageNumber.length >= 4 && includedPortCount >= 2);
+    (step === 3 && !!voyageNumber && voyageNumber.length >= 4 && includedPortCount >= 2 && !voyageNumberError && !isCheckingNumber);
 
   // ---------------------------------------------------------------------------
   // Render
@@ -284,19 +301,28 @@ export default function NewVoyagePage() {
                     Enter the voyage number and set ETA and ETD for each port call.
                   </p>
 
-                  <div className={styles.voyageNumberRow}>
+                  <div className={`${styles.voyageNumberRow} ${voyageNumberError ? styles.voyageNumberRowError : ''}`}>
                     <label className={styles.fieldLabel}>Voyage Number</label>
-                    <input
-                      type="text"
-                      className={styles.voyageNumberInput}
-                      value={voyageNumber}
-                      onChange={e => setVoyageNumber(e.target.value.toUpperCase())}
-                      placeholder="e.g. ACON-062026"
-                      required
-                      maxLength={30}
-                      pattern="[A-Z0-9-]+"
-                      title="Uppercase letters, numbers, and hyphens only"
-                    />
+                    <div className={styles.voyageNumberField}>
+                      <input
+                        type="text"
+                        className={styles.voyageNumberInput}
+                        value={voyageNumber}
+                        onChange={e => { setVoyageNumber(e.target.value.toUpperCase()); setVoyageNumberError(null); }}
+                        onBlur={handleVoyageNumberBlur}
+                        placeholder="e.g. ACON-062026"
+                        required
+                        maxLength={30}
+                        pattern="[A-Z0-9-]+"
+                        title="Uppercase letters, numbers, and hyphens only"
+                      />
+                      {isCheckingNumber && (
+                        <p className={styles.fieldHint}>Checking…</p>
+                      )}
+                      {voyageNumberError && (
+                        <p className={styles.fieldError}>{voyageNumberError}</p>
+                      )}
+                    </div>
                   </div>
 
                   <div className={styles.voyageNumberRow}>

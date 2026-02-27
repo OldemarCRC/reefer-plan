@@ -1,7 +1,7 @@
 import AppShell from '@/components/layout/AppShell';
 import { getAdminVoyages } from '@/app/actions/voyage';
 import { getContracts } from '@/app/actions/contract';
-import { getActiveOffices } from '@/app/actions/office';
+import { getOffices } from '@/app/actions/office';
 import { getServices } from '@/app/actions/service';
 import { getAdminPlans } from '@/app/actions/stowage-plan';
 import { getAdminVessels } from '@/app/actions/vessel';
@@ -17,7 +17,7 @@ export default async function AdminPage() {
   const [voyagesResult, contractsRes, officesRes, servicesRes, plansRes, vesselsRes, usersRes, portsRes, shippersRes, unecePortsRes] = await Promise.all([
     getAdminVoyages(),
     getContracts(),
-    getActiveOffices(),
+    getOffices(),
     getServices(),
     getAdminPlans(),
     getAdminVessels(),

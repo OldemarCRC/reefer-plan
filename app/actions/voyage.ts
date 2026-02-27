@@ -840,6 +840,21 @@ export async function resequencePortCallsByEta(voyageId: unknown) {
 }
 
 // ----------------------------------------------------------------------------
+// CHECK VOYAGE NUMBER EXISTS (for real-time duplicate validation in wizard)
+// ----------------------------------------------------------------------------
+
+export async function checkVoyageNumberExists(voyageNumber: unknown) {
+  try {
+    const num = z.string().min(1).parse(voyageNumber);
+    await connectDB();
+    const existing = await VoyageModel.findOne({ voyageNumber: num.toUpperCase() }).lean();
+    return { exists: !!existing };
+  } catch {
+    return { exists: false };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // GET ALL VOYAGES
 // ----------------------------------------------------------------------------
 
@@ -850,9 +865,9 @@ export async function getVoyages() {
     const voyages = await VoyageModel.find()
       .populate('vesselId', 'name imoNumber')
       .populate('serviceId', 'serviceCode serviceName')
-      .sort({ departureDate: -1 })
+      .sort({ weekNumber: 1, departureDate: 1 })
       .lean();
-    
+
     return {
       success: true,
       data: JSON.parse(JSON.stringify(voyages)),
@@ -1144,7 +1159,7 @@ export async function getAdminVoyages() {
     const voyages = await VoyageModel.find()
       .populate('vesselId', 'name imoNumber')
       .populate('serviceId', 'serviceCode serviceName')
-      .sort({ departureDate: -1 })
+      .sort({ weekNumber: 1, departureDate: 1 })
       .lean();
 
     // Fetch plan + booking counts for all voyages in parallel
