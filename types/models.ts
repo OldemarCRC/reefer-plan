@@ -146,6 +146,9 @@ export interface Office {
   code: string;       // "RTM", "SMR", "GYE" — 3-letter unique
   name: string;       // "Rotterdam", "Santa Marta"
   country: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
   active: boolean;
   createdAt: Date;
   updatedAt: Date;

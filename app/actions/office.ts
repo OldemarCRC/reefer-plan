@@ -19,6 +19,9 @@ const CreateOfficeSchema = z.object({
   code: z.string().length(3, 'Office code must be exactly 3 characters').toUpperCase(),
   name: z.string().min(1, 'Name is required').max(100),
   country: z.string().min(1, 'Country is required').max(100),
+  contactName:  z.string().max(150).optional(),
+  contactEmail: z.string().email('Invalid email').max(200).optional().or(z.literal('')),
+  contactPhone: z.string().max(30).optional(),
   active: z.boolean().default(true),
 });
 

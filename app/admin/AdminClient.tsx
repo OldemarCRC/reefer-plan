@@ -174,6 +174,9 @@ interface AdminOffice {
   code: string;
   name: string;
   country: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
   active: boolean;
   createdAt?: string;
 }
@@ -2944,6 +2947,9 @@ function CreateOfficeModal({ onClose, onCreated }: {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [country, setCountry] = useState('');
+  const [contactName, setContactName] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -2954,7 +2960,14 @@ function CreateOfficeModal({ onClose, onCreated }: {
     }
     setError(null);
     startTransition(async () => {
-      const result = await createOffice({ code: code.trim(), name: name.trim(), country: country.trim() });
+      const result = await createOffice({
+        code: code.trim(),
+        name: name.trim(),
+        country: country.trim(),
+        contactName: contactName.trim() || undefined,
+        contactEmail: contactEmail.trim() || undefined,
+        contactPhone: contactPhone.trim() || undefined,
+      });
       if (result.success) {
         onCreated(result.data as AdminOffice);
       } else {
@@ -2998,6 +3011,37 @@ function CreateOfficeModal({ onClose, onCreated }: {
               maxLength={100}
             />
           </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Contact Name</label>
+            <input
+              className={styles.formInput}
+              value={contactName}
+              onChange={e => setContactName(e.target.value)}
+              placeholder="Jane Doe"
+              maxLength={150}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Contact Email</label>
+            <input
+              className={styles.formInput}
+              type="email"
+              value={contactEmail}
+              onChange={e => setContactEmail(e.target.value)}
+              placeholder="jane.doe@office.com"
+              maxLength={200}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Contact Phone</label>
+            <input
+              className={styles.formInput}
+              value={contactPhone}
+              onChange={e => setContactPhone(e.target.value)}
+              placeholder="+1 555 123 4567"
+              maxLength={30}
+            />
+          </div>
         </div>
         {error && <div className={styles.modalError}>{error}</div>}
         <div className={styles.modalActions}>
@@ -3022,6 +3066,9 @@ function EditOfficeModal({ office, onClose, onUpdated }: {
 }) {
   const [name, setName] = useState(office.name);
   const [country, setCountry] = useState(office.country);
+  const [contactName, setContactName] = useState(office.contactName ?? '');
+  const [contactEmail, setContactEmail] = useState(office.contactEmail ?? '');
+  const [contactPhone, setContactPhone] = useState(office.contactPhone ?? '');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -3032,7 +3079,13 @@ function EditOfficeModal({ office, onClose, onUpdated }: {
     }
     setError(null);
     startTransition(async () => {
-      const result = await updateOffice(office._id, { name: name.trim(), country: country.trim() });
+      const result = await updateOffice(office._id, {
+        name: name.trim(),
+        country: country.trim(),
+        contactName: contactName.trim() || undefined,
+        contactEmail: contactEmail.trim() || undefined,
+        contactPhone: contactPhone.trim() || undefined,
+      });
       if (result.success) {
         onUpdated(result.data as AdminOffice);
       } else {
@@ -3071,6 +3124,37 @@ function EditOfficeModal({ office, onClose, onUpdated }: {
               value={name}
               onChange={e => setName(e.target.value)}
               maxLength={100}
+            />
+          </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Contact Name</label>
+            <input
+              className={styles.formInput}
+              value={contactName}
+              onChange={e => setContactName(e.target.value)}
+              placeholder="Jane Doe"
+              maxLength={150}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Contact Email</label>
+            <input
+              className={styles.formInput}
+              type="email"
+              value={contactEmail}
+              onChange={e => setContactEmail(e.target.value)}
+              placeholder="jane.doe@office.com"
+              maxLength={200}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Contact Phone</label>
+            <input
+              className={styles.formInput}
+              value={contactPhone}
+              onChange={e => setContactPhone(e.target.value)}
+              placeholder="+1 555 123 4567"
+              maxLength={30}
             />
           </div>
         </div>
@@ -3126,6 +3210,7 @@ function OfficesTab({ initialOffices }: { initialOffices: AdminOffice[] }) {
               <th>Code</th>
               <th>Name</th>
               <th>Country</th>
+              <th>Contact</th>
               <th>Status</th>
               <th className={styles.thActions}>Actions</th>
             </tr>
@@ -3136,6 +3221,12 @@ function OfficesTab({ initialOffices }: { initialOffices: AdminOffice[] }) {
                 <td><code style={{ fontFamily: 'monospace', fontWeight: 700 }}>{o.code}</code></td>
                 <td style={{ fontWeight: 'var(--weight-medium)' }}>{o.name}</td>
                 <td className={styles.cellSecondary}>{o.country}</td>
+                <td className={styles.cellSecondary} style={{ fontSize: '0.8125rem' }}>
+                  {o.contactName && <div style={{ fontWeight: 'var(--weight-medium)', color: 'var(--color-text-primary)' }}>{o.contactName}</div>}
+                  {o.contactEmail && <div>{o.contactEmail}</div>}
+                  {o.contactPhone && <div>{o.contactPhone}</div>}
+                  {!o.contactName && !o.contactEmail && !o.contactPhone && <span style={{ opacity: 0.4 }}>—</span>}
+                </td>
                 <td>
                   <span className={styles.badge} style={{
                     background: o.active ? 'var(--color-success-muted)' : 'var(--color-bg-tertiary)',
@@ -3159,7 +3250,7 @@ function OfficesTab({ initialOffices }: { initialOffices: AdminOffice[] }) {
             ))}
             {offices.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '2rem' }}>
+                <td colSpan={6} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '2rem' }}>
                   No offices yet.
                 </td>
               </tr>

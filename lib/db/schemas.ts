@@ -152,6 +152,9 @@ const OfficeSchema = new Schema({
   code: { type: String, required: true, unique: true, uppercase: true, minlength: 3, maxlength: 3 },
   name: { type: String, required: true },
   country: { type: String, required: true },
+  contactName:  { type: String, default: '' },
+  contactEmail: { type: String, default: '' },
+  contactPhone: { type: String, default: '' },
   active: { type: Boolean, default: true },
 }, {
   timestamps: true,
