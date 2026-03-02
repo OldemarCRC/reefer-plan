@@ -28,7 +28,6 @@ export default async function VesselsPage() {
             <h1 className={styles.pageTitle}>Vessels</h1>
             <p className={styles.pageSubtitle}>{displayVessels.length} vessels in fleet</p>
           </div>
-          <button className={styles.btnPrimary}>+ Add Vessel</button>
         </div>
 
         {/* Vessel grid */}

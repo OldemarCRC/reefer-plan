@@ -151,8 +151,8 @@
 }
 
 .selectCard {
-  background: var(--color-bg-tertiary);
-  border: 2px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 10px;
   padding: 1.5rem;
   cursor: pointer;
@@ -163,13 +163,15 @@
 }
 
 .selectCard:hover {
-  border-color: var(--color-cyan-muted);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   transform: translateY(-2px);
 }
 
 .selectCard.selected {
   border-color: var(--color-cyan);
-  background: rgba(34, 211, 238, 0.05);
+  background: rgba(34, 211, 238, 0.10);
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.35), 0 4px 16px rgba(34, 211, 238, 0.08);
 }
 
 .cardTop {
