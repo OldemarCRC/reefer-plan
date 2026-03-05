@@ -14,7 +14,7 @@ interface ProvidersProps {
 
 export default function Providers({ children, session }: ProvidersProps) {
   return (
-    <SessionProvider key={session?.user?.id ?? 'guest'} session={session}>
+    <SessionProvider key={session?.user?.id ?? 'guest'} session={session} refetchInterval={30} refetchOnWindowFocus={true}>
       <InactivityTimer />
       {children}
     </SessionProvider>
