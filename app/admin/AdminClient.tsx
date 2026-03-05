@@ -1001,7 +1001,7 @@ function EditVesselModal({ vessel, onClose, onUpdated }: {
           totalPallets: totalPallets ? Number(totalPallets) : undefined,
           totalSqm: totalSqm ? Number(totalSqm) : undefined,
         } : undefined,
-        captainEmail: captainEmailEdit.trim() || undefined,
+        captainEmail: captainEmailEdit.trim(), // '' means clear; server handles unset
         temperatureZones: fromFormZones(zones),
       });
       if (result.success) {

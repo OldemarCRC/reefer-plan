@@ -450,6 +450,8 @@ export async function updateVessel(id: unknown, input: unknown) {
     }
 
     const update: Record<string, any> = {};
+    const unset:  Record<string, 1>   = {};
+
     if (data.name !== undefined) update.name = data.name.trim().toUpperCase();
     if (data.imoNumber !== undefined) update.imoNumber = data.imoNumber;
     if (data.flag !== undefined) update.flag = data.flag.toUpperCase();
@@ -457,7 +459,16 @@ export async function updateVessel(id: unknown, input: unknown) {
     if (data.built !== undefined) update.built = new Date(Date.UTC(data.built, 0, 1));
     if (data.capacity !== undefined) update.capacity = data.capacity;
     if (data.active !== undefined) update.active = data.active;
-    if (data.captainEmail !== undefined) update.captainEmail = data.captainEmail?.trim() || undefined;
+    if (data.captainEmail !== undefined) {
+      const trimmed = data.captainEmail.trim();
+      if (trimmed === '') {
+        // Explicitly remove the field — Mongoose ignores undefined in $set,
+        // so we must use $unset to actually clear the value in MongoDB.
+        unset.captainEmail = 1;
+      } else {
+        update.captainEmail = trimmed;
+      }
+    }
     if (data.temperatureZones !== undefined) {
       update.temperatureZones = data.temperatureZones.map((z: any) => ({
         zoneId: z.zoneId.toUpperCase(),
@@ -467,7 +478,11 @@ export async function updateVessel(id: unknown, input: unknown) {
       update.maxTemperatureZones = data.temperatureZones.length;
     }
 
-    const vessel = await VesselModel.findByIdAndUpdate(vesselId, update, { new: true }).lean() as any;
+    const mongoUpdate = Object.keys(unset).length > 0
+      ? { $set: update, $unset: unset }
+      : update;
+
+    const vessel = await VesselModel.findByIdAndUpdate(vesselId, mongoUpdate, { new: true }).lean() as any;
     if (!vessel) return { success: false, error: 'Vessel not found' };
 
     return {
