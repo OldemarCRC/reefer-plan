@@ -69,22 +69,45 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     ...authConfig.callbacks,
 
-    // Add role, name, email and sessionVersion to the JWT token on first sign-in.
-    jwt({ token, user }) {
+    // Runs on sign-in (user is populated) and on every session refresh (user is null).
+    // With updateAge:0 this fires on every authenticated request via auth().
+    async jwt({ token, user }) {
       if (user) {
+        // ── Sign-in: stamp all fields from the authorize() result into the token ──
         token.name           = user.name;
         token.email          = user.email;
         token.role           = (user as any).role;
         token.shipperCode    = (user as any).shipperCode ?? null;
         token.sessionVersion = (user as any).sessionVersion;
-        // Record the absolute login time so the jwt callback can enforce a hard limit.
+        // Record the absolute login time for the hard 8-hour limit.
         token.loginAt        = Date.now();
+      } else {
+        // ── Refresh: validate sessionVersion against the DB ──
+        // If another device has logged in since this token was issued, the DB counter
+        // will be higher than the token's value. Returning null clears the cookie
+        // and the user is redirected to /login on their next request.
+        try {
+          await connectDB();
+          const dbUser = await UserModel
+            .findById(token.sub)
+            .select('sessionVersion')
+            .lean();
+
+          if (!dbUser || (dbUser as any).sessionVersion !== token.sessionVersion) {
+            return null;
+          }
+        } catch (err) {
+          // Fail open: if the DB is momentarily unreachable, keep the session alive.
+          console.error('[auth] sessionVersion check error:', err);
+        }
       }
-      // Hard 8-hour timeout — return null to invalidate regardless of cookie state.
+
+      // Hard 8-hour timeout — applies on both sign-in and refresh paths.
       const loginAt = token.loginAt as number | undefined;
       if (loginAt && Date.now() - loginAt > 28_800_000) {
         return null;
       }
+
       return token;
     },
   },
