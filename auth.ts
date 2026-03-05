@@ -77,12 +77,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role           = (user as any).role;
         token.shipperCode    = (user as any).shipperCode ?? null;
         token.sessionVersion = (user as any).sessionVersion;
+        // Record the absolute login time so the jwt callback can enforce a hard limit.
+        token.loginAt        = Date.now();
+      }
+      // Hard 8-hour timeout — return null to invalidate regardless of cookie state.
+      const loginAt = token.loginAt as number | undefined;
+      if (loginAt && Date.now() - loginAt > 28_800_000) {
+        return null;
       }
       return token;
     },
   },
 
-  session: { strategy: 'jwt', maxAge: 8 * 60 * 60 }, // 8 hours
+  session: {
+    strategy: 'jwt',
+    maxAge: 8 * 60 * 60,  // 8 hours — absolute cookie lifetime
+    updateAge: 0,          // re-encode the JWT on every request so loginAt check runs server-side
+  },
 
   // Derive base URL from the incoming request Host header instead of
   // NEXTAUTH_URL. Required for Docker / LAN access (192.168.x.x, custom port).

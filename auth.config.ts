@@ -8,6 +8,16 @@ export default {
   },
 
   callbacks: {
+    // Edge-compatible loginAt check — runs on every request via middleware.
+    // Returns null to invalidate the session after 8 hours from the original sign-in.
+    jwt({ token }) {
+      const loginAt = token.loginAt as number | undefined;
+      if (loginAt && Date.now() - loginAt > 28_800_000) {
+        return null;
+      }
+      return token;
+    },
+
     // Fix Docker/LAN redirect issue: strip the base URL from redirect targets
     // so NEXTAUTH_URL=localhost:3000 doesn't corrupt redirects on 192.168.x.x:3001
     redirect({ url }) {
