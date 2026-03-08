@@ -54,6 +54,8 @@ const CreateContractSchema = z.object({
     email: z.string().email(),
     country: z.string().min(1),
   }),
+  cargoType:    CargoTypeSchema,
+  weeklyPallets: z.number().int().min(1, 'Weekly pallets must be at least 1'),
   shippers:       z.array(CounterpartySchema).default([]),
   consignees:     z.array(CounterpartySchema).default([]),
   counterparties: z.array(ContractCounterpartyInputSchema).default([]),
@@ -72,6 +74,8 @@ const UpdateContractSchema = z.object({
     email: z.string().email(),
     country: z.string().min(1),
   }).partial().optional(),
+  cargoType:    CargoTypeSchema.optional(),
+  weeklyPallets: z.number().int().min(1).optional(),
   shippers: z.array(CounterpartySchema).optional(),
   consignees: z.array(CounterpartySchema).optional(),
   originPort: PortInfoSchema.optional(),
@@ -166,6 +170,8 @@ export async function createContract(data: unknown) {
         ...validated.client,
         clientNumber,
       },
+      cargoType: validated.cargoType,
+      weeklyPallets: validated.weeklyPallets,
       shippers: validated.shippers,
       consignees: validated.consignees,
       counterparties: validated.counterparties,
@@ -206,9 +212,26 @@ export async function updateContract(contractId: unknown, updates: unknown) {
     const validated = UpdateContractSchema.parse(updates);
     await connectDB();
 
+    // Expand nested client fields to dot-notation to avoid wiping clientNumber/type
+    const setFields: Record<string, any> = {};
+    if (validated.client) {
+      for (const [k, v] of Object.entries(validated.client)) {
+        if (v !== undefined) setFields[`client.${k}`] = v;
+      }
+    }
+    if (validated.cargoType   !== undefined) setFields.cargoType   = validated.cargoType;
+    if (validated.weeklyPallets !== undefined) setFields.weeklyPallets = validated.weeklyPallets;
+    if (validated.shippers    !== undefined) setFields.shippers    = validated.shippers;
+    if (validated.consignees  !== undefined) setFields.consignees  = validated.consignees;
+    if (validated.originPort  !== undefined) setFields.originPort  = validated.originPort;
+    if (validated.destinationPort !== undefined) setFields.destinationPort = validated.destinationPort;
+    if (validated.validFrom   !== undefined) setFields.validFrom   = validated.validFrom;
+    if (validated.validTo     !== undefined) setFields.validTo     = validated.validTo;
+    if (validated.active      !== undefined) setFields.active      = validated.active;
+
     const contract = await ContractModel.findByIdAndUpdate(
       id,
-      { $set: validated },
+      { $set: setFields },
       { new: true, runValidators: true }
     );
 
@@ -262,6 +285,41 @@ export async function deactivateContract(contractId: unknown) {
   } catch (error) {
     console.error('Error deactivating contract:', error);
     return { success: false, error: 'Failed to deactivate contract' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// ACTIVATE CONTRACT (restore from inactive)
+// ----------------------------------------------------------------------------
+
+export async function activateContract(contractId: unknown) {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
+    const id = ContractIdSchema.parse(contractId);
+    await connectDB();
+
+    const contract = await ContractModel.findByIdAndUpdate(
+      id,
+      { $set: { active: true } },
+      { new: true }
+    );
+
+    if (!contract) {
+      return { success: false, error: 'Contract not found' };
+    }
+
+    return {
+      success: true,
+      data: JSON.parse(JSON.stringify(contract)),
+      message: `Contract ${contract.contractNumber} activated`,
+    };
+  } catch (error) {
+    console.error('Error activating contract:', error);
+    return { success: false, error: 'Failed to activate contract' };
   }
 }
 

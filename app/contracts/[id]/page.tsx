@@ -166,6 +166,14 @@ export default async function ContractDetailPage({
                 <span className={styles.detailValue}>{fmtDate(c.validTo)}</span>
               </div>
               <div className={styles.detailItem}>
+                <span className={styles.detailLabel}>Primary Cargo</span>
+                <span className={styles.detailValue}>{c.cargoType ? formatCargo(c.cargoType) : '—'}</span>
+              </div>
+              <div className={styles.detailItem}>
+                <span className={styles.detailLabel}>Contract Weekly Cap</span>
+                <span className={styles.detailValueHighlight}>{c.weeklyPallets ? `${c.weeklyPallets} pallets` : '—'}</span>
+              </div>
+              <div className={styles.detailItem}>
                 <span className={styles.detailLabel}>Active Weekly Estimate</span>
                 <span className={styles.detailValueHighlight}>{totalWeekly} pallets</span>
               </div>
@@ -177,6 +185,7 @@ export default async function ContractDetailPage({
         <ContractShippersPanel
           contractId={c._id}
           contractActive={c.active}
+          contractWeeklyPallets={c.weeklyPallets || 0}
           counterparties={counterparties}
           availableShippers={availableShippers.map((s) => ({
             id: s._id,

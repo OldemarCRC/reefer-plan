@@ -39,8 +39,8 @@ export default async function AdminPage() {
   const unecePorts = unecePortsRes.success ? unecePortsRes.data : [];
 
   const displayContracts: DisplayContract[] = contracts.map((c: any) => {
-    const counterparties = c.client?.type === 'SHIPPER' ? c.consignees : c.shippers;
-    const totalWeekly = (counterparties || []).reduce(
+    const legacyCps = c.client?.type === 'SHIPPER' ? c.consignees : c.shippers;
+    const totalWeekly = (legacyCps || []).reduce(
       (sum: number, cp: any) => sum + (cp.weeklyEstimate || 0),
       0
     );
@@ -49,11 +49,22 @@ export default async function AdminPage() {
       contractNumber: c.contractNumber,
       clientName: c.client?.name || 'Unknown',
       clientType: c.client?.type || 'SHIPPER',
+      clientContact: c.client?.contact || '',
+      clientEmail: c.client?.email || '',
+      clientCountry: c.client?.country || '',
       officeCode: c.officeCode || c.officeId?.code || '—',
+      officeId: c.officeId?._id || c.officeId || '',
       serviceCode: c.serviceCode || c.serviceId?.serviceCode || '—',
       serviceName: c.serviceId?.serviceName || '—',
+      serviceId: c.serviceId?._id || c.serviceId || '',
       originPort: c.originPort?.portCode || '—',
+      originPortName: c.originPort?.portName || '',
+      originPortCountry: c.originPort?.country || '',
       destinationPort: c.destinationPort?.portCode || '—',
+      destinationPortName: c.destinationPort?.portName || '',
+      destinationPortCountry: c.destinationPort?.country || '',
+      cargoType: c.cargoType || '',
+      weeklyPallets: c.weeklyPallets || 0,
       weeklyEstimate: totalWeekly,
       validFrom: c.validFrom,
       validTo: c.validTo,

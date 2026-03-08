@@ -466,3 +466,103 @@
   color: var(--color-blue-light);
   border-color: var(--color-blue);
 }
+
+/* --- Row action buttons --- */
+
+.rowActions {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.btnSmall {
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.btnSmall:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btnSmallEdit {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+}
+
+.btnSmallEdit:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.btnSmallDeactivate {
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.btnSmallDeactivate:hover:not(:disabled) {
+  background: var(--color-danger);
+  color: white;
+}
+
+.btnSmallActivate {
+  background: var(--color-success-muted);
+  color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.btnSmallActivate:hover:not(:disabled) {
+  background: var(--color-success);
+  color: white;
+}
+
+/* --- Inline messages --- */
+
+.msgSuccess {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-success-muted);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--color-success);
+}
+
+.msgError {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-danger-muted);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+}
+
+/* --- Weekly pallet bar (create/edit shippers) --- */
+
+.weeklyBar {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.weeklyBarOver {
+  background: var(--color-warning-muted, rgba(234, 179, 8, 0.1));
+  border-color: var(--color-warning, #eab308);
+  color: var(--color-warning, #eab308);
+}
+
+.weeklyBarExact {
+  background: var(--color-success-muted);
+  border-color: var(--color-success);
+  color: var(--color-success);
+}

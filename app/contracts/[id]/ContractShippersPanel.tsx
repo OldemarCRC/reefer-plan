@@ -38,13 +38,59 @@ interface ContractCounterparty {
 interface ContractShippersPanelProps {
   contractId: string;
   contractActive: boolean;
+  contractWeeklyPallets?: number;
   counterparties: ContractCounterparty[];
   availableShippers: ShipperOption[];
 }
 
+// ---------------------------------------------------------------------------
+// Weekly capacity bar
+// ---------------------------------------------------------------------------
+
+function WeeklyCapacityBar({
+  used,
+  total,
+}: {
+  used: number;
+  total: number;
+}) {
+  if (!total) return null;
+  const pct = Math.min((used / total) * 100, 100);
+  const isOver = used > total;
+  const isExact = used === total && total > 0;
+
+  return (
+    <div className={`${styles.weeklyCapBar} ${isOver ? styles.weeklyCapBarOver : isExact ? styles.weeklyCapBarExact : ''}`}>
+      <span>
+        Active shippers:{' '}
+        <strong className={isOver ? styles.weeklyCapOver : isExact ? styles.weeklyCapExact : ''}>
+          {used}
+        </strong>{' '}
+        / {total} pallets/week
+        {isOver && <span className={styles.weeklyCapOver}> — over contract capacity</span>}
+        {isExact && <span className={styles.weeklyCapExact}> — at capacity</span>}
+      </span>
+      <div className={styles.weeklyCapBarFill}>
+        <div
+          className={styles.weeklyCapBarInner}
+          style={{
+            width: `${pct}%`,
+            background: isOver ? 'var(--color-danger)' : isExact ? 'var(--color-success)' : 'var(--color-blue)',
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Panel
+// ---------------------------------------------------------------------------
+
 export default function ContractShippersPanel({
   contractId,
   contractActive,
+  contractWeeklyPallets = 0,
   counterparties,
   availableShippers,
 }: ContractShippersPanelProps) {
@@ -66,6 +112,14 @@ export default function ContractShippersPanel({
     (s) => !assignedIds.has(s.id) && !assignedCodes.has(s.code)
   );
 
+  // Active weekly total (for bar)
+  const activeWeeklyTotal = counterparties
+    .filter((cp) => cp.active !== false)
+    .reduce((s, cp) => s + (cp.weeklyEstimate || 0), 0);
+
+  // Projected total if we add the new entry
+  const projectedTotal = activeWeeklyTotal + weeklyEst;
+
   function toggleCargo(ct: string) {
     setSelCargoTypes((prev) =>
       prev.includes(ct) ? prev.filter((x) => x !== ct) : [...prev, ct]
@@ -81,6 +135,20 @@ export default function ContractShippersPanel({
       setAddError('Select at least one cargo type');
       return;
     }
+
+    // Soft warnings — never block
+    if (contractWeeklyPallets > 0 && projectedTotal > contractWeeklyPallets) {
+      const confirmed = window.confirm(
+        `Warning: Adding this shipper would bring the total to ${projectedTotal} pallets/week, ` +
+        `which exceeds the contract capacity of ${contractWeeklyPallets}.\n\nAdd anyway?`
+      );
+      if (!confirmed) return;
+    } else if (contractWeeklyPallets > 0 && projectedTotal === contractWeeklyPallets) {
+      window.alert(
+        `This brings the total to exactly ${contractWeeklyPallets} pallets/week — contract at full capacity.`
+      );
+    }
+
     setAddError('');
     startTransition(async () => {
       const res = await addShipperToContract(contractId, {
@@ -146,6 +214,9 @@ export default function ContractShippersPanel({
           </button>
         )}
       </div>
+
+      {/* Weekly capacity bar */}
+      <WeeklyCapacityBar used={activeWeeklyTotal} total={contractWeeklyPallets} />
 
       {actionMsg && (
         <p className={actionMsg.type === 'error' ? styles.msgError : styles.msgSuccess}>
@@ -226,6 +297,11 @@ export default function ContractShippersPanel({
           <p className={styles.addShipperHint}>
             Only shippers confirmed by the consignee should be added here.
           </p>
+
+          {/* Live capacity preview */}
+          {contractWeeklyPallets > 0 && selShipperId && (
+            <WeeklyCapacityBar used={projectedTotal} total={contractWeeklyPallets} />
+          )}
 
           <div className={styles.addFormRow}>
             <div className={styles.formGroup}>

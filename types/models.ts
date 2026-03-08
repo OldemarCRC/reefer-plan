@@ -188,6 +188,8 @@ export interface Contract {
     email: string;
     country: string;
   };
+  cargoType: CargoType;
+  weeklyPallets: number;
   shippers: ContractCounterparty[];     // legacy: kept for backward compat
   consignees: ContractCounterparty[];   // legacy: kept for backward compat
   counterparties: ShipperCounterparty[]; // new: refs Shipper collection

@@ -195,6 +195,8 @@ const ContractSchema = new Schema({
     email: { type: String, required: true },
     country: { type: String, required: true },
   },
+  cargoType:    { type: String, required: true },   // primary cargo for this contract
+  weeklyPallets: { type: Number, required: true, min: 1 }, // contract-level weekly capacity
   shippers: [CounterpartySchema],       // kept for backward compat with existing docs
   consignees: [CounterpartySchema],     // kept for backward compat with existing docs
   counterparties: [ContractCounterpartySchema], // new: refs Shipper collection
