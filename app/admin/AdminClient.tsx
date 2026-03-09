@@ -12,6 +12,7 @@ import { getPorts, createPort, updatePort, importAllPortsFromUnece } from '@/app
 import { getShipperCodes } from '@/app/actions/contract';
 import { createShipper, updateShipper, deactivateShipper } from '@/app/actions/shipper';
 import { createOffice, updateOffice, deleteOffice } from '@/app/actions/office';
+import { approveBooking, rejectBooking, cancelBooking } from '@/app/actions/booking';
 import ContractsClient from '@/app/contracts/ContractsClient';
 import type { DisplayContract } from '@/app/contracts/ContractsClient';
 import styles from './page.module.css';
@@ -181,7 +182,42 @@ interface AdminOffice {
   createdAt?: string;
 }
 
-type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users' | 'ports' | 'shippers' | 'offices';
+interface AdminBooking {
+  _id: string;
+  bookingNumber: string;
+  voyageNumber: string;
+  shipper: { name: string; code: string };
+  consignee: { name: string; code: string };
+  cargoType: string;
+  requestedQuantity: number;
+  confirmedQuantity: number;
+  status: string;
+  createdAt?: string;
+}
+
+const BOOKING_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
+  CONFIRMED: { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
+  PENDING:   { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)' },
+  PARTIAL:   { bg: 'var(--color-yellow-muted)',  color: 'var(--color-yellow)' },
+  STANDBY:   { bg: 'var(--color-info-muted)',    color: 'var(--color-info)' },
+  REJECTED:  { bg: 'var(--color-danger-muted)',  color: 'var(--color-danger)' },
+  CANCELLED: { bg: 'var(--color-bg-tertiary)',   color: 'var(--color-text-tertiary)' },
+};
+
+function BookingStatusBadge({ status }: { status: string }) {
+  const s = BOOKING_STATUS_COLORS[status] ?? { bg: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' };
+  return (
+    <span className={styles.badge} style={{ background: s.bg, color: s.color }}>
+      {status.replace(/_/g, ' ')}
+    </span>
+  );
+}
+
+function fmtCargo(type: string): string {
+  return type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
+
+type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users' | 'ports' | 'shippers' | 'offices' | 'bookings';
 
 type ConfirmAction =
   | { type: 'cancel'; voyage: AdminVoyage }
@@ -3320,6 +3356,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'ports',     label: 'Ports'         },
   { id: 'shippers',  label: 'Shippers'      },
   { id: 'offices',   label: 'Offices'       },
+  { id: 'bookings',  label: 'Bookings'      },
 ];
 
 interface AdminClientProps {
@@ -3333,9 +3370,10 @@ interface AdminClientProps {
   ports: AdminPort[];
   shippers: AdminShipper[];
   unecePorts: UnecePort[];
+  bookings: AdminBooking[];
 }
 
-export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports, shippers, unecePorts }: AdminClientProps) {
+export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports, shippers, unecePorts, bookings }: AdminClientProps) {
   const [activeTab, setActiveTab] = useState<Tab>('voyages');
 
   return (
@@ -3377,6 +3415,429 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
       {activeTab === 'ports'    && <PortsTab initialPorts={ports} unecePorts={unecePorts} />}
       {activeTab === 'shippers' && <ShippersTab initialShippers={shippers} />}
       {activeTab === 'offices'  && <OfficesTab initialOffices={offices} />}
+      {activeTab === 'bookings' && <BookingsTab initialBookings={bookings} />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Bookings Tab
+// ---------------------------------------------------------------------------
+
+function BookingsTab({ initialBookings }: { initialBookings: AdminBooking[] }) {
+  const router = useRouter();
+  const [bookings, setBookings] = useState<AdminBooking[]>(initialBookings);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [voyageFilter, setVoyageFilter] = useState('');
+  const [approveTarget, setApproveTarget] = useState<AdminBooking | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<AdminBooking | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<AdminBooking | null>(null);
+
+  const voyageNumbers = useMemo(
+    () => [...new Set(bookings.map((b: any) => b.voyageNumber).filter(Boolean))].sort() as string[],
+    [bookings]
+  );
+
+  const filtered = useMemo(() => {
+    return bookings.filter((b: any) => {
+      if (statusFilter && b.status !== statusFilter) return false;
+      if (voyageFilter && b.voyageNumber !== voyageFilter) return false;
+      return true;
+    });
+  }, [bookings, statusFilter, voyageFilter]);
+
+  return (
+    <div className={styles.tabContent}>
+      <div className={styles.toolbar}>
+        <div className={styles.toolbarLeft}>
+          <span className={styles.toolbarCount}>{filtered.length} of {bookings.length} bookings</span>
+          <select
+            className={styles.filterSelect}
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+          >
+            <option value="">All Statuses</option>
+            <option value="PENDING">Pending</option>
+            <option value="CONFIRMED">Confirmed</option>
+            <option value="PARTIAL">Partial</option>
+            <option value="STANDBY">Standby</option>
+            <option value="REJECTED">Rejected</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+          <select
+            className={styles.filterSelect}
+            value={voyageFilter}
+            onChange={e => setVoyageFilter(e.target.value)}
+          >
+            <option value="">All Voyages</option>
+            {voyageNumbers.map((v: any) => (
+              <option key={v} value={v}>{v}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Booking #</th>
+              <th>Voyage</th>
+              <th>Shipper</th>
+              <th>Consignee</th>
+              <th>Cargo Type</th>
+              <th className={styles.thNum}>Req. Qty</th>
+              <th className={styles.thNum}>Conf. Qty</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th className={styles.thActions}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr><td colSpan={10} className={styles.emptyCell}>No bookings match the current filters.</td></tr>
+            ) : (
+              filtered.map((b: any) => (
+                <tr key={b._id}>
+                  <td className={styles.cellMono}>{b.bookingNumber}</td>
+                  <td className={styles.cellSecondary}>{b.voyageNumber || '—'}</td>
+                  <td>{b.shipper?.name || '—'}</td>
+                  <td className={styles.cellSecondary}>{b.consignee?.name || '—'}</td>
+                  <td>{fmtCargo(b.cargoType || '')}</td>
+                  <td className={styles.cellNum}>{b.requestedQuantity ?? '—'}</td>
+                  <td className={styles.cellNum}>
+                    {b.confirmedQuantity > 0
+                      ? <span style={{ color: 'var(--color-success)', fontWeight: 'var(--weight-semibold)' }}>{b.confirmedQuantity}</span>
+                      : <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+                    }
+                  </td>
+                  <td><BookingStatusBadge status={b.status} /></td>
+                  <td className={styles.cellMono}>{fmtDate(b.createdAt)}</td>
+                  <td className={styles.cellActions}>
+                    {(b.status === 'PENDING' || b.status === 'PARTIAL') && (
+                      <>
+                        <button
+                          className={styles.btnSm}
+                          onClick={() => setApproveTarget(b)}
+                          title="Approve booking"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          className={styles.btnWarn}
+                          onClick={() => setRejectTarget(b)}
+                          title="Reject booking"
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
+                    {b.status !== 'CANCELLED' && b.status !== 'REJECTED' && (
+                      <button
+                        className={styles.btnDanger}
+                        onClick={() => setCancelTarget(b)}
+                        title="Cancel booking"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Approve Modal */}
+      {approveTarget && (
+        <AdminApproveModal
+          booking={approveTarget}
+          onClose={() => setApproveTarget(null)}
+          onDone={(updated: any) => {
+            setBookings((prev: any) => prev.map((b: any) => b._id === updated._id ? { ...b, ...updated } : b));
+            setApproveTarget(null);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {/* Reject Modal */}
+      {rejectTarget && (
+        <AdminRejectModal
+          booking={rejectTarget}
+          onClose={() => setRejectTarget(null)}
+          onDone={(updated: any) => {
+            setBookings((prev: any) => prev.map((b: any) => b._id === updated._id ? { ...b, ...updated } : b));
+            setRejectTarget(null);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {/* Cancel Modal */}
+      {cancelTarget && (
+        <AdminCancelModal
+          booking={cancelTarget}
+          onClose={() => setCancelTarget(null)}
+          onDone={(updated: any) => {
+            setBookings((prev: any) => prev.map((b: any) => b._id === updated._id ? { ...b, ...updated } : b));
+            setCancelTarget(null);
+            router.refresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Admin Approve Modal
+// ---------------------------------------------------------------------------
+
+function AdminApproveModal({
+  booking,
+  onClose,
+  onDone,
+}: {
+  booking: AdminBooking;
+  onClose: () => void;
+  onDone: (updated: any) => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [confirmedQty, setConfirmedQty] = useState(booking.requestedQuantity);
+  const [error, setError] = useState<string | null>(null);
+
+  const standby = Math.max(0, booking.requestedQuantity - confirmedQty);
+  const resultStatus = confirmedQty === 0 ? 'STANDBY' : confirmedQty < booking.requestedQuantity ? 'PARTIAL' : 'CONFIRMED';
+
+  const handleApprove = () => {
+    setError(null);
+    startTransition(async () => {
+      const result = await approveBooking({ bookingId: booking._id, confirmedQuantity: confirmedQty });
+      if (result.success) {
+        onDone(result.data);
+      } else {
+        setError(result.error ?? 'Failed to approve');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h3 className={styles.modalTitle}>Approve Booking</h3>
+        <div className={styles.modalVoyageInfo}>
+          <span className={styles.modalVoyageNumber}>{booking.bookingNumber}</span>
+          <BookingStatusBadge status={booking.status} />
+        </div>
+        <div className={styles.modalMeta}>
+          <span>{booking.shipper?.name || '—'}</span>
+          <span>·</span>
+          <span>{fmtCargo(booking.cargoType || '')}</span>
+          <span>·</span>
+          <span>Voyage {booking.voyageNumber}</span>
+        </div>
+
+        <div className={styles.formGrid}>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Confirmed Quantity (requested: {booking.requestedQuantity})</label>
+            <input
+              type="number"
+              className={styles.formInput}
+              min={0}
+              max={booking.requestedQuantity}
+              value={confirmedQty}
+              onChange={e => setConfirmedQty(Math.min(parseInt(e.target.value) || 0, booking.requestedQuantity))}
+            />
+          </div>
+          <div className={styles.formGroupFull} style={{ display: 'flex', gap: 'var(--space-4)', padding: 'var(--space-3)', background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
+            <div style={{ flex: 1, textAlign: 'center' }}>
+              <div className={styles.formLabel}>Confirmed</div>
+              <div style={{ color: 'var(--color-success)', fontWeight: 'var(--weight-semibold)', fontSize: 'var(--text-lg)' }}>{confirmedQty}</div>
+            </div>
+            <div style={{ flex: 1, textAlign: 'center' }}>
+              <div className={styles.formLabel}>Standby</div>
+              <div style={{ color: standby > 0 ? 'var(--color-warning)' : 'var(--color-text-muted)', fontWeight: 'var(--weight-semibold)', fontSize: 'var(--text-lg)' }}>{standby || '—'}</div>
+            </div>
+            <div style={{ flex: 1, textAlign: 'center' }}>
+              <div className={styles.formLabel}>Result</div>
+              <BookingStatusBadge status={resultStatus} />
+            </div>
+          </div>
+        </div>
+
+        {error && <div className={styles.modalError}>{error}</div>}
+
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
+          <button
+            className={styles.btnPrimary}
+            onClick={handleApprove}
+            disabled={isPending}
+          >
+            {isPending ? 'Approving…' : 'Confirm Approval'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Admin Reject Modal
+// ---------------------------------------------------------------------------
+
+function AdminRejectModal({
+  booking,
+  onClose,
+  onDone,
+}: {
+  booking: AdminBooking;
+  onClose: () => void;
+  onDone: (updated: any) => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const handleReject = () => {
+    if (!reason.trim()) { setError('Rejection reason is required'); return; }
+    setError(null);
+    startTransition(async () => {
+      const result = await rejectBooking({ bookingId: booking._id, rejectionReason: reason.trim() });
+      if (result.success) {
+        onDone(result.data);
+      } else {
+        setError(result.error ?? 'Failed to reject');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h3 className={styles.modalTitle}>Reject Booking</h3>
+        <div className={styles.modalVoyageInfo}>
+          <span className={styles.modalVoyageNumber}>{booking.bookingNumber}</span>
+          <BookingStatusBadge status={booking.status} />
+        </div>
+        <div className={styles.modalMeta}>
+          <span>{booking.shipper?.name || '—'}</span>
+          <span>·</span>
+          <span>{fmtCargo(booking.cargoType || '')}</span>
+          <span>·</span>
+          <span>Voyage {booking.voyageNumber}</span>
+        </div>
+
+        <div className={styles.formGrid}>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Rejection Reason *</label>
+            <textarea
+              className={styles.formInput}
+              rows={3}
+              style={{ resize: 'vertical', fontFamily: 'inherit' }}
+              placeholder="Provide a reason for rejection..."
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              maxLength={500}
+            />
+          </div>
+        </div>
+
+        {error && <div className={styles.modalError}>{error}</div>}
+
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
+          <button
+            className={styles.btnModalDanger}
+            onClick={handleReject}
+            disabled={isPending || !reason.trim()}
+          >
+            {isPending ? 'Rejecting…' : 'Confirm Rejection'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Admin Cancel Modal
+// ---------------------------------------------------------------------------
+
+function AdminCancelModal({
+  booking,
+  onClose,
+  onDone,
+}: {
+  booking: AdminBooking;
+  onClose: () => void;
+  onDone: (updated: any) => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const handleCancel = () => {
+    setError(null);
+    startTransition(async () => {
+      const result = await cancelBooking({ bookingId: booking._id, reason: reason.trim() || undefined });
+      if (result.success) {
+        onDone(result.data);
+      } else {
+        setError(result.error ?? 'Failed to cancel');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h3 className={styles.modalTitle}>Cancel Booking</h3>
+        <div className={styles.modalVoyageInfo}>
+          <span className={styles.modalVoyageNumber}>{booking.bookingNumber}</span>
+          <BookingStatusBadge status={booking.status} />
+        </div>
+        <div className={styles.modalMeta}>
+          <span>{booking.shipper?.name || '—'}</span>
+          <span>·</span>
+          <span>{fmtCargo(booking.cargoType || '')}</span>
+          <span>·</span>
+          <span>{booking.requestedQuantity} pallets</span>
+        </div>
+        <p className={styles.modalBody}>
+          This sets the booking status to <strong>CANCELLED</strong>. The record is preserved for audit purposes.
+        </p>
+
+        <div className={styles.formGrid}>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Cancellation Reason (optional)</label>
+            <textarea
+              className={styles.formInput}
+              rows={2}
+              style={{ resize: 'vertical', fontFamily: 'inherit' }}
+              placeholder="Optional reason..."
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              maxLength={500}
+            />
+          </div>
+        </div>
+
+        {error && <div className={styles.modalError}>{error}</div>}
+
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Back</button>
+          <button
+            className={styles.btnModalWarn}
+            onClick={handleCancel}
+            disabled={isPending}
+          >
+            {isPending ? 'Cancelling…' : 'Yes, Cancel Booking'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

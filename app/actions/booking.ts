@@ -10,6 +10,7 @@ import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
 import { BookingModel, ContractModel, VoyageModel, ServiceModel } from '@/lib/db/schemas';
 import type { BookingStatus } from '@/types/models';
+import { auth } from '@/auth';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -45,13 +46,16 @@ const CreateBookingFromContractSchema = z.object({
 const ApproveBookingSchema = z.object({
   bookingId: z.string().min(1),
   confirmedQuantity: z.number().int().min(0),
-  approvedBy: z.string().min(1),
 });
 
 const RejectBookingSchema = z.object({
   bookingId: z.string().min(1),
   rejectionReason: z.string().min(1).max(500),
-  rejectedBy: z.string().min(1),
+});
+
+const CancelBookingSchema = z.object({
+  bookingId: z.string().min(1),
+  reason: z.string().max(500).optional(),
 });
 
 // ----------------------------------------------------------------------------
@@ -224,6 +228,11 @@ export async function createBookingFromContract(data: unknown) {
 
 export async function approveBooking(data: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role;
+    if (role !== 'ADMIN' && role !== 'SHIPPING_PLANNER') return { success: false, error: 'Forbidden' };
+
     const validated = ApproveBookingSchema.parse(data);
     await connectDB();
 
@@ -231,8 +240,8 @@ export async function approveBooking(data: unknown) {
     if (!booking) {
       return { success: false, error: 'Booking not found' };
     }
-    if (booking.status !== 'PENDING') {
-      return { success: false, error: 'Booking is not in PENDING status' };
+    if (booking.status !== 'PENDING' && booking.status !== 'PARTIAL') {
+      return { success: false, error: 'Booking must be in PENDING or PARTIAL status to approve' };
     }
 
     const requested = booking.requestedQuantity;
@@ -255,7 +264,7 @@ export async function approveBooking(data: unknown) {
     booking.standbyQuantity = standby;
     booking.status = status;
     booking.confirmedDate = new Date();
-    booking.approvedBy = validated.approvedBy;
+    booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
     await booking.save();
 
     return {
@@ -282,6 +291,11 @@ export async function approveBooking(data: unknown) {
 
 export async function rejectBooking(data: unknown) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role;
+    if (role !== 'ADMIN' && role !== 'SHIPPING_PLANNER') return { success: false, error: 'Forbidden' };
+
     const validated = RejectBookingSchema.parse(data);
     await connectDB();
 
@@ -293,7 +307,7 @@ export async function rejectBooking(data: unknown) {
     booking.status = 'REJECTED';
     booking.rejectionReason = validated.rejectionReason;
     booking.confirmedDate = new Date();
-    booking.approvedBy = validated.rejectedBy;
+    booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
     await booking.save();
 
     return {
@@ -306,6 +320,63 @@ export async function rejectBooking(data: unknown) {
     }
     console.error('Error rejecting booking:', error);
     return { success: false, error: 'Failed to reject booking' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// CANCEL BOOKING
+// ----------------------------------------------------------------------------
+
+export async function cancelBooking(data: unknown) {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role;
+    if (role !== 'ADMIN' && role !== 'SHIPPING_PLANNER') return { success: false, error: 'Forbidden' };
+
+    const validated = CancelBookingSchema.parse(data);
+    await connectDB();
+
+    const booking = await BookingModel.findById(validated.bookingId);
+    if (!booking) return { success: false, error: 'Booking not found' };
+    if (booking.status === 'CANCELLED') return { success: false, error: 'Booking is already cancelled' };
+
+    booking.status = 'CANCELLED';
+    if (validated.reason) booking.rejectionReason = validated.reason;
+    booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
+    await booking.save();
+
+    return { success: true, data: JSON.parse(JSON.stringify(booking)) };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: `Validation error: ${error.issues[0].message}` };
+    }
+    console.error('Error cancelling booking:', error);
+    return { success: false, error: 'Failed to cancel booking' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// GET ALL BOOKINGS (admin — auth guarded)
+// ----------------------------------------------------------------------------
+
+export async function getAdminBookings() {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, data: [], error: 'Unauthorized' };
+    const role = (session.user as any).role;
+    if (role !== 'ADMIN' && role !== 'SHIPPING_PLANNER') return { success: false, data: [], error: 'Forbidden' };
+
+    await connectDB();
+
+    const bookings = await BookingModel.find({})
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return { success: true, data: JSON.parse(JSON.stringify(bookings)) };
+  } catch (error) {
+    console.error('Error fetching admin bookings:', error);
+    return { success: false, data: [], error: 'Failed to fetch bookings' };
   }
 }
 

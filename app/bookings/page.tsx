@@ -79,7 +79,7 @@ export default async function BookingsPage() {
 
   return (
     <AppShell>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', minWidth: 0, width: '100%' }}>
         <BookingsClient
           bookings={displayBookings}
           voyageNumbers={voyageNumbers}

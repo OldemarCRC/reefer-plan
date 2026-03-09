@@ -8,13 +8,14 @@ import { getAdminVessels } from '@/app/actions/vessel';
 import { getUsers } from '@/app/actions/user';
 import { getPorts, getUnecePorts } from '@/app/actions/port';
 import { getShippers } from '@/app/actions/shipper';
+import { getAdminBookings } from '@/app/actions/booking';
 import AdminClient from './AdminClient';
 import type { DisplayContract } from '@/app/contracts/ContractsClient';
 
 export const metadata = { title: 'Admin — Reefer Planner' };
 
 export default async function AdminPage() {
-  const [voyagesResult, contractsRes, officesRes, servicesRes, plansRes, vesselsRes, usersRes, portsRes, shippersRes, unecePortsRes] = await Promise.all([
+  const [voyagesResult, contractsRes, officesRes, servicesRes, plansRes, vesselsRes, usersRes, portsRes, shippersRes, unecePortsRes, bookingsRes] = await Promise.all([
     getAdminVoyages(),
     getContracts(),
     getOffices(),
@@ -25,6 +26,7 @@ export default async function AdminPage() {
     getPorts(),
     getShippers(),
     getUnecePorts(),
+    getAdminBookings(),
   ]);
 
   const voyages  = voyagesResult.success ? voyagesResult.data : [];
@@ -37,6 +39,7 @@ export default async function AdminPage() {
   const ports    = portsRes.success     ? portsRes.data     : [];
   const shippers   = shippersRes.success   ? shippersRes.data   : [];
   const unecePorts = unecePortsRes.success ? unecePortsRes.data : [];
+  const bookings   = bookingsRes.success   ? bookingsRes.data   : [];
 
   const displayContracts: DisplayContract[] = contracts.map((c: any) => {
     const legacyCps = c.client?.type === 'SHIPPER' ? c.consignees : c.shippers;
@@ -85,6 +88,7 @@ export default async function AdminPage() {
         ports={ports}
         shippers={shippers}
         unecePorts={unecePorts}
+        bookings={bookings}
       />
     </AppShell>
   );
