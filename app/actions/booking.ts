@@ -305,7 +305,7 @@ export async function rejectBooking(data: unknown) {
     }
 
     booking.status = 'REJECTED';
-    booking.rejectionReason = validated.rejectionReason;
+    booking.rejectionReason = validated.rejectionReason.trim();
     booking.confirmedDate = new Date();
     booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
     await booking.save();
@@ -496,13 +496,17 @@ export async function updateBooking(bookingId: unknown, updates: Record<string, 
 // Filters bookings where shipper.code matches the user's shipperCode
 // ----------------------------------------------------------------------------
 
-export async function getBookingsByShipperCode(code: string) {
+export async function getBookingsByShipperCode(code: string, shipperId?: string) {
   try {
-    if (!code) return { success: false, data: [], error: 'Shipper code is required' };
+    if (!code && !shipperId) return { success: false, data: [], error: 'Shipper code is required' };
 
     await connectDB();
 
-    const bookings = await BookingModel.find({ 'shipper.code': code })
+    const query = shipperId
+      ? { $or: [{ shipperId }, { 'shipper.code': code }] }
+      : { 'shipper.code': code };
+
+    const bookings = await BookingModel.find(query)
       .sort({ createdAt: -1 })
       .lean();
 

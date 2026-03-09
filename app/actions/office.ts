@@ -8,6 +8,7 @@
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
 import { OfficeModel } from '@/lib/db/schemas';
+import { toTitleCase, toLower } from '@/lib/utils/normalize';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -113,7 +114,13 @@ export async function createOffice(data: unknown) {
       return { success: false, error: `Office with code ${validated.code} already exists` };
     }
 
-    const office = await OfficeModel.create(validated);
+    const office = await OfficeModel.create({
+      ...validated,
+      name:         toTitleCase(validated.name),
+      country:      toTitleCase(validated.country),
+      contactName:  validated.contactName  ? toTitleCase(validated.contactName)  : undefined,
+      contactEmail: validated.contactEmail ? toLower(validated.contactEmail)     : undefined,
+    });
     return {
       success: true,
       data: JSON.parse(JSON.stringify(office)),
@@ -138,9 +145,15 @@ export async function updateOffice(officeId: unknown, data: unknown) {
     const validated = UpdateOfficeSchema.parse(data);
     await connectDB();
 
+    const normalizedUpdate: Record<string, any> = { ...validated };
+    if (validated.name         !== undefined) normalizedUpdate.name         = toTitleCase(validated.name);
+    if (validated.country      !== undefined) normalizedUpdate.country      = toTitleCase(validated.country);
+    if (validated.contactName  !== undefined) normalizedUpdate.contactName  = validated.contactName ? toTitleCase(validated.contactName) : undefined;
+    if (validated.contactEmail !== undefined) normalizedUpdate.contactEmail = validated.contactEmail ? toLower(validated.contactEmail) : undefined;
+
     const office = await OfficeModel.findByIdAndUpdate(
       id,
-      { $set: validated },
+      { $set: normalizedUpdate },
       { new: true, runValidators: true }
     );
 

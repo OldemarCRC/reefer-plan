@@ -9,9 +9,10 @@ import BookingsClient from './BookingsClient';
 export default async function ShipperBookingsPage() {
   const session = await auth();
   const shipperCode = (session?.user as any)?.shipperCode as string | null;
+  const shipperId   = (session?.user as any)?.shipperId   as string | null;
 
-  const result = shipperCode
-    ? await getBookingsByShipperCode(shipperCode)
+  const result = (shipperCode || shipperId)
+    ? await getBookingsByShipperCode(shipperCode ?? '', shipperId ?? undefined)
     : { success: true, data: [] };
 
   return (

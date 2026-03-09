@@ -56,6 +56,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             name: (user as any).name as string,
             role: (user as any).role,
             shipperCode: (user as any).shipperCode ?? null,
+            shipperId: (user as any).shipperId?.toString() ?? null,
             sessionVersion,
           } as any;
         } catch (err) {
@@ -78,6 +79,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.email          = user.email;
         token.role           = (user as any).role;
         token.shipperCode    = (user as any).shipperCode ?? null;
+        token.shipperId      = (user as any).shipperId ?? null;
         token.sessionVersion = (user as any).sessionVersion;
         // Record the absolute login time for the hard 8-hour limit.
         token.loginAt        = Date.now();

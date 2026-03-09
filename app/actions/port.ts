@@ -9,6 +9,7 @@ import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
 import { PortModel, UnecePortModel } from '@/lib/db/schemas';
 import { auth } from '@/auth';
+import { toTitleCase } from '@/lib/utils/normalize';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -79,9 +80,9 @@ export async function createPort(input: unknown) {
     const port = await PortModel.create({
       unlocode:    data.unlocode,
       countryCode: data.countryCode,
-      country:     data.country.trim(),
-      portName:    data.portName.trim(),
-      weatherCity: data.weatherCity.trim(),
+      country:     toTitleCase(data.country),
+      portName:    toTitleCase(data.portName),
+      weatherCity: toTitleCase(data.weatherCity),
       latitude:    data.latitude,
       longitude:   data.longitude,
       active:      true,
@@ -121,10 +122,10 @@ export async function updatePort(id: unknown, input: unknown) {
     await connectDB();
 
     const update: Record<string, any> = {};
-    if (data.portName    !== undefined) update.portName    = data.portName.trim();
-    if (data.country     !== undefined) update.country     = data.country.trim();
+    if (data.portName    !== undefined) update.portName    = toTitleCase(data.portName);
+    if (data.country     !== undefined) update.country     = toTitleCase(data.country);
     if (data.countryCode !== undefined) update.countryCode = data.countryCode;
-    if (data.weatherCity !== undefined) update.weatherCity = data.weatherCity.trim();
+    if (data.weatherCity !== undefined) update.weatherCity = toTitleCase(data.weatherCity);
     if (data.latitude    !== undefined) update.latitude    = data.latitude;
     if (data.longitude   !== undefined) update.longitude   = data.longitude;
     if (data.active      !== undefined) update.active      = data.active;

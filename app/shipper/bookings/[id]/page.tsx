@@ -46,6 +46,7 @@ function countryFlag(country: string) {
 export default async function BookingDetailPage({ params }: { params: { id: string } }) {
   const session = await auth();
   const shipperCode = (session?.user as any)?.shipperCode as string | null;
+  const shipperId   = (session?.user as any)?.shipperId   as string | null;
 
   const result = await getBookingById(params.id);
   if (!result.success || !result.data) {
@@ -54,8 +55,11 @@ export default async function BookingDetailPage({ params }: { params: { id: stri
 
   const booking = result.data;
 
-  // Security: ensure the booking belongs to this shipper
-  if (shipperCode && booking.shipper?.code !== shipperCode) {
+  // Security: ensure the booking belongs to this shipper (by shipperId or shipperCode)
+  const matchesShipper =
+    (shipperId && booking.shipperId?.toString() === shipperId) ||
+    (shipperCode && booking.shipper?.code === shipperCode);
+  if ((shipperCode || shipperId) && !matchesShipper) {
     notFound();
   }
 

@@ -32,8 +32,9 @@ function countryFlag(country: string) {
 export default async function ShipperDashboardPage() {
   const session = await auth();
   const shipperCode = (session?.user as any)?.shipperCode as string | null;
+  const shipperId   = (session?.user as any)?.shipperId   as string | null;
 
-  if (!shipperCode) {
+  if (!shipperCode && !shipperId) {
     return (
       <div>
         <div className={styles.pageHeader}>
@@ -41,15 +42,14 @@ export default async function ShipperDashboardPage() {
         </div>
         <div className={styles.detailCard}>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
-            Your account has not been linked to a shipper code yet.
-            Please contact your shipping coordinator to complete account setup.
+            Your account is not linked to a shipper. Contact your administrator.
           </p>
         </div>
       </div>
     );
   }
 
-  const result = await getShipperDashboard(shipperCode);
+  const result = await getShipperDashboard(shipperCode ?? '', shipperId ?? undefined);
   if (!result.success || !result.data) {
     return <div className={styles.emptyState}><p>Failed to load dashboard.</p></div>;
   }

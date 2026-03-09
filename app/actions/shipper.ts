@@ -8,6 +8,7 @@
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
 import { BookingModel, VoyageModel, ServiceModel, ShipperModel } from '@/lib/db/schemas';
+import { toTitleCase, toUpperCode, toLower } from '@/lib/utils/normalize';
 
 // ============================================================================
 // SHIPPER CRUD
@@ -35,8 +36,12 @@ export async function createShipper(data: unknown) {
     }
 
     const shipper = await ShipperModel.create({
-      ...validated,
-      code: validated.code.toUpperCase(),
+      name:    toTitleCase(validated.name),
+      code:    toUpperCode(validated.code),
+      contact: toTitleCase(validated.contact),
+      email:   toLower(validated.email),
+      phone:   validated.phone?.trim(),
+      country: toTitleCase(validated.country),
     });
 
     return { success: true, data: JSON.parse(JSON.stringify(shipper)) };
@@ -89,16 +94,23 @@ export async function updateShipper(id: string, data: unknown) {
     await connectDB();
 
     if (validated.code) {
-      validated.code = validated.code.toUpperCase();
+      validated.code = toUpperCode(validated.code);
       const conflict = await ShipperModel.findOne({ code: validated.code, _id: { $ne: id } });
       if (conflict) {
         return { success: false, error: `Shipper code ${validated.code} already exists` };
       }
     }
 
+    const normalizedUpdate: Record<string, any> = { ...validated };
+    if (validated.name)    normalizedUpdate.name    = toTitleCase(validated.name);
+    if (validated.contact) normalizedUpdate.contact = toTitleCase(validated.contact);
+    if (validated.email)   normalizedUpdate.email   = toLower(validated.email);
+    if (validated.country) normalizedUpdate.country = toTitleCase(validated.country);
+    if (validated.phone !== undefined) normalizedUpdate.phone = validated.phone?.trim();
+
     const shipper = await ShipperModel.findByIdAndUpdate(
       id,
-      { $set: validated },
+      { $set: normalizedUpdate },
       { new: true, runValidators: true }
     );
 
@@ -134,13 +146,17 @@ export async function deactivateShipper(id: string) {
 // Summary cards + upcoming voyages + last 5 bookings
 // ----------------------------------------------------------------------------
 
-export async function getShipperDashboard(shipperCode: string) {
-  if (!shipperCode) return { success: false, error: 'Shipper code required' };
+export async function getShipperDashboard(shipperCode: string, shipperId?: string) {
+  if (!shipperCode && !shipperId) return { success: false, error: 'Shipper code required' };
 
   try {
     await connectDB();
 
-    const bookings = await BookingModel.find({ 'shipper.code': shipperCode })
+    const query = shipperId
+      ? { $or: [{ shipperId }, { 'shipper.code': shipperCode }] }
+      : { 'shipper.code': shipperCode };
+
+    const bookings = await BookingModel.find(query)
       .sort({ createdAt: -1 })
       .lean();
 
@@ -286,8 +302,8 @@ export async function getShipperSchedules() {
 
 import { ContractModel } from '@/lib/db/schemas';
 
-export async function getContractsForShipper(shipperCode: string) {
-  if (!shipperCode) return { success: false, data: [], error: 'Shipper code required' };
+export async function getContractsForShipper(shipperCode: string, shipperId?: string) {
+  if (!shipperCode && !shipperId) return { success: false, data: [], error: 'Shipper code required' };
 
   try {
     await connectDB();
@@ -296,13 +312,18 @@ export async function getContractsForShipper(shipperCode: string) {
     // - new counterparties[] (shipperCode field)
     // - legacy shippers[] (code field)
     // - client itself (SHIPPER type + clientNumber = shipperCode)
+    const orConditions: any[] = [
+      { 'counterparties.shipperCode': shipperCode },
+      { 'shippers.code': shipperCode },
+      { 'client.type': 'SHIPPER', 'client.clientNumber': shipperCode },
+    ];
+    if (shipperId) {
+      orConditions.push({ 'counterparties.shipperId': shipperId });
+    }
+
     const contracts = await ContractModel.find({
       active: true,
-      $or: [
-        { 'counterparties.shipperCode': shipperCode },
-        { 'shippers.code': shipperCode },
-        { 'client.type': 'SHIPPER', 'client.clientNumber': shipperCode },
-      ],
+      $or: orConditions,
     })
       .populate('serviceId', 'serviceCode serviceName shortCode portRotation cycleDurationWeeks')
       .lean();

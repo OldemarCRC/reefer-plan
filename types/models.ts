@@ -664,6 +664,8 @@ export interface User {
   company?: string;
   port?: string;
   canSendEmailsToCaptains?: boolean;
+  shipperCode?: string;
+  shipperId?: string;
   createdAt: Date;
   updatedAt: Date;
 }

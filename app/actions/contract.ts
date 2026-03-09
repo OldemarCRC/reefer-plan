@@ -10,6 +10,7 @@ import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
 import { ContractModel, ServiceModel, OfficeModel, ShipperModel, BookingModel } from '@/lib/db/schemas';
 import { auth } from '@/auth';
+import { toTitleCase, toLower } from '@/lib/utils/normalize';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -168,6 +169,10 @@ export async function createContract(data: unknown) {
       officeCode: office.code,
       client: {
         ...validated.client,
+        name:    toTitleCase(validated.client.name),
+        contact: toTitleCase(validated.client.contact),
+        email:   toLower(validated.client.email),
+        country: toTitleCase(validated.client.country),
         clientNumber,
       },
       cargoType: validated.cargoType,
@@ -216,7 +221,10 @@ export async function updateContract(contractId: unknown, updates: unknown) {
     const setFields: Record<string, any> = {};
     if (validated.client) {
       for (const [k, v] of Object.entries(validated.client)) {
-        if (v !== undefined) setFields[`client.${k}`] = v;
+        if (v === undefined) continue;
+        if (k === 'name' || k === 'contact' || k === 'country') setFields[`client.${k}`] = toTitleCase(v as string);
+        else if (k === 'email') setFields[`client.${k}`] = toLower(v as string);
+        else setFields[`client.${k}`] = v;
       }
     }
     if (validated.cargoType   !== undefined) setFields.cargoType   = validated.cargoType;

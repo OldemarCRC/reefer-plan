@@ -12,6 +12,7 @@ import connectDB from '@/lib/db/connect';
 import { UserModel } from '@/lib/db/schemas';
 import { sendUserConfirmationEmail } from '@/lib/email';
 import { auth } from '@/auth';
+import { toTitleCase, toUpperCode } from '@/lib/utils/normalize';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -29,6 +30,7 @@ const CreateUserSchema = z.object({
   port: z.string().max(50).optional(),
   canSendEmailsToCaptains: z.boolean().optional(),
   shipperCode: z.string().max(20).optional(),
+  shipperId: z.string().optional().nullable(),
 });
 
 const UpdateUserSchema = z.object({
@@ -38,6 +40,7 @@ const UpdateUserSchema = z.object({
   port: z.string().max(50).optional(),
   canSendEmailsToCaptains: z.boolean().optional(),
   shipperCode: z.string().max(20).optional().nullable(),
+  shipperId: z.string().optional().nullable(),
 });
 
 // ----------------------------------------------------------------------------
@@ -66,6 +69,7 @@ export async function getUsers() {
       port: u.port ?? '',
       canSendEmailsToCaptains: u.canSendEmailsToCaptains ?? false,
       shipperCode: u.shipperCode ?? '',
+      shipperId: u.shipperId?.toString() ?? null,
       emailConfirmed: u.emailConfirmed ?? false,
       lastLogin: u.lastLogin ? u.lastLogin.toISOString() : null,
       createdAt: u.createdAt ? u.createdAt.toISOString() : null,
@@ -104,12 +108,13 @@ export async function createUser(input: unknown) {
 
     const user = await UserModel.create({
       email: normalizedEmail,
-      name: data.name.trim(),
+      name: toTitleCase(data.name),
       role: data.role,
-      company: data.company?.trim() ?? '',
+      company: data.company ? toTitleCase(data.company) : '',
       port: data.port?.trim() ?? '',
       canSendEmailsToCaptains: data.canSendEmailsToCaptains ?? false,
-      shipperCode: data.shipperCode?.trim() ?? '',
+      shipperCode: data.shipperCode ? toUpperCode(data.shipperCode) : '',
+      shipperId: data.shipperId || undefined,
       emailConfirmToken,
       emailConfirmed: false,
     });
@@ -136,6 +141,7 @@ export async function createUser(input: unknown) {
         port: user.port ?? '',
         canSendEmailsToCaptains: user.canSendEmailsToCaptains ?? false,
         shipperCode: (user as any).shipperCode ?? '',
+        shipperId: (user as any).shipperId?.toString() ?? null,
         emailConfirmed: false,
         lastLogin: null,
         createdAt: user.createdAt?.toISOString() ?? null,
@@ -167,12 +173,13 @@ export async function updateUser(id: unknown, input: unknown) {
     await connectDB();
 
     const update: Record<string, any> = {};
-    if (data.name !== undefined) update.name = data.name.trim();
+    if (data.name !== undefined) update.name = toTitleCase(data.name);
     if (data.role !== undefined) update.role = data.role;
-    if (data.company !== undefined) update.company = data.company.trim();
+    if (data.company !== undefined) update.company = data.company ? toTitleCase(data.company) : '';
     if (data.port !== undefined) update.port = data.port.trim();
     if (data.canSendEmailsToCaptains !== undefined) update.canSendEmailsToCaptains = data.canSendEmailsToCaptains;
-    if (data.shipperCode !== undefined) update.shipperCode = data.shipperCode?.trim() ?? '';
+    if (data.shipperCode !== undefined) update.shipperCode = data.shipperCode ? toUpperCode(data.shipperCode) : '';
+    if (data.shipperId !== undefined) update.shipperId = data.shipperId || null;
 
     const user = await UserModel.findByIdAndUpdate(userId, update, { new: true }).lean() as any;
     if (!user) return { success: false, error: 'User not found' };
@@ -188,6 +195,7 @@ export async function updateUser(id: unknown, input: unknown) {
         port: user.port ?? '',
         canSendEmailsToCaptains: user.canSendEmailsToCaptains ?? false,
         shipperCode: user.shipperCode ?? '',
+        shipperId: user.shipperId?.toString() ?? null,
         emailConfirmed: user.emailConfirmed ?? false,
         lastLogin: user.lastLogin ? user.lastLogin.toISOString() : null,
         createdAt: user.createdAt ? user.createdAt.toISOString() : null,
