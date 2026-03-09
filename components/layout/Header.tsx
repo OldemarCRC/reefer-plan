@@ -20,6 +20,13 @@ const routeLabels: Record<string, string> = {
   vessels: 'Vessels',
   bookings: 'Bookings',
   'stowage-plans': 'Stowage Plans',
+  admin: 'Admin',
+  contracts: 'Contracts',
+};
+
+// Override href for certain segments (e.g. 'contracts' lives under /admin?tab=contracts)
+const routeHrefOverrides: Record<string, string> = {
+  contracts: '/admin?tab=contracts',
 };
 
 function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
@@ -35,7 +42,8 @@ function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
   for (const segment of segments) {
     path += `/${segment}`;
     const label = routeLabels[segment] || formatSegment(segment);
-    crumbs.push({ label, href: path });
+    const href = routeHrefOverrides[segment] ?? path;
+    crumbs.push({ label, href });
   }
 
   return crumbs;

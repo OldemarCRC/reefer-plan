@@ -14,7 +14,11 @@ import type { DisplayContract } from '@/app/contracts/ContractsClient';
 
 export const metadata = { title: 'Admin — Reefer Planner' };
 
-export default async function AdminPage() {
+const VALID_TABS = ['voyages','contracts','plans','vessels','services','users','ports','shippers','offices','bookings'];
+
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const { tab } = await searchParams;
+  const initialTab = VALID_TABS.includes(tab ?? '') ? tab! : 'voyages';
   const [voyagesResult, contractsRes, officesRes, servicesRes, plansRes, vesselsRes, usersRes, portsRes, shippersRes, unecePortsRes, bookingsRes] = await Promise.all([
     getAdminVoyages(),
     getContracts(),
@@ -89,6 +93,7 @@ export default async function AdminPage() {
         shippers={shippers}
         unecePorts={unecePorts}
         bookings={bookings}
+        initialTab={initialTab}
       />
     </AppShell>
   );

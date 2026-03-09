@@ -252,6 +252,42 @@ function fmtDate(d?: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Detail Panel helpers (shared across all tab detail views)
+// ---------------------------------------------------------------------------
+
+function DetailPanel({ onBack, title, actions, children }: {
+  onBack: () => void;
+  title: string;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={styles.detailPanel}>
+      <div className={styles.detailPanelHeader}>
+        <button className={styles.btnBack} onClick={onBack}>← Back</button>
+        <span className={styles.detailPanelTitle}>{title}</span>
+        {actions && <div className={styles.detailPanelHeaderActions}>{actions}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function DRow({ label, value, full, mono }: {
+  label: string;
+  value?: React.ReactNode;
+  full?: boolean;
+  mono?: boolean;
+}) {
+  return (
+    <div className={`${styles.detailField} ${full ? styles.detailFieldFull : ''}`}>
+      <span className={styles.detailLabel}>{label}</span>
+      <div className={`${styles.detailValue} ${mono ? styles.cellMono : ''}`}>{value ?? '—'}</div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Confirmation Modal
 // ---------------------------------------------------------------------------
 
@@ -356,6 +392,7 @@ function VoyagesTab({ initialVoyages }: { initialVoyages: AdminVoyage[] }) {
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [selectedVoyage, setSelectedVoyage] = useState<AdminVoyage | null>(null);
 
   const filtered = statusFilter === 'ALL'
     ? voyages
@@ -392,6 +429,34 @@ function VoyagesTab({ initialVoyages }: { initialVoyages: AdminVoyage[] }) {
       setErrorMsg(result.error ?? 'Operation failed');
     });
   };
+
+  if (selectedVoyage) {
+    return (
+      <div className={styles.tabContent}>
+        <DetailPanel
+          title={selectedVoyage.voyageNumber}
+          onBack={() => setSelectedVoyage(null)}
+          actions={
+            <Link href={`/voyages/${selectedVoyage._id}`} className={styles.btnSm} style={{ textDecoration: 'none' }}>
+              Open Voyage →
+            </Link>
+          }
+        >
+          <div className={styles.detailGrid}>
+            <DRow label="Voyage #" value={<code>{selectedVoyage.voyageNumber}</code>} />
+            <DRow label="Status" value={<StatusBadge status={selectedVoyage.status} />} />
+            <DRow label="Vessel" value={selectedVoyage.vesselId?.name} />
+            <DRow label="Service" value={selectedVoyage.serviceId?.serviceCode} />
+            <DRow label="Departure" value={fmtDate(selectedVoyage.departureDate)} />
+            <DRow label="Arrival" value={fmtDate(selectedVoyage.arrivalDate)} />
+            <DRow label="Week" value={selectedVoyage.weekNumber != null ? `WK${String(selectedVoyage.weekNumber).padStart(2, '0')}` : undefined} />
+            <DRow label="Stowage Plans" value={selectedVoyage.planCount} />
+            <DRow label="Bookings" value={selectedVoyage.bookingCount} />
+          </div>
+        </DetailPanel>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.tabContent}>
@@ -441,9 +506,9 @@ function VoyagesTab({ initialVoyages }: { initialVoyages: AdminVoyage[] }) {
                 const isCancelled = v.status === 'CANCELLED';
                 const canHardDelete = v.planCount === 0 && v.bookingCount === 0;
                 return (
-                  <tr key={v._id} className={isCancelled ? styles.rowCancelled : ''}>
+                  <tr key={v._id} className={`${isCancelled ? styles.rowCancelled : ''} ${styles.trClickable}`} onClick={() => setSelectedVoyage(v)}>
                     <td>
-                      <Link href={`/voyages/${v._id}`} className={styles.voyageLink}>
+                      <Link href={`/voyages/${v._id}`} className={styles.voyageLink} onClick={e => e.stopPropagation()}>
                         {v.voyageNumber}
                       </Link>
                       {v.weekNumber != null && (
@@ -464,7 +529,7 @@ function VoyagesTab({ initialVoyages }: { initialVoyages: AdminVoyage[] }) {
                       {!isCancelled && (
                         <button
                           className={styles.btnWarn}
-                          onClick={() => setConfirmAction({ type: 'cancel', voyage: v })}
+                          onClick={(e) => { e.stopPropagation(); setConfirmAction({ type: 'cancel', voyage: v }); }}
                           title="Soft cancel — keeps record for audit"
                         >
                           Cancel
@@ -472,7 +537,7 @@ function VoyagesTab({ initialVoyages }: { initialVoyages: AdminVoyage[] }) {
                       )}
                       <button
                         className={`${styles.btnDanger} ${!canHardDelete ? styles.btnBlocked : ''}`}
-                        onClick={() => setConfirmAction({ type: 'hard-delete', voyage: v })}
+                        onClick={(e) => { e.stopPropagation(); setConfirmAction({ type: 'hard-delete', voyage: v }); }}
                         title={canHardDelete
                           ? 'Permanently remove from database'
                           : `Blocked: ${v.planCount > 0 ? `${v.planCount} plan(s)` : ''}${v.planCount > 0 && v.bookingCount > 0 ? ', ' : ''}${v.bookingCount > 0 ? `${v.bookingCount} booking(s)` : ''} must be removed first`}
@@ -1174,6 +1239,43 @@ function VesselsTab({ initialVessels }: { initialVessels: AdminVessel[] }) {
   const [vessels, setVessels] = useState<AdminVessel[]>(initialVessels);
   const [showCreate, setShowCreate] = useState(false);
   const [editingVessel, setEditingVessel] = useState<AdminVessel | null>(null);
+  const [selectedVessel, setSelectedVessel] = useState<AdminVessel | null>(null);
+
+  if (selectedVessel) {
+    const zoneCount = selectedVessel.temperatureZones?.length ?? 0;
+    const sectionCount = selectedVessel.temperatureZones?.reduce((s, z) => s + z.coolingSections.length, 0) ?? 0;
+    return (
+      <div className={styles.tabContent}>
+        <DetailPanel
+          title={selectedVessel.name}
+          onBack={() => setSelectedVessel(null)}
+          actions={
+            <button className={styles.btnSm} onClick={() => setEditingVessel(selectedVessel)}>Edit</button>
+          }
+        >
+          <div className={styles.detailGrid}>
+            <DRow label="Vessel Name" value={selectedVessel.name} />
+            <DRow label="IMO Number" value={selectedVessel.imoNumber} mono />
+            <DRow label="Flag" value={selectedVessel.flag} />
+            <DRow label="Call Sign" value={selectedVessel.callSign} mono />
+            <DRow label="Built" value={selectedVessel.built} />
+            <DRow label="Voyages" value={selectedVessel.voyageCount} />
+            <DRow label="Total Pallets" value={selectedVessel.capacity?.totalPallets?.toLocaleString()} />
+            <DRow label="Total m²" value={selectedVessel.capacity?.totalSqm != null ? selectedVessel.capacity.totalSqm.toLocaleString() : undefined} />
+            <DRow label="Temperature Zones" value={zoneCount > 0 ? `${zoneCount} zones / ${sectionCount} sections` : undefined} />
+            <DRow label="Captain Email" value={selectedVessel.captainEmail} mono />
+          </div>
+        </DetailPanel>
+        {editingVessel && (
+          <EditVesselModal
+            vessel={editingVessel}
+            onClose={() => setEditingVessel(null)}
+            onUpdated={v => { setVessels(prev => prev.map(x => x._id === v._id ? v : x)); setSelectedVessel(v); setEditingVessel(null); }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={styles.tabContent}>
@@ -1209,9 +1311,9 @@ function VesselsTab({ initialVessels }: { initialVessels: AdminVessel[] }) {
                 const zoneCount = v.temperatureZones?.length ?? 0;
                 const sectionCount = v.temperatureZones?.reduce((s, z) => s + z.coolingSections.length, 0) ?? 0;
                 return (
-                  <tr key={v._id}>
+                  <tr key={v._id} className={styles.trClickable} onClick={() => setSelectedVessel(v)}>
                     <td>
-                      <Link href={`/vessels/${v._id}`} className={styles.voyageLink}>
+                      <Link href={`/vessels/${v._id}`} className={styles.voyageLink} onClick={e => e.stopPropagation()}>
                         {v.name}
                       </Link>
                     </td>
@@ -1237,7 +1339,7 @@ function VesselsTab({ initialVessels }: { initialVessels: AdminVessel[] }) {
                       {v.voyageCount}
                     </td>
                     <td className={styles.cellActions}>
-                      <button className={styles.btnSm} onClick={() => setEditingVessel(v)}>
+                      <button className={styles.btnSm} onClick={(e) => { e.stopPropagation(); setEditingVessel(v); }}>
                         Edit
                       </button>
                     </td>
@@ -1686,6 +1788,7 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
   const [editingService, setEditingService] = useState<AdminService | null>(null);
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [selectedService, setSelectedService] = useState<AdminService | null>(null);
 
   const confirmService = services.find(s => s._id === confirmId);
 
@@ -1721,6 +1824,65 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
       .map(p => p.portCode)
       .join(' → ');
 
+  if (selectedService) {
+    const sortedPorts = [...selectedService.portRotation].sort((a: any, b: any) => a.sequence - b.sequence);
+    return (
+      <div className={styles.tabContent}>
+        <DetailPanel
+          title={selectedService.serviceCode}
+          onBack={() => setSelectedService(null)}
+          actions={
+            <button className={styles.btnSm} onClick={() => setEditingService(selectedService)}>Edit</button>
+          }
+        >
+          <div className={styles.detailGrid}>
+            <DRow label="Service Code" value={<code>{selectedService.serviceCode}</code>} />
+            <DRow label="Short Code" value={selectedService.shortCode} mono />
+            <DRow label="Service Name" value={selectedService.serviceName} />
+            <DRow label="Frequency" value={selectedService.frequency} />
+            <DRow label="Cycle (weeks)" value={selectedService.cycleDurationWeeks} />
+            <DRow label="Status" value={
+              <span className={styles.badge} style={selectedService.active !== false
+                ? { background: 'var(--color-success-muted)', color: 'var(--color-success)' }
+                : { background: 'var(--color-danger-muted)', color: 'var(--color-danger)' }}>
+                {selectedService.active !== false ? 'ACTIVE' : 'INACTIVE'}
+              </span>
+            } />
+            {sortedPorts.length > 0 && (
+              <>
+                <div className={styles.detailSectionHeading}>Port Rotation ({sortedPorts.length} ports)</div>
+                <table className={styles.detailTable}>
+                  <thead>
+                    <tr><th>#</th><th>Code</th><th>Port Name</th><th>Country</th><th>Operations</th><th>Wk offset</th></tr>
+                  </thead>
+                  <tbody>
+                    {sortedPorts.map((p: any) => (
+                      <tr key={p.portCode + p.sequence}>
+                        <td>{p.sequence}</td>
+                        <td><code>{p.portCode}</code></td>
+                        <td>{p.portName}</td>
+                        <td>{p.country}</td>
+                        <td>{(p.operations || []).join(', ')}</td>
+                        <td>{p.weeksFromStart ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </div>
+        </DetailPanel>
+        {editingService && (
+          <EditServiceModal
+            service={editingService}
+            onClose={() => setEditingService(null)}
+            onUpdated={svc => { setServices(prev => prev.map(s => s._id === svc._id ? svc : s)); setSelectedService(svc); setEditingService(null); router.refresh(); }}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={styles.tabContent}>
       <div className={styles.toolbar}>
@@ -1751,7 +1913,7 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
               services.map(s => {
                 const isActive = s.active !== false;
                 return (
-                  <tr key={s._id} className={!isActive ? styles.rowCancelled : ''}>
+                  <tr key={s._id} className={`${!isActive ? styles.rowCancelled : ''} ${styles.trClickable}`} onClick={() => setSelectedService(s)}>
                     <td>
                       <span className={styles.modalVoyageNumber}>{s.serviceCode}</span>
                       {s.shortCode && (
@@ -1776,21 +1938,21 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
                     <td className={styles.cellActions}>
                       <button
                         className={styles.btnSm}
-                        onClick={() => setEditingService(s)}
+                        onClick={(e) => { e.stopPropagation(); setEditingService(s); }}
                       >
                         Edit
                       </button>
                       {isActive ? (
                         <button
                           className={styles.btnWarn}
-                          onClick={() => { setConfirmId(s._id); setErrorMsg(null); }}
+                          onClick={(e) => { e.stopPropagation(); setConfirmId(s._id); setErrorMsg(null); }}
                         >
                           Deactivate
                         </button>
                       ) : (
                         <button
                           className={styles.btnSuccess}
-                          onClick={() => handleActivate(s._id)}
+                          onClick={(e) => { e.stopPropagation(); handleActivate(s._id); }}
                           disabled={isPending}
                         >
                           Activate
@@ -2172,6 +2334,7 @@ function UsersTab({ initialUsers }: { initialUsers: AdminUser[] }) {
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
 
   const confirmUser = users.find(u => u._id === confirmId);
 
@@ -2201,6 +2364,48 @@ function UsersTab({ initialUsers }: { initialUsers: AdminUser[] }) {
   const roleLabel = (role: string) =>
     USER_ROLES.find(r => r.value === role)?.label ?? role;
 
+  if (selectedUser) {
+    return (
+      <div className={styles.tabContent}>
+        <DetailPanel
+          title={selectedUser.name}
+          onBack={() => setSelectedUser(null)}
+          actions={
+            <button className={styles.btnSm} onClick={() => setEditingUser(selectedUser)}>Edit</button>
+          }
+        >
+          <div className={styles.detailGrid}>
+            <DRow label="Full Name" value={selectedUser.name} />
+            <DRow label="Email" value={selectedUser.email} mono />
+            <DRow label="Role" value={
+              <span className={styles.badge} style={{
+                background: selectedUser.role === 'ADMIN' ? 'var(--color-warning-muted)' : 'var(--color-bg-tertiary)',
+                color: selectedUser.role === 'ADMIN' ? 'var(--color-warning)' : 'var(--color-text-secondary)',
+              }}>{roleLabel(selectedUser.role)}</span>
+            } />
+            <DRow label="Company" value={selectedUser.company} />
+            <DRow label="Port" value={selectedUser.port} />
+            <DRow label="Shipper Code" value={selectedUser.shipperCode} mono />
+            <DRow label="Email Status" value={
+              selectedUser.emailConfirmed
+                ? <span className={styles.badge} style={{ background: 'var(--color-success-muted)', color: 'var(--color-success)' }}>Confirmed</span>
+                : <span className={styles.badge} style={{ background: 'var(--color-warning-muted)', color: 'var(--color-warning)' }}>Pending</span>
+            } />
+            <DRow label="Last Login" value={selectedUser.lastLogin ? fmtDate(selectedUser.lastLogin) : undefined} />
+            <DRow label="Created" value={fmtDate(selectedUser.createdAt ?? undefined)} />
+          </div>
+        </DetailPanel>
+        {editingUser && (
+          <EditUserModal
+            user={editingUser}
+            onClose={() => setEditingUser(null)}
+            onUpdated={updated => { setUsers(prev => prev.map(u => u._id === updated._id ? updated : u)); setSelectedUser(updated); setEditingUser(null); }}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={styles.tabContent}>
       <div className={styles.toolbar}>
@@ -2229,7 +2434,7 @@ function UsersTab({ initialUsers }: { initialUsers: AdminUser[] }) {
               <tr><td colSpan={6} className={styles.emptyCell}>No users found.</td></tr>
             ) : (
               users.map(u => (
-                <tr key={u._id}>
+                <tr key={u._id} className={styles.trClickable} onClick={() => setSelectedUser(u)}>
                   <td>
                     <span style={{ fontWeight: 'var(--weight-medium)' }}>{u.name}</span>
                   </td>
@@ -2258,19 +2463,19 @@ function UsersTab({ initialUsers }: { initialUsers: AdminUser[] }) {
                     {!u.emailConfirmed && (
                       <button
                         className={styles.btnSm}
-                        onClick={() => handleResend(u._id)}
+                        onClick={(e) => { e.stopPropagation(); handleResend(u._id); }}
                         disabled={resendingId === u._id || isPending}
                         title="Resend invitation email"
                       >
                         {resendingId === u._id ? 'Sending…' : 'Resend'}
                       </button>
                     )}
-                    <button className={styles.btnSm} onClick={() => setEditingUser(u)}>
+                    <button className={styles.btnSm} onClick={(e) => { e.stopPropagation(); setEditingUser(u); }}>
                       Edit
                     </button>
                     <button
                       className={styles.btnDanger}
-                      onClick={() => { setConfirmId(u._id); setErrorMsg(null); }}
+                      onClick={(e) => { e.stopPropagation(); setConfirmId(u._id); setErrorMsg(null); }}
                     >
                       Delete
                     </button>
@@ -2592,6 +2797,7 @@ function PortsTab({ initialPorts, unecePorts }: { initialPorts: AdminPort[]; une
   const [editingPort, setEditingPort] = useState<AdminPort | null>(null);
   const [isImporting, startImport] = useTransition();
   const [importError, setImportError] = useState<string | null>(null);
+  const [selectedPort, setSelectedPort] = useState<AdminPort | null>(null);
 
   const handleImportAll = () => {
     if (!confirm(`This will DELETE all ${ports.length} current port records and re-import all ${unecePorts.length} ports from the UNECE master list. Continue?`)) return;
@@ -2606,6 +2812,43 @@ function PortsTab({ initialPorts, unecePorts }: { initialPorts: AdminPort[]; une
       }
     });
   };
+
+  if (selectedPort) {
+    return (
+      <div className={styles.tabContent}>
+        <DetailPanel
+          title={selectedPort.unlocode}
+          onBack={() => setSelectedPort(null)}
+          actions={
+            <button className={styles.btnSm} onClick={() => setEditingPort(selectedPort)}>Edit</button>
+          }
+        >
+          <div className={styles.detailGrid}>
+            <DRow label="UNLOCODE" value={<code>{selectedPort.unlocode}</code>} />
+            <DRow label="Country Code" value={selectedPort.countryCode} mono />
+            <DRow label="Port Name" value={selectedPort.portName} />
+            <DRow label="Country" value={selectedPort.country} />
+            <DRow label="Weather City" value={selectedPort.weatherCity} />
+            <DRow label="Latitude" value={selectedPort.latitude} />
+            <DRow label="Longitude" value={selectedPort.longitude} />
+            <DRow label="Status" value={
+              <span className={styles.badge} style={{
+                background: selectedPort.active ? 'var(--color-success-muted)' : 'var(--color-bg-tertiary)',
+                color: selectedPort.active ? 'var(--color-success)' : 'var(--color-text-tertiary)',
+              }}>{selectedPort.active ? 'Active' : 'Inactive'}</span>
+            } />
+          </div>
+        </DetailPanel>
+        {editingPort && (
+          <EditPortModal
+            port={editingPort}
+            onClose={() => setEditingPort(null)}
+            onUpdated={p => { setPorts(prev => prev.map(x => x._id === p._id ? p : x)); setSelectedPort(p); setEditingPort(null); router.refresh(); }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={styles.tabContent}>
@@ -2652,7 +2895,7 @@ function PortsTab({ initialPorts, unecePorts }: { initialPorts: AdminPort[]; une
           </thead>
           <tbody>
             {ports.map(p => (
-              <tr key={p._id} style={{ opacity: p.active ? 1 : 0.5 }}>
+              <tr key={p._id} style={{ opacity: p.active ? 1 : 0.5 }} className={styles.trClickable} onClick={() => setSelectedPort(p)}>
                 <td><code>{p.unlocode}</code></td>
                 <td>{p.portName}</td>
                 <td>{p.country}</td>
@@ -2666,7 +2909,7 @@ function PortsTab({ initialPorts, unecePorts }: { initialPorts: AdminPort[]; une
                   </span>
                 </td>
                 <td>
-                  <button className={styles.btnSm} onClick={() => setEditingPort(p)}>Edit</button>
+                  <button className={styles.btnSm} onClick={(e) => { e.stopPropagation(); setEditingPort(p); }}>Edit</button>
                 </td>
               </tr>
             ))}
@@ -2864,6 +3107,7 @@ function ShippersTab({ initialShippers }: { initialShippers: AdminShipper[] }) {
   const [confirmDeactivate, setConfirmDeactivate] = useState<AdminShipper | null>(null);
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [selectedShipper, setSelectedShipper] = useState<AdminShipper | null>(null);
 
   const handleDeactivate = () => {
     if (!confirmDeactivate) return;
@@ -2879,6 +3123,42 @@ function ShippersTab({ initialShippers }: { initialShippers: AdminShipper[] }) {
       }
     });
   };
+
+  if (selectedShipper) {
+    return (
+      <div className={styles.tabContent}>
+        <DetailPanel
+          title={selectedShipper.name}
+          onBack={() => setSelectedShipper(null)}
+          actions={
+            <button className={styles.btnSm} onClick={() => setEditingShipper(selectedShipper)}>Edit</button>
+          }
+        >
+          <div className={styles.detailGrid}>
+            <DRow label="Company Name" value={selectedShipper.name} />
+            <DRow label="Code" value={<code>{selectedShipper.code}</code>} />
+            <DRow label="Country" value={selectedShipper.country} />
+            <DRow label="Contact Person" value={selectedShipper.contact} />
+            <DRow label="Email" value={selectedShipper.email} mono />
+            <DRow label="Phone" value={selectedShipper.phone} />
+            <DRow label="Status" value={
+              <span className={styles.badge} style={{
+                background: selectedShipper.active ? 'var(--color-success-muted)' : 'var(--color-bg-tertiary)',
+                color: selectedShipper.active ? 'var(--color-success)' : 'var(--color-text-tertiary)',
+              }}>{selectedShipper.active ? 'Active' : 'Inactive'}</span>
+            } />
+          </div>
+        </DetailPanel>
+        {editingShipper && (
+          <EditShipperModal
+            shipper={editingShipper}
+            onClose={() => setEditingShipper(null)}
+            onUpdated={s => { setShippers(prev => prev.map(x => x._id === s._id ? s : x)); setSelectedShipper(s); setEditingShipper(null); router.refresh(); }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={styles.tabContent}>
@@ -2904,7 +3184,7 @@ function ShippersTab({ initialShippers }: { initialShippers: AdminShipper[] }) {
           </thead>
           <tbody>
             {shippers.map(s => (
-              <tr key={s._id} style={{ opacity: s.active ? 1 : 0.5 }}>
+              <tr key={s._id} style={{ opacity: s.active ? 1 : 0.5 }} className={styles.trClickable} onClick={() => setSelectedShipper(s)}>
                 <td style={{ fontWeight: 'var(--weight-medium)' }}>{s.name}</td>
                 <td><code>{s.code}</code></td>
                 <td>{s.country}</td>
@@ -2919,9 +3199,9 @@ function ShippersTab({ initialShippers }: { initialShippers: AdminShipper[] }) {
                   </span>
                 </td>
                 <td className={styles.cellActions}>
-                  <button className={styles.btnSm} onClick={() => setEditingShipper(s)}>Edit</button>
+                  <button className={styles.btnSm} onClick={(e) => { e.stopPropagation(); setEditingShipper(s); }}>Edit</button>
                   {s.active && (
-                    <button className={styles.btnWarn} onClick={() => { setConfirmDeactivate(s); setErrorMsg(null); }}>Deactivate</button>
+                    <button className={styles.btnWarn} onClick={(e) => { e.stopPropagation(); setConfirmDeactivate(s); setErrorMsg(null); }}>Deactivate</button>
                   )}
                 </td>
               </tr>
@@ -3214,6 +3494,7 @@ function OfficesTab({ initialOffices }: { initialOffices: AdminOffice[] }) {
   const [confirmDeactivate, setConfirmDeactivate] = useState<AdminOffice | null>(null);
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [selectedOffice, setSelectedOffice] = useState<AdminOffice | null>(null);
 
   const handleDeactivate = () => {
     if (!confirmDeactivate) return;
@@ -3229,6 +3510,43 @@ function OfficesTab({ initialOffices }: { initialOffices: AdminOffice[] }) {
       }
     });
   };
+
+  if (selectedOffice) {
+    return (
+      <div className={styles.tabContent}>
+        <DetailPanel
+          title={`${selectedOffice.code} — ${selectedOffice.name}`}
+          onBack={() => setSelectedOffice(null)}
+          actions={
+            <button className={styles.btnSm} onClick={() => setEditingOffice(selectedOffice)}>Edit</button>
+          }
+        >
+          <div className={styles.detailGrid}>
+            <DRow label="Code" value={<code>{selectedOffice.code}</code>} />
+            <DRow label="Office Name" value={selectedOffice.name} />
+            <DRow label="Country" value={selectedOffice.country} />
+            <DRow label="Status" value={
+              <span className={styles.badge} style={{
+                background: selectedOffice.active ? 'var(--color-success-muted)' : 'var(--color-bg-tertiary)',
+                color: selectedOffice.active ? 'var(--color-success)' : 'var(--color-text-tertiary)',
+              }}>{selectedOffice.active ? 'Active' : 'Inactive'}</span>
+            } />
+            <DRow label="Contact Name" value={selectedOffice.contactName} />
+            <DRow label="Contact Email" value={selectedOffice.contactEmail} mono />
+            <DRow label="Contact Phone" value={selectedOffice.contactPhone} />
+            <DRow label="Created" value={fmtDate(selectedOffice.createdAt)} />
+          </div>
+        </DetailPanel>
+        {editingOffice && (
+          <EditOfficeModal
+            office={editingOffice}
+            onClose={() => setEditingOffice(null)}
+            onUpdated={o => { setOffices(prev => prev.map(x => x._id === o._id ? o : x)); setSelectedOffice(o); setEditingOffice(null); router.refresh(); }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={styles.tabContent}>
@@ -3253,7 +3571,7 @@ function OfficesTab({ initialOffices }: { initialOffices: AdminOffice[] }) {
           </thead>
           <tbody>
             {offices.map(o => (
-              <tr key={o._id} style={{ opacity: o.active ? 1 : 0.5 }}>
+              <tr key={o._id} style={{ opacity: o.active ? 1 : 0.5 }} className={styles.trClickable} onClick={() => setSelectedOffice(o)}>
                 <td><code style={{ fontFamily: 'monospace', fontWeight: 700 }}>{o.code}</code></td>
                 <td style={{ fontWeight: 'var(--weight-medium)' }}>{o.name}</td>
                 <td className={styles.cellSecondary}>{o.country}</td>
@@ -3272,11 +3590,11 @@ function OfficesTab({ initialOffices }: { initialOffices: AdminOffice[] }) {
                   </span>
                 </td>
                 <td className={styles.cellActions}>
-                  <button className={styles.btnSm} onClick={() => setEditingOffice(o)}>Edit</button>
+                  <button className={styles.btnSm} onClick={(e) => { e.stopPropagation(); setEditingOffice(o); }}>Edit</button>
                   {o.active && (
                     <button
                       className={styles.btnWarn}
-                      onClick={() => { setConfirmDeactivate(o); setErrorMsg(null); }}
+                      onClick={(e) => { e.stopPropagation(); setConfirmDeactivate(o); setErrorMsg(null); }}
                     >
                       Deactivate
                     </button>
@@ -3371,10 +3689,17 @@ interface AdminClientProps {
   shippers: AdminShipper[];
   unecePorts: UnecePort[];
   bookings: AdminBooking[];
+  initialTab?: string;
 }
 
-export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports, shippers, unecePorts, bookings }: AdminClientProps) {
-  const [activeTab, setActiveTab] = useState<Tab>('voyages');
+export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports, shippers, unecePorts, bookings, initialTab = 'voyages' }: AdminClientProps) {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<Tab>((initialTab as Tab) || 'voyages');
+
+  const handleTabChange = (tab: Tab) => {
+    setActiveTab(tab);
+    router.replace(`/admin?tab=${tab}`, { scroll: false });
+  };
 
   return (
     <div className={styles.page}>
@@ -3394,7 +3719,7 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
           <button
             key={t.id}
             className={`${styles.tabBtn} ${activeTab === t.id ? styles['tabBtn--active'] : ''}`}
-            onClick={() => setActiveTab(t.id)}
+            onClick={() => handleTabChange(t.id)}
           >
             {t.label}
           </button>
@@ -3432,6 +3757,7 @@ function BookingsTab({ initialBookings }: { initialBookings: AdminBooking[] }) {
   const [approveTarget, setApproveTarget] = useState<AdminBooking | null>(null);
   const [rejectTarget, setRejectTarget] = useState<AdminBooking | null>(null);
   const [cancelTarget, setCancelTarget] = useState<AdminBooking | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<AdminBooking | null>(null);
 
   const voyageNumbers = useMemo(
     () => [...new Set(bookings.map((b: any) => b.voyageNumber).filter(Boolean))].sort() as string[],
@@ -3445,6 +3771,66 @@ function BookingsTab({ initialBookings }: { initialBookings: AdminBooking[] }) {
       return true;
     });
   }, [bookings, statusFilter, voyageFilter]);
+
+  if (selectedBooking) {
+    const b = selectedBooking;
+    return (
+      <div className={styles.tabContent}>
+        <DetailPanel
+          title={b.bookingNumber}
+          onBack={() => setSelectedBooking(null)}
+          actions={
+            <>
+              {(b.status === 'PENDING' || b.status === 'PARTIAL') && (
+                <>
+                  <button className={styles.btnSm} onClick={() => setApproveTarget(b)}>Approve</button>
+                  <button className={styles.btnWarn} onClick={() => setRejectTarget(b)}>Reject</button>
+                </>
+              )}
+              {b.status !== 'CANCELLED' && b.status !== 'REJECTED' && (
+                <button className={styles.btnDanger} onClick={() => setCancelTarget(b)}>Cancel</button>
+              )}
+            </>
+          }
+        >
+          <div className={styles.detailGrid}>
+            <DRow label="Booking #" value={<code>{b.bookingNumber}</code>} />
+            <DRow label="Status" value={<BookingStatusBadge status={b.status} />} />
+            <DRow label="Voyage" value={b.voyageNumber} />
+            <DRow label="Created" value={fmtDate(b.createdAt)} />
+            <DRow label="Shipper Name" value={b.shipper?.name} />
+            <DRow label="Shipper Code" value={b.shipper?.code} mono />
+            <DRow label="Consignee Name" value={b.consignee?.name} />
+            <DRow label="Consignee Code" value={b.consignee?.code} mono />
+            <DRow label="Cargo Type" value={fmtCargo(b.cargoType || '')} />
+            <DRow label="Requested Qty" value={b.requestedQuantity} />
+            <DRow label="Confirmed Qty" value={b.confirmedQuantity > 0 ? b.confirmedQuantity : undefined} />
+          </div>
+        </DetailPanel>
+        {approveTarget && (
+          <AdminApproveModal
+            booking={approveTarget}
+            onClose={() => setApproveTarget(null)}
+            onDone={updated => { setBookings(prev => prev.map(x => x._id === updated._id ? updated : x)); setSelectedBooking(updated); setApproveTarget(null); router.refresh(); }}
+          />
+        )}
+        {rejectTarget && (
+          <AdminRejectModal
+            booking={rejectTarget}
+            onClose={() => setRejectTarget(null)}
+            onDone={updated => { setBookings(prev => prev.map(x => x._id === updated._id ? updated : x)); setSelectedBooking(updated); setRejectTarget(null); router.refresh(); }}
+          />
+        )}
+        {cancelTarget && (
+          <AdminCancelModal
+            booking={cancelTarget}
+            onClose={() => setCancelTarget(null)}
+            onDone={updated => { setBookings(prev => prev.map(x => x._id === updated._id ? updated : x)); setSelectedBooking(updated); setCancelTarget(null); router.refresh(); }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={styles.tabContent}>
@@ -3498,7 +3884,7 @@ function BookingsTab({ initialBookings }: { initialBookings: AdminBooking[] }) {
               <tr><td colSpan={10} className={styles.emptyCell}>No bookings match the current filters.</td></tr>
             ) : (
               filtered.map((b: any) => (
-                <tr key={b._id}>
+                <tr key={b._id} className={styles.trClickable} onClick={() => setSelectedBooking(b)}>
                   <td className={styles.cellMono}>{b.bookingNumber}</td>
                   <td className={styles.cellSecondary}>{b.voyageNumber || '—'}</td>
                   <td>{b.shipper?.name || '—'}</td>
@@ -3518,14 +3904,14 @@ function BookingsTab({ initialBookings }: { initialBookings: AdminBooking[] }) {
                       <>
                         <button
                           className={styles.btnSm}
-                          onClick={() => setApproveTarget(b)}
+                          onClick={(e) => { e.stopPropagation(); setApproveTarget(b); }}
                           title="Approve booking"
                         >
                           Approve
                         </button>
                         <button
                           className={styles.btnWarn}
-                          onClick={() => setRejectTarget(b)}
+                          onClick={(e) => { e.stopPropagation(); setRejectTarget(b); }}
                           title="Reject booking"
                         >
                           Reject
@@ -3535,7 +3921,7 @@ function BookingsTab({ initialBookings }: { initialBookings: AdminBooking[] }) {
                     {b.status !== 'CANCELLED' && b.status !== 'REJECTED' && (
                       <button
                         className={styles.btnDanger}
-                        onClick={() => setCancelTarget(b)}
+                        onClick={(e) => { e.stopPropagation(); setCancelTarget(b); }}
                         title="Cancel booking"
                       >
                         Cancel

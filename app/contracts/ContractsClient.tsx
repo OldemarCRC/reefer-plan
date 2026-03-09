@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useMemo, useTransition } from 'react';
+import { useState, useMemo, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createContract, updateContract, deactivateContract, activateContract } from '@/app/actions/contract';
+import { createContract, updateContract, deactivateContract, activateContract, getContractById } from '@/app/actions/contract';
+import ContractShippersPanel from '@/app/contracts/[id]/ContractShippersPanel';
 import styles from './page.module.css';
 import type { CargoType } from '@/types/models';
 
@@ -604,16 +605,27 @@ function EditContractModal({
   contract,
   offices,
   services,
+  shippers = [],
   onClose,
 }: {
   contract: DisplayContract;
   offices: OfficeOption[];
   services: ServiceOption[];
+  shippers?: ShipperOption[];
   onClose: () => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [counterparties, setCounterparties] = useState<any[]>([]);
+
+  useEffect(() => {
+    getContractById(contract._id).then(res => {
+      if (res.success && (res.data as any)?.counterparties) {
+        setCounterparties((res.data as any).counterparties);
+      }
+    });
+  }, [contract._id]);
 
   const [clientName, setClientName] = useState(contract.clientName);
   const [clientContact, setClientContact] = useState(contract.clientContact);
@@ -790,6 +802,20 @@ function EditContractModal({
             </div>
           </div>
         </div>
+
+        {/* Shippers / Counterparties section */}
+        {shippers.length > 0 && (
+          <>
+            <div className={styles.formDivider} />
+            <ContractShippersPanel
+              contractId={contract._id}
+              contractActive={contract.active !== false}
+              contractWeeklyPallets={contract.weeklyPallets}
+              counterparties={counterparties}
+              availableShippers={shippers.map(s => ({ id: s._id, name: s.name, code: s.code }))}
+            />
+          </>
+        )}
 
         {errorMsg && <div className={styles.modalError}>{errorMsg}</div>}
 
@@ -1012,6 +1038,7 @@ export default function ContractsClient({ contracts, offices, services, shippers
           contract={editContract}
           offices={offices}
           services={services}
+          shippers={shippers}
           onClose={() => setEditContract(null)}
         />
       )}
