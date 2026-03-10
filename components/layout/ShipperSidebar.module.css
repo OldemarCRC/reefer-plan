@@ -188,6 +188,13 @@
   opacity: 0;
 }
 
+/* --- Sign-out button (anchored outside scrollable nav) --- */
+
+.signOutBtn {
+  border-top: var(--border-subtle);
+  flex-shrink: 0;
+}
+
 /* --- User info at bottom --- */
 
 .userSection {
@@ -296,6 +303,10 @@
     transform: translateX(-100%);
     transition: transform var(--transition-normal);
     width: var(--sidebar-width) !important;
+    /* dvh accounts for mobile browser chrome (address bar, bottom nav);
+       falls back to vh on unsupported browsers */
+    height: 100vh;
+    height: 100dvh;
   }
 
   .sidebar--mobileOpen {

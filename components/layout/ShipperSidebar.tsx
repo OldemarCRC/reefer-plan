@@ -135,24 +135,24 @@ export default function ShipperSidebar({ collapsed, onToggle, mobileOpen = false
           </Link>
         ))}
 
-        <div style={{ flex: 1 }} />
-
-        <button
-          onClick={handleSignOut}
-          className={styles.navItem}
-          style={{ border: 'none', background: 'transparent', cursor: 'pointer', width: '100%', textAlign: 'left', color: 'var(--color-text-secondary)' }}
-          title={collapsed ? 'Sign out' : undefined}
-        >
-          <span className={styles.navIcon}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-          </span>
-          <span className={styles.navLabel}>Sign Out</span>
-        </button>
       </nav>
+
+      {/* Sign-out — anchored outside the scrollable nav */}
+      <button
+        onClick={handleSignOut}
+        className={`${styles.navItem} ${styles.signOutBtn}`}
+        style={{ border: 'none', background: 'transparent', cursor: 'pointer', width: '100%', textAlign: 'left', color: 'var(--color-text-secondary)' }}
+        title={collapsed ? 'Sign out' : undefined}
+      >
+        <span className={styles.navIcon}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+        </span>
+        <span className={styles.navLabel}>Sign Out</span>
+      </button>
 
       {/* User info */}
       <div className={styles.userSection}>
