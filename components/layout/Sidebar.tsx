@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import styles from './Sidebar.module.css';
 import { getPortWeather } from '@/app/actions/weather';
 import { getFleetStatus } from '@/app/actions/voyage';
@@ -93,13 +94,23 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', href: '/', icon: 'dashboard' },
-  { id: 'voyages', label: 'Voyages', href: '/voyages', icon: 'voyage' },
-  { id: 'vessels', label: 'Vessels', href: '/vessels', icon: 'vessel' },
-  { id: 'bookings', label: 'Bookings', href: '/bookings', icon: 'booking' },
-  { id: 'stowage-plans', label: 'Stowage Plans', href: '/stowage-plans', icon: 'stowagePlan' },
-  { id: 'admin', label: 'Admin', href: '/admin', icon: 'admin' },
+  { id: 'dashboard',     label: 'Dashboard',     href: '/',              icon: 'dashboard'   },
+  { id: 'voyages',       label: 'Voyages',        href: '/voyages',       icon: 'voyage'      },
+  { id: 'vessels',       label: 'Vessels',        href: '/vessels',       icon: 'vessel'      },
+  { id: 'bookings',      label: 'Bookings',       href: '/bookings',      icon: 'booking'     },
+  { id: 'stowage-plans', label: 'Stowage Plans',  href: '/stowage-plans', icon: 'stowagePlan' },
+  { id: 'admin',         label: 'Admin',          href: '/admin',         icon: 'admin'       },
 ];
+
+// Items visible to roles with read-only / limited access
+const LIMITED_ITEMS = new Set(['dashboard', 'voyages', 'stowage-plans']);
+
+function getVisibleItems(role: string | undefined): NavItem[] {
+  if (role === 'ADMIN') return navItems;
+  if (role === 'SHIPPING_PLANNER') return navItems.filter(i => i.id !== 'admin');
+  // STEVEDORE, CHECKER, VIEWER — and any unrecognized role (safe default)
+  return navItems.filter(i => LIMITED_ITEMS.has(i.id));
+}
 
 
 function tempClass(temp: number): string {
@@ -131,6 +142,9 @@ interface FleetStatus {
 
 export default function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProps) {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const role = (session?.user as any)?.role as string | undefined;
+  const visibleNavItems = getVisibleItems(role);
 
   const [portTemps, setPortTemps] = useState<PortTemp[]>([]);
   const [fleet, setFleet] = useState<FleetStatus | null>(null);
@@ -192,7 +206,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProp
       <nav className={styles.nav}>
         <div className={styles.navSectionLabel}>Planning</div>
 
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <Link
             key={item.id}
             href={item.href}
