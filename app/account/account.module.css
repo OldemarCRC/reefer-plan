@@ -23,8 +23,23 @@
   gap: var(--space-5);
 }
 
-@media (max-width: 640px) {
-  .grid { grid-template-columns: 1fr; }
+@media (max-width: 767px) {
+  .page {
+    padding: var(--space-4);
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .input {
+    min-height: 44px;
+  }
+
+  .btnSubmit {
+    width: 100%;
+    min-height: 44px;
+  }
 }
 
 .card {

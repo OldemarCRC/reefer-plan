@@ -58,14 +58,58 @@
   width: 100%;
 }
 
-/* Mobile: sidebar is collapsed by default — content fills full width */
+/* Hamburger toggle — hidden on desktop */
+.menuToggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.menuToggle:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+
+.menuToggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Backdrop overlay for mobile sidebar */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: calc(var(--z-sidebar) - 1);
+}
+
+/* Mobile: full-width content, hamburger visible, sidebar is overlay */
 @media (max-width: 767px) {
   .main,
   .main--collapsed {
     margin-left: 0;
   }
 
+  .header {
+    padding: 0 var(--space-3);
+    gap: var(--space-2);
+  }
+
   .content {
     padding: var(--space-4);
+    max-width: 100%;
+  }
+
+  .menuToggle {
+    display: flex;
   }
 }

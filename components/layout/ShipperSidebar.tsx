@@ -66,9 +66,10 @@ const navItems = [
 interface ShipperSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  mobileOpen?: boolean;
 }
 
-export default function ShipperSidebar({ collapsed, onToggle }: ShipperSidebarProps) {
+export default function ShipperSidebar({ collapsed, onToggle, mobileOpen = false }: ShipperSidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
 
@@ -85,7 +86,7 @@ export default function ShipperSidebar({ collapsed, onToggle }: ShipperSidebarPr
   }, []);
 
   return (
-    <aside className={`${styles.sidebar} ${collapsed ? styles['sidebar--collapsed'] : ''}`}>
+    <aside className={`${styles.sidebar} ${collapsed ? styles['sidebar--collapsed'] : ''} ${mobileOpen ? styles['sidebar--mobileOpen'] : ''}`}>
       {/* Brand */}
       <div className={styles.brand}>
         <div className={styles.brandIcon}>

@@ -289,3 +289,20 @@
   opacity: 0;
   width: 0;
 }
+
+/* Mobile: slide-in overlay sidebar */
+@media (max-width: 767px) {
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform var(--transition-normal);
+    width: var(--sidebar-width) !important;
+  }
+
+  .sidebar--mobileOpen {
+    transform: translateX(0);
+  }
+
+  .collapseBtn {
+    display: none;
+  }
+}

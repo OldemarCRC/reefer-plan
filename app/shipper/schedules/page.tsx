@@ -81,13 +81,13 @@ export default async function ShipperSchedulesPage() {
                     const ports = [...v.portCalls].sort((a: any, b: any) => a.sequence - b.sequence);
                     return (
                       <tr key={v._id}>
-                        <td className={styles.mono}>{v.voyageNumber}</td>
-                        <td style={{ color: 'var(--color-text-primary)', fontWeight: 'var(--weight-medium)' }}>
+                        <td data-label="Voyage" className={styles.mono}>{v.voyageNumber}</td>
+                        <td data-label="Vessel" style={{ color: 'var(--color-text-primary)', fontWeight: 'var(--weight-medium)' }}>
                           {v.vesselName}
                         </td>
-                        <td className={styles.mono}>{fmtDate(v.departureDate)}</td>
-                        <td>
-                          <div className={styles.portChain} style={{ flexWrap: 'nowrap' }}>
+                        <td data-label="Departure" className={styles.mono}>{fmtDate(v.departureDate)}</td>
+                        <td data-label="Port Rotation">
+                          <div className={styles.portChain}>
                             {ports.map((pc: any, i: number) => (
                               <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
@@ -105,7 +105,7 @@ export default async function ShipperSchedulesPage() {
                             ))}
                           </div>
                         </td>
-                        <td>
+                        <td data-label="Status">
                           <span className={styles.badge} style={{ background: vs.bg, color: vs.color }}>
                             {v.status.replace(/_/g, ' ')}
                           </span>

@@ -169,23 +169,23 @@ export default async function ShipperDashboardPage() {
                   const s = STATUS_COLORS[b.status] ?? STATUS_COLORS.CANCELLED;
                   return (
                     <tr key={b._id}>
-                      <td>
+                      <td data-label="Booking #">
                         <Link href={`/shipper/bookings/${b._id}`} className={styles.tableLink}>
                           {b.bookingNumber}
                         </Link>
                       </td>
-                      <td className={styles.mono}>{b.voyageNumber || '—'}</td>
-                      <td>{b.cargoType.replace(/_/g, ' ')}</td>
-                      <td className={styles.mono}>{b.requestedQuantity}</td>
-                      <td className={styles.mono}>{b.confirmedQuantity || '—'}</td>
-                      <td>
+                      <td data-label="Voyage" className={styles.mono}>{b.voyageNumber || '—'}</td>
+                      <td data-label="Cargo">{b.cargoType.replace(/_/g, ' ')}</td>
+                      <td data-label="Req." className={styles.mono}>{b.requestedQuantity}</td>
+                      <td data-label="Conf." className={styles.mono}>{b.confirmedQuantity || '—'}</td>
+                      <td data-label="Route">
                         <div className={styles.portRoute}>
                           <span>{b.pol?.portCode ?? '—'}</span>
                           <span className={styles.portArrow}>→</span>
                           <span>{b.pod?.portCode ?? '—'}</span>
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Status">
                         <span className={styles.badge} style={{ background: s.bg, color: s.color }}>
                           {b.status}
                         </span>

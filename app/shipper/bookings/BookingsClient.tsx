@@ -89,19 +89,7 @@ export default function BookingsClient({
             <option key={s} value={s}>{s === 'ALL' ? 'All Statuses' : s}</option>
           ))}
         </select>
-        <Link
-          href="/shipper/request"
-          style={{
-            padding: 'var(--space-2) var(--space-4)',
-            background: 'var(--color-blue)',
-            color: '#fff',
-            borderRadius: 'var(--radius-md)',
-            fontSize: 'var(--text-sm)',
-            fontWeight: 'var(--weight-semibold)',
-            textDecoration: 'none',
-            whiteSpace: 'nowrap',
-          }}
-        >
+        <Link href="/shipper/request" className={styles.filterNewBtn}>
           + New Request
         </Link>
       </div>
@@ -140,26 +128,26 @@ export default function BookingsClient({
                 const s = STATUS_COLORS[b.status] ?? STATUS_COLORS.CANCELLED;
                 return (
                   <tr key={b._id}>
-                    <td>
+                    <td data-label="Booking #">
                       <Link href={`/shipper/bookings/${b._id}`} className={styles.tableLink}>
                         {b.bookingNumber}
                       </Link>
                     </td>
-                    <td className={styles.mono}>{b.voyageNumber || '—'}</td>
-                    <td className={styles.mono}>{b.serviceCode}</td>
-                    <td>{b.cargoType.replace(/_/g, ' ')}</td>
-                    <td className={styles.mono}>{b.requestedQuantity}</td>
-                    <td className={styles.mono}>{b.confirmedQuantity || '—'}</td>
-                    <td className={styles.mono}>{b.standbyQuantity || '—'}</td>
-                    <td>
+                    <td data-label="Voyage" className={styles.mono}>{b.voyageNumber || '—'}</td>
+                    <td data-label="Service" className={styles.mono}>{b.serviceCode}</td>
+                    <td data-label="Cargo Type">{b.cargoType.replace(/_/g, ' ')}</td>
+                    <td data-label="Req." className={styles.mono}>{b.requestedQuantity}</td>
+                    <td data-label="Conf." className={styles.mono}>{b.confirmedQuantity || '—'}</td>
+                    <td data-label="Stby." className={styles.mono}>{b.standbyQuantity || '—'}</td>
+                    <td data-label="Route">
                       <div className={styles.portRoute}>
                         <span>{b.pol?.portCode ?? '—'}</span>
                         <span className={styles.portArrow}>→</span>
                         <span>{b.pod?.portCode ?? '—'}</span>
                       </div>
                     </td>
-                    <td className={styles.mono}>{fmtDate(b.requestedDate)}</td>
-                    <td>
+                    <td data-label="Requested" className={styles.mono}>{fmtDate(b.requestedDate)}</td>
+                    <td data-label="Status">
                       <span className={styles.badge} style={{ background: s.bg, color: s.color }}>
                         {b.status}
                       </span>

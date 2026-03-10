@@ -85,7 +85,7 @@ export default async function BookingDetailPage({ params }: { params: { id: stri
             ← My Bookings
           </Link>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+        <div className={styles.bookingDetailHeading}>
           <h1 className={styles.pageTitle} style={{ margin: 0 }}>{booking.bookingNumber}</h1>
           <span className={styles.badge} style={{ background: bookingStatus.bg, color: bookingStatus.color }}>
             {booking.status}
