@@ -386,7 +386,7 @@ export async function createVessel(input: unknown) {
       capacity: data.capacity,
       temperatureZones: zones,
       maxTemperatureZones: zones.length,
-      captainEmail: data.captainEmail?.trim() || undefined,
+      captainEmail: data.captainEmail ? data.captainEmail.trim().toLowerCase() : undefined,
       active: data.active !== false,
       holds: [],
     });
@@ -466,7 +466,7 @@ export async function updateVessel(id: unknown, input: unknown) {
         // so we must use $unset to actually clear the value in MongoDB.
         unset.captainEmail = 1;
       } else {
-        update.captainEmail = trimmed;
+        update.captainEmail = trimmed.toLowerCase();
       }
     }
     if (data.temperatureZones !== undefined) {

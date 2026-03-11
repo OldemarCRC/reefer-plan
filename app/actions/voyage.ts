@@ -107,11 +107,11 @@ export async function createVoyageFromWizard(data: unknown) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const voyage: any = await VoyageModel.create({
-      voyageNumber: validated.voyageNumber,
+      voyageNumber: validated.voyageNumber.toUpperCase().trim(),
       weekNumber: validated.weekNumber,
       serviceId: validated.serviceId,
       vesselId: validated.vesselId,
-      vesselName: validated.vesselName,
+      vesselName: validated.vesselName.trim().toUpperCase(),
       departureDate: new Date(validated.departureDate),
       estimatedArrivalDate,
       status: 'PLANNED',
