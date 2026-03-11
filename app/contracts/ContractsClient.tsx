@@ -803,14 +803,14 @@ function EditContractModal({
           </div>
         </div>
 
-        {/* Shippers / Counterparties section */}
-        {shippers.length > 0 && (
+        {/* Shippers / Counterparties section — CONSIGNEE contracts only */}
+        {shippers.length > 0 && contract.clientType === 'CONSIGNEE' && (
           <>
             <div className={styles.formDivider} />
             <ContractShippersPanel
               contractId={contract._id}
               contractActive={contract.active !== false}
-              contractWeeklyPallets={contract.weeklyPallets}
+              contractWeeklyPallets={parseInt(weeklyPallets) || contract.weeklyPallets}
               counterparties={counterparties}
               availableShippers={shippers.map(s => ({ id: s._id, name: s.name, code: s.code }))}
             />
