@@ -566,3 +566,123 @@
   border-color: var(--color-success);
   color: var(--color-success);
 }
+
+/* ============================================================================
+   CONTRACT DETAIL PANEL (admin inline view)
+   ============================================================================ */
+
+.detailPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.detailPanelHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: var(--border-subtle);
+  flex-wrap: wrap;
+}
+
+.btnBack {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  border: var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btnBack:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.detailPanelTitle {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  flex: 1;
+}
+
+.detailPanelActions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.detailField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-bg-secondary);
+  border: var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.detailFieldFull {
+  grid-column: 1 / -1;
+}
+
+.detailLabel {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.detailValue {
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+}
+
+.detailSectionHeading {
+  grid-column: 1 / -1;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-top: var(--space-2);
+  border-top: var(--border-subtle);
+}
+
+.btnOpenPage {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-blue-light);
+  background: var(--color-blue-muted, rgba(59, 130, 246, 0.1));
+  border: 1px solid var(--color-blue-muted, rgba(59, 130, 246, 0.2));
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+}
+
+.btnOpenPage:hover {
+  background: var(--color-blue);
+  color: white;
+  border-color: var(--color-blue);
+}

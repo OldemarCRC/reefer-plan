@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createContract, updateContract, deactivateContract, activateContract, getContractById } from '@/app/actions/contract';
 import ContractShippersPanel from '@/app/contracts/[id]/ContractShippersPanel';
 import styles from './page.module.css';
@@ -77,6 +78,8 @@ interface ContractsClientProps {
   offices: OfficeOption[];
   services: ServiceOption[];
   shippers?: ShipperOption[];
+  /** When true, row clicks open an inline detail panel instead of navigating to /contracts/[id] */
+  adminMode?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -834,7 +837,7 @@ function EditContractModal({
 // Main Component
 // ---------------------------------------------------------------------------
 
-export default function ContractsClient({ contracts, offices, services, shippers = [] }: ContractsClientProps) {
+export default function ContractsClient({ contracts, offices, services, shippers = [], adminMode = false }: ContractsClientProps) {
   const router = useRouter();
   const [searchText, setSearchText] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -843,6 +846,7 @@ export default function ContractsClient({ contracts, offices, services, shippers
   const [filterStatus, setFilterStatus] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [editContract, setEditContract] = useState<DisplayContract | null>(null);
+  const [selectedForDetail, setSelectedForDetail] = useState<DisplayContract | null>(null);
   const [isPending, startTransition] = useTransition();
   const [actionMsg, setActionMsg] = useState<{ id: string; text: string; ok: boolean } | null>(null);
 
@@ -889,6 +893,117 @@ export default function ContractsClient({ contracts, offices, services, shippers
       setActionMsg({ id: c._id, text: res.success ? `${c.contractNumber} activated` : (res.error ?? 'Failed'), ok: res.success });
       if (res.success) router.refresh();
     });
+  }
+
+  // --- Admin inline detail panel ---
+  if (adminMode && selectedForDetail) {
+    const c = selectedForDetail;
+    return (
+      <>
+        <div className={styles.detailPanel}>
+          <div className={styles.detailPanelHeader}>
+            <button className={styles.btnBack} onClick={() => setSelectedForDetail(null)}>← Back</button>
+            <span className={styles.detailPanelTitle}>{c.contractNumber}</span>
+            <div className={styles.detailPanelActions}>
+              <Link href={`/contracts/${c._id}`} className={styles.btnOpenPage} target="_blank" rel="noreferrer">
+                Full page ↗
+              </Link>
+              <button className={styles.btnPrimary} onClick={() => setEditContract(c)}>Edit</button>
+            </div>
+          </div>
+
+          <div className={styles.detailGrid}>
+            <div className={styles.detailField}>
+              <span className={styles.detailLabel}>Contract #</span>
+              <div className={styles.detailValue}><code>{c.contractNumber}</code></div>
+            </div>
+            <div className={styles.detailField}>
+              <span className={styles.detailLabel}>Status</span>
+              <div className={styles.detailValue}><StatusBadge active={c.active} /></div>
+            </div>
+            <div className={styles.detailField}>
+              <span className={styles.detailLabel}>Client Type</span>
+              <div className={styles.detailValue}>
+                <span className={styles.typeBadge}>{c.clientType}</span>
+              </div>
+            </div>
+            <div className={styles.detailField}>
+              <span className={styles.detailLabel}>Office</span>
+              <div className={styles.detailValue}>{c.officeCode || '—'}</div>
+            </div>
+
+            <div className={styles.detailSectionHeading}>Client</div>
+
+            <div className={`${styles.detailField} ${styles.detailFieldFull}`}>
+              <span className={styles.detailLabel}>Client Name</span>
+              <div className={styles.detailValue}>{c.clientName || '—'}</div>
+            </div>
+            <div className={styles.detailField}>
+              <span className={styles.detailLabel}>Contact</span>
+              <div className={styles.detailValue}>{c.clientContact || '—'}</div>
+            </div>
+            <div className={styles.detailField}>
+              <span className={styles.detailLabel}>Email</span>
+              <div className={styles.detailValue}>{c.clientEmail || '—'}</div>
+            </div>
+            <div className={styles.detailField}>
+              <span className={styles.detailLabel}>Country</span>
+              <div className={styles.detailValue}>{c.clientCountry || '—'}</div>
+            </div>
+
+            <div className={styles.detailSectionHeading}>Route & Service</div>
+
+            <div className={styles.detailField}>
+              <span className={styles.detailLabel}>Service</span>
+              <div className={styles.detailValue}>{c.serviceCode} — {c.serviceName}</div>
+            </div>
+            <div className={styles.detailField}>
+              <span className={styles.detailLabel}>Origin Port</span>
+              <div className={styles.detailValue}><code>{c.originPort}</code> {c.originPortName && `— ${c.originPortName}`}</div>
+            </div>
+            <div className={styles.detailField}>
+              <span className={styles.detailLabel}>Destination Port</span>
+              <div className={styles.detailValue}><code>{c.destinationPort}</code> {c.destinationPortName && `— ${c.destinationPortName}`}</div>
+            </div>
+            <div className={styles.detailField}>
+              <span className={styles.detailLabel}>Valid From</span>
+              <div className={styles.detailValue}>{fmtDate(c.validFrom)}</div>
+            </div>
+            <div className={styles.detailField}>
+              <span className={styles.detailLabel}>Valid To</span>
+              <div className={styles.detailValue}>{fmtDate(c.validTo)}</div>
+            </div>
+
+            <div className={styles.detailSectionHeading}>Cargo & Capacity</div>
+
+            <div className={styles.detailField}>
+              <span className={styles.detailLabel}>Primary Cargo Type</span>
+              <div className={styles.detailValue}>{c.cargoType ? formatCargo(c.cargoType) : '—'}</div>
+            </div>
+            <div className={styles.detailField}>
+              <span className={styles.detailLabel}>Weekly Contract Cap</span>
+              <div className={styles.detailValue}>{c.weeklyPallets ? `${c.weeklyPallets} pallets` : '—'}</div>
+            </div>
+            {c.weeklyEstimate > 0 && (
+              <div className={styles.detailField}>
+                <span className={styles.detailLabel}>Shipper Weekly Total</span>
+                <div className={styles.detailValue}>{c.weeklyEstimate} pallets</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {editContract && (
+          <EditContractModal
+            contract={editContract}
+            offices={offices}
+            services={services}
+            shippers={shippers}
+            onClose={() => setEditContract(null)}
+          />
+        )}
+      </>
+    );
   }
 
   return (
@@ -967,7 +1082,7 @@ export default function ContractsClient({ contracts, offices, services, shippers
                   <tr
                     key={c._id}
                     className={`${styles.rowClickable} ${!c.active ? styles.rowInactive : ''}`}
-                    onClick={() => router.push(`/contracts/${c._id}`)}
+                    onClick={() => adminMode ? setSelectedForDetail(c) : router.push(`/contracts/${c._id}`)}
                   >
                     <td className={styles.cellMono}>{c.contractNumber}</td>
                     <td>{c.clientName}</td>
