@@ -11,7 +11,7 @@ export default function AutoGenerateButton() {
   const [result, setResult] = useState<{
     type: 'success' | 'error';
     message: string;
-    details?: { voyageNumber: string; action: string; reason?: string; planNumber?: string }[];
+    details?: { voyageNumber: string; result: string; conflictCount: number; planNumber?: string }[];
   } | null>(null);
 
   const handleClick = () => {
@@ -23,7 +23,7 @@ export default function AutoGenerateButton() {
         setResult({
           type: 'success',
           message: res.message ?? '',
-          details: res.results,
+          details: res.details,
         });
         if (created > 0) {
           router.refresh();
@@ -46,16 +46,16 @@ export default function AutoGenerateButton() {
       </button>
 
       {result && (
-        <div className={`${styles.autoGenToast} ${result.type === 'error' ? styles.autoGenToastError : result.details?.some(d => d.action === 'created') ? styles.autoGenToastSuccess : styles.autoGenToastNeutral}`}>
+        <div className={`${styles.autoGenToast} ${result.type === 'error' ? styles.autoGenToastError : result.details?.some(d => d.result === 'created') ? styles.autoGenToastSuccess : styles.autoGenToastNeutral}`}>
           <p className={styles.autoGenToastMsg}>{result.message}</p>
           {result.details && result.details.length > 0 && (
             <ul className={styles.autoGenList}>
               {result.details.map((d, i) => (
-                <li key={i} className={d.action === 'created' ? styles.autoGenCreated : styles.autoGenSkipped}>
+                <li key={i} className={d.result === 'created' ? styles.autoGenCreated : styles.autoGenSkipped}>
                   <span className={styles.autoGenVoyage}>{d.voyageNumber}</span>
-                  {d.action === 'created'
-                    ? <span>→ {d.planNumber}</span>
-                    : <span className={styles.autoGenReason}>{d.reason}</span>
+                  {d.result === 'created'
+                    ? <span>→ {d.planNumber}{d.conflictCount > 0 ? ` (${d.conflictCount} conflict${d.conflictCount > 1 ? 's' : ''})` : ''}</span>
+                    : <span className={styles.autoGenReason}>{d.result}</span>
                   }
                 </li>
               ))}

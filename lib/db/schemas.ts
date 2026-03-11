@@ -604,6 +604,7 @@ const StowagePlanSchema = new Schema({
     coolingSectionIds: [{ type: String }],
     assignedTemperature: { type: Number },
     locked: { type: Boolean, default: false },
+    temperatureSource: { type: String }, // 'INHERITED' | 'MAJORITY_RULE' | 'PLANNER_OVERRIDE'
   }],
   temperatureChangelog: [{
     changedAt: { type: Date, required: true },
@@ -645,6 +646,27 @@ const StowagePlanSchema = new Schema({
     }],
     planStatus: { type: String },
     note: { type: String },
+  }],
+  // Engine output fields (added v1.23.0 — Step 4)
+  generationMethod: {
+    type: String,
+    enum: ['AUTO', 'MANUAL', 'REVISED'],
+    default: 'MANUAL',
+  },
+  conflicts: [{
+    type:             { type: String, required: true }, // TEMPERATURE_CONFLICT | CAPACITY_CONFLICT | OVERSTOW_CONFLICT | STABILITY_WARNING
+    bookingIds:       [{ type: String }],
+    sectionsInvolved: [{ type: String }],
+    palletsAffected:  { type: Number, default: 0 },
+    message:          { type: String, required: true },
+    suggestedActions: [{ type: String }],
+  }],
+  stabilityIndicators: [{
+    trimIndex:     { type: Number, required: true },
+    listIndex:     { type: Number, required: true },
+    status:        { type: String, required: true }, // GREEN | YELLOW | RED
+    portSequence:  { type: Number, required: true },
+    portCode:      { type: String, required: true },
   }],
   createdBy: { type: String, default: 'SYSTEM' },
 }, {
