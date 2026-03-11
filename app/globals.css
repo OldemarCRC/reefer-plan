@@ -274,6 +274,7 @@ input:focus, select:focus, textarea:focus {
 
 .app-content {
   flex: 1;
+  min-width: 0; /* prevent wide tables from expanding flex item past viewport */
   padding: var(--space-6);
   margin-top: var(--header-height);
 }

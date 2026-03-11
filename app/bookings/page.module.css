@@ -87,11 +87,12 @@
   background: var(--color-surface);
   border: var(--border-subtle);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: clip; /* clip border-radius without creating a competing scroll container */
   min-width: 0;
 }
 
 .tableWrap {
+  width: 100%;
   overflow-x: auto;
 }
 
