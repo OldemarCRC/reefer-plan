@@ -8,7 +8,7 @@ import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import AppShell from '@/components/layout/AppShell';
 import VesselProfile from '@/components/vessel/VesselProfile';
-import { getStowagePlanById, deleteStowagePlan, saveCargoAssignments, updatePlanStatus, copyStowagePlan } from '@/app/actions/stowage-plan';
+import { getStowagePlanById, deleteStowagePlan, saveCargoAssignments, updatePlanStatus, copyStowagePlan, replanAfterTemperatureOverride } from '@/app/actions/stowage-plan';
 import MarkSentModal from '@/components/stowage/MarkSentModal';
 import { getConfirmedBookingsForVoyage } from '@/app/actions/booking';
 import ConfigureZonesModal, { type ZoneConfig } from '@/components/vessel/ConfigureZonesModal';
@@ -32,6 +32,7 @@ interface CargoInPlan {
   consignee: string;
   shipperName: string;
   assignments: CargoAssignment[];
+  isConfirmed: boolean;
 }
 
 export default function StowagePlanDetailPage() {
@@ -57,6 +58,12 @@ export default function StowagePlanDetailPage() {
   const [communicationLog, setCommunicationLog] = useState<any[]>([]);
   const [captainComm, setCaptainComm] = useState<any>(null);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
+  const [engineConflicts, setEngineConflicts] = useState<any[]>([]);
+  const [stabilityIndicators, setStabilityIndicators] = useState<any[]>([]);
+  const [generationMethod, setGenerationMethod] = useState<string>('MANUAL');
+  const [highlightedSectionIds, setHighlightedSectionIds] = useState<string[]>([]);
+  const [showReplanBanner, setShowReplanBanner] = useState(false);
+  const [isReplanning, startReplanTransition] = useTransition();
 
   // Plan header info — populated from DB on mount
   const [plan, setPlan] = useState({
@@ -171,6 +178,11 @@ export default function StowagePlanDetailPage() {
         setCommunicationLog(p.communicationLog ?? []);
         setCaptainComm(p.captainCommunication ?? null);
 
+        // Engine output fields (conflicts, stability, generationMethod)
+        setEngineConflicts((p as any).conflicts ?? []);
+        setStabilityIndicators((p as any).stabilityIndicators ?? []);
+        setGenerationMethod((p as any).generationMethod ?? 'MANUAL');
+
         // Load confirmed bookings for this voyage
         const voyageId = typeof p.voyageId === 'object' ? p.voyageId?._id : p.voyageId;
         if (voyageId) {
@@ -198,6 +210,7 @@ export default function StowagePlanDetailPage() {
               consignee: b.consignee?.name ?? '',
               shipperName: b.shipper?.name ?? '',
               assignments: positionsByBooking[b._id] ?? [],
+              isConfirmed: (b.confirmedQuantity ?? 0) > 0,
             }));
 
             setBookings(mapped);
@@ -365,6 +378,7 @@ export default function StowagePlanDetailPage() {
           sqm: factors?.sqm,
           designStowageFactor: factors?.designStowageFactor,
           historicalStowageFactor: factors?.historicalStowageFactor,
+          confidence: (entries.length > 0 && entries[0].booking.isConfirmed) ? 'CONFIRMED' : 'ESTIMATED',
         });
       }
     }
@@ -445,6 +459,42 @@ export default function StowagePlanDetailPage() {
   const stowedPallets = bookings.reduce((sum, b) => sum + assignedQty(b), 0);
 
   const selectedBooking = bookings.find(b => b.bookingId === selectedBookingId) || null;
+
+  // Section IDs assigned to a booking (used when clicking conflict booking chips)
+  const sectionsForBooking = (bookingId: string): string[] =>
+    bookings.find(b => b.bookingId === bookingId)?.assignments.map(a => a.compartmentId) ?? [];
+
+  // Remap plan.cargoPositions back into per-booking assignments (after replan)
+  const remapCargoPositions = (cargoPositions: any[]): Map<string, CargoAssignment[]> => {
+    const map = new Map<string, CargoAssignment[]>();
+    for (const pos of cargoPositions) {
+      const bid = String(pos.bookingId ?? '');
+      if (!bid) continue;
+      if (!map.has(bid)) map.set(bid, []);
+      map.get(bid)!.push({ compartmentId: pos.compartment?.id ?? '', quantity: pos.quantity ?? 0 });
+    }
+    return map;
+  };
+
+  const handleReplan = () => {
+    const zoneOverrides = tempZoneConfig.map(z => ({ zoneId: z.sectionId, temperature: z.temp }));
+    startReplanTransition(async () => {
+      const result = await replanAfterTemperatureOverride(planId, zoneOverrides);
+      if (result.success && result.data) {
+        const posMap = remapCargoPositions(result.data.cargoPositions ?? []);
+        setBookings(prev => prev.map(b => ({ ...b, assignments: posMap.get(b.bookingId) ?? [] })));
+        setEngineConflicts(result.data.conflicts ?? []);
+        setStabilityIndicators(result.data.stabilityIndicators ?? []);
+        setGenerationMethod(result.data.generationMethod ?? 'REVISED');
+        setShowReplanBanner(false);
+        setSaveMsg({ type: 'success', text: `Replanned — ${(result as any).conflictCount ?? 0} hard conflict(s)` });
+        setTimeout(() => setSaveMsg(null), 4000);
+      } else {
+        setSaveMsg({ type: 'error', text: (result as any).error ?? 'Replan failed' });
+        setTimeout(() => setSaveMsg(null), 3000);
+      }
+    });
+  };
 
   const getCargoTypeColor = (cargoType: string) => {
     const colors: Record<string, string> = {
@@ -795,6 +845,43 @@ export default function StowagePlanDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Stability Timeline — per-port discharge stability from engine */}
+        {stabilityIndicators.length > 0 && (
+          <div className={styles.stabilityTimeline}>
+            <span className={styles.stabilityTimelineLabel}>
+              Stability by Port
+              {generationMethod !== 'MANUAL' && (
+                <span className={styles.stabilityTimelineMethod}> · {generationMethod}</span>
+              )}
+            </span>
+            <div className={styles.stabilityPorts}>
+              {stabilityIndicators.map((s: any, i: number) => (
+                <div
+                  key={i}
+                  className={styles.stabilityPort}
+                  title={`Port ${s.portCode} (seq ${s.portSequence}) · Trim index: ${s.trimIndex.toFixed(3)} · List index: ${s.listIndex.toFixed(3)}`}
+                >
+                  <div className={`${styles.stabilityDot} ${
+                    s.status === 'GREEN' ? styles.stabilityDotGreen :
+                    s.status === 'YELLOW' ? styles.stabilityDotYellow :
+                    styles.stabilityDotRed
+                  }`} />
+                  <div className={styles.stabilityBars}>
+                    <div
+                      className={styles.stabilityBar}
+                      style={{
+                        height: `${Math.min(100, Math.abs(s.trimIndex) * 800)}%`,
+                        background: s.status === 'GREEN' ? '#22c55e' : s.status === 'YELLOW' ? '#eab308' : '#ef4444',
+                      }}
+                    />
+                  </div>
+                  <span className={styles.stabilityPortCode}>{s.portCode || `P${s.portSequence}`}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Cargo Assignment Bar */}
@@ -908,6 +995,27 @@ export default function StowagePlanDetailPage() {
         )}
       </div>
 
+      {/* Replan Banner — shown after zone temperature changes */}
+      {showReplanBanner && !isLocked && canEdit && (
+        <div className={styles.replanBanner}>
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" style={{ flexShrink: 0 }}>
+            <path d="M10 2l8 16H2l8-16z" stroke="#eab308" strokeWidth="1.5" strokeLinejoin="round"/>
+            <path d="M10 8v4m0 3h.01" stroke="#eab308" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+          <span className={styles.replanBannerMsg}>
+            Zone temperatures updated. Run Auto-Reassign to recalculate cargo assignments with the new temperatures.
+          </span>
+          <button
+            className={styles.btnReplan}
+            onClick={handleReplan}
+            disabled={isReplanning}
+          >
+            {isReplanning ? 'Reassigning…' : '⚡ Auto-Reassign Bookings'}
+          </button>
+          <button className={styles.modalClose} onClick={() => setShowReplanBanner(false)} title="Dismiss">✕</button>
+        </div>
+      )}
+
       {/* Vessel Profile SVG — full width; click a section to drill into top-down view */}
       <div className={styles.svgContainer}>
         <VesselProfile
@@ -915,8 +1023,12 @@ export default function StowagePlanDetailPage() {
           voyageNumber={plan.voyageNumber}
           tempAssignments={vesselProfileData}
           conflictCompartmentIds={conflictCompartmentIds}
+          highlightedCompartmentIds={highlightedSectionIds}
           vesselLayout={vesselLayout}
-          onCompartmentClick={(id) => setSelectedSectionId(prev => prev === id ? null : id)}
+          onCompartmentClick={(id) => {
+            setSelectedSectionId(prev => prev === id ? null : id);
+            setHighlightedSectionIds([]);
+          }}
         />
       </div>
 
@@ -937,6 +1049,87 @@ export default function StowagePlanDetailPage() {
 
       {/* Validation Panel — below SVG, collapsible sections */}
       <div className={styles.validationCollapsible}>
+
+        {/* Engine Analysis — conflicts from auto-generated plan */}
+        {engineConflicts.length > 0 && (
+          <div className={styles.validationSection}>
+            <button
+              className={styles.validationSectionHeader}
+              onClick={() => toggleValidationSection('engine')}
+            >
+              <span>Engine Analysis</span>
+              {engineConflicts.filter((c: any) => c.type !== 'STABILITY_WARNING').length > 0 ? (
+                <span className={styles.badge}>
+                  {engineConflicts.filter((c: any) => c.type !== 'STABILITY_WARNING').length}
+                </span>
+              ) : (
+                <span className={styles.badgeWarning}>{engineConflicts.length}</span>
+              )}
+              <svg
+                className={`${styles.chevron} ${expandedValidation.engine ? styles.chevronOpen : ''}`}
+                width="16" height="16" viewBox="0 0 16 16" fill="none"
+              >
+                <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
+            {expandedValidation.engine && (
+              <div className={styles.validationSectionContent}>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+                  Generated by stowage engine ·{' '}
+                  <strong style={{ color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                    {generationMethod}
+                  </strong>
+                </p>
+                {engineConflicts.map((conflict: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className={conflict.type === 'STABILITY_WARNING' ? styles.conflictCardWarning : styles.conflictCard}
+                  >
+                    <div className={styles.conflictHeader}>
+                      <span className={styles[`engineConflict${conflict.type}`] ?? styles.engineConflictDefault}>
+                        {conflict.type.replace(/_/g, ' ')}
+                      </span>
+                      {conflict.palletsAffected > 0 && (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: 'auto' }}>
+                          {conflict.palletsAffected} plt affected
+                        </span>
+                      )}
+                    </div>
+                    <p>{conflict.message}</p>
+                    {conflict.bookingIds?.length > 0 && (
+                      <div className={styles.conflictBookingChips}>
+                        {conflict.bookingIds.map((bid: string) => {
+                          const b = bookings.find(bk => bk.bookingId === bid);
+                          const secs = sectionsForBooking(bid);
+                          const isActive = secs.length > 0 && secs.every(s => highlightedSectionIds.includes(s));
+                          return (
+                            <button
+                              key={bid}
+                              className={`${styles.conflictChip} ${isActive ? styles.conflictChipActive : ''}`}
+                              onClick={() => setHighlightedSectionIds(isActive ? [] : secs)}
+                              title={`Highlight sections for ${b?.bookingNumber ?? bid}`}
+                            >
+                              {b?.bookingNumber ?? bid.slice(-6)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {conflict.suggestedActions?.length > 0 && (
+                      <div className={styles.conflictSuggestions}>
+                        <span className={styles.conflictSuggestLabel}>Suggested:</span>
+                        {conflict.suggestedActions.map((action: string, i: number) => (
+                          <span key={i} className={styles.conflictSuggestChip}>{action}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Temperature Conflicts */}
         <div className={styles.validationSection}>
           <button
@@ -1427,6 +1620,7 @@ export default function StowagePlanDetailPage() {
                   }))
                 );
               }
+              setShowReplanBanner(true);
               setShowZoneModal(false);
             }}
           />

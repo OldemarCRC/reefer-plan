@@ -168,6 +168,7 @@ interface VesselProfileProps {
   tempAssignments?: VoyageTempAssignment[];
   vesselLayout?: VesselLayout;
   conflictCompartmentIds?: string[];
+  highlightedCompartmentIds?: string[];
 }
 
 export default function VesselProfile({
@@ -177,6 +178,7 @@ export default function VesselProfile({
   tempAssignments = defaultAssignments,
   vesselLayout,
   conflictCompartmentIds,
+  highlightedCompartmentIds,
 }: VesselProfileProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -249,6 +251,10 @@ export default function VesselProfile({
           xmlns="http://www.w3.org/2000/svg"
         >
           <defs>
+            {/* Hatched pattern for ESTIMATED (unconfirmed) cargo fills */}
+            <pattern id="hatch-estimated" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="5" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5"/>
+            </pattern>
             {/* Water pattern */}
             <pattern id="water" x="0" y="0" width="40" height="8" patternUnits="userSpaceOnUse">
               <path d="M0 4 Q5 0 10 4 Q15 8 20 4 Q25 0 30 4 Q35 8 40 4" stroke="#1E3A5F" fill="none" strokeWidth="0.8" opacity="0.3" />
@@ -382,6 +388,8 @@ export default function VesselProfile({
             const isSelected = selectedId === comp.id;
             const inZone = highlightZone && comp.assignment?.zoneId === highlightZone;
             const isConflict = !isSelected && !isHovered && !!conflictCompartmentIds?.includes(comp.id);
+            const isHighlighted = !isSelected && !isHovered && !isConflict && !!highlightedCompartmentIds?.includes(comp.id);
+            const isEstimated = comp.assignment?.confidence === 'ESTIMATED';
             const zoneColor = comp.assignment?.zoneColor || '#1E3A5F';
             // Capacity switches based on factor toggle
             const displayCapacity = (() => {
@@ -418,15 +426,17 @@ export default function VesselProfile({
                     isSelected ? 0.5 :
                     isHovered ? 0.4 :
                     isConflict ? 0.35 :
+                    isHighlighted ? 0.4 :
                     inZone ? 0.25 : 0.15
                   }
                   stroke={
                     isSelected ? '#FCD34D' :
+                    isHighlighted ? '#22c55e' :
                     isHovered ? '#fff' :
                     isConflict ? '#ef4444' :
                     inZone ? zoneColor : '#1E3A5F'
                   }
-                  strokeWidth={isSelected ? 2 : isHovered ? 1.5 : isConflict ? 1.5 : 0.8}
+                  strokeWidth={isSelected ? 2 : isHighlighted ? 2 : isHovered ? 1.5 : isConflict ? 1.5 : 0.8}
                 />
 
                 {/* Conflict indicator — small red dot top-right */}
@@ -450,6 +460,19 @@ export default function VesselProfile({
                     rx={1}
                     fill={zoneColor}
                     opacity={isSelected ? 0.7 : isHovered ? 0.6 : 0.35}
+                  />
+                )}
+
+                {/* Hatch overlay for ESTIMATED (unconfirmed) cargo */}
+                {fillPct > 0 && isEstimated && (
+                  <rect
+                    x={comp.x + 1}
+                    y={comp.y + comp.h * (1 - fillPct)}
+                    width={comp.w - 2}
+                    height={comp.h * fillPct - 1}
+                    rx={1}
+                    fill="url(#hatch-estimated)"
+                    opacity={0.6}
                   />
                 )}
 

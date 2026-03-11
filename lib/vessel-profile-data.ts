@@ -18,6 +18,8 @@ export interface VoyageTempAssignment {
   sqm?: number;               // floor area in sqm
   designStowageFactor?: number;    // from vessel spec sheet (e.g. 1.32)
   historicalStowageFactor?: number; // rolling average across completed voyages
+  // Confidence level — ESTIMATED = hatched fill, CONFIRMED = solid fill
+  confidence?: 'ESTIMATED' | 'CONFIRMED';
 }
 
 export const voyageTempAssignments: VoyageTempAssignment[] = [
