@@ -87,10 +87,47 @@ export function assignCargo(
     return b.pallets - a.pallets;
   });
 
+  // ── Pre-assignment capacity check ─────────────────────────────────────────
+  // If total requested pallets exceed total vessel capacity, exclude the
+  // lowest-priority bookings (already sorted — exclude from the end).
+  const totalVesselCapacity = sections.reduce((sum, s) => sum + s.maxPallets, 0);
+  const totalRequested = sorted.reduce((sum, b) => sum + b.pallets, 0);
+  const preConflicts: EngineConflict[] = [];
+
+  let bookingsToAssign = sorted;
+  if (totalRequested > totalVesselCapacity) {
+    let remaining = totalVesselCapacity;
+    const included: EngineBooking[] = [];
+    const excluded: EngineBooking[] = [];
+
+    for (const b of sorted) {
+      if (remaining >= b.pallets) {
+        included.push(b);
+        remaining -= b.pallets;
+      } else {
+        excluded.push(b);
+      }
+    }
+
+    for (const b of excluded) {
+      preConflicts.push({
+        type: 'CAPACITY_CONFLICT',
+        bookingIds: [b.bookingId],
+        sectionsInvolved: [],
+        palletsAffected: b.pallets,
+        message: `${b.pallets} pallets of ${b.cargoType} excluded: vessel total capacity (${totalVesselCapacity} pallets) exceeded.`,
+        suggestedActions: ['Split to another voyage or reduce booking quantity.'],
+      });
+      unassigned.push({ bookingId: b.bookingId, reason: 'Vessel over total capacity.' });
+    }
+
+    bookingsToAssign = included;
+  }
+
   // ── Greedy constructive pass ──────────────────────────────────────────────
   const unassignedAfterGreedy: EngineBooking[] = [];
 
-  for (const booking of sorted) {
+  for (const booking of bookingsToAssign) {
     let remaining = booking.pallets;
     const compatible = getCompatibleSections(
       booking, sections, zones, assignments, allBookings,
@@ -280,5 +317,5 @@ export function assignCargo(
     unassigned.push({ bookingId: booking.bookingId, reason: message });
   }
 
-  return { assignments, conflicts, unassigned };
+  return { assignments, conflicts: [...preConflicts, ...conflicts], unassigned };
 }

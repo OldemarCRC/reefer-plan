@@ -48,6 +48,7 @@ export interface EngineInput {
     zones: EngineZone[];
   };
   bookings: EngineBooking[];
+  portCalls?: { sequence: number; portCode: string }[];  // for stability portCode resolution
   previousZoneTemps?: Record<string, number>;  // zoneId → temperature (INHERITED)
   plannerOverrides?: Record<string, number>;   // zoneId → temperature (PLANNER_OVERRIDE)
   phase: 'ESTIMATED' | 'CONFIRMED';

@@ -51,6 +51,7 @@ export function calculateStability(
   assignments: CargoAssignment[],
   bookings: EngineBooking[],
   portSequences: number[],
+  portSequenceToCode?: Map<number, string>,
 ): StabilityIndicator[] {
   if (portSequences.length === 0) return [];
 
@@ -78,7 +79,7 @@ export function calculateStability(
         listIndex: 0,
         status: 'GREEN',
         portSequence: portSeq,
-        portCode: `SEQ${portSeq}`,
+        portCode: portSequenceToCode?.get(portSeq) ?? `SEQ${portSeq}`,
       });
       continue;
     }
@@ -109,7 +110,7 @@ export function calculateStability(
         listIndex: 0,
         status: 'GREEN',
         portSequence: portSeq,
-        portCode: `SEQ${portSeq}`,
+        portCode: portSequenceToCode?.get(portSeq) ?? `SEQ${portSeq}`,
       });
       continue;
     }
@@ -125,7 +126,7 @@ export function calculateStability(
       listIndex: Math.round(listIndex * 10000) / 10000,
       status: classifyStatus(trimIndex, listIndex),
       portSequence: portSeq,
-      portCode: `SEQ${portSeq}`,
+      portCode: portSequenceToCode?.get(portSeq) ?? `SEQ${portSeq}`,
     });
   }
 

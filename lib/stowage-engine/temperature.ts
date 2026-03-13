@@ -49,8 +49,9 @@ function rangeMidpoint(r: { min: number; max: number }): number {
   return Math.round(((r.min + r.max) / 2) * 10) / 10;
 }
 
-// Group bookings by compatible temperature (bookings whose ranges overlap
-// with any member of a group join that group).
+// Group bookings by cargoType — one group per distinct cargo type.
+// Transitive-overlap merging is intentionally avoided: TABLE_GRAPES and PLUMS
+// must remain separate groups even if an intermediate cargo type bridges them.
 interface CargoGroup {
   range: { min: number; max: number };
   totalPallets: number;
@@ -60,26 +61,24 @@ interface CargoGroup {
 function groupByTemperature(
   bookings: EngineInput['bookings'],
 ): CargoGroup[] {
-  const groups: CargoGroup[] = [];
+  const groups = new Map<string, CargoGroup>();
 
   for (const b of bookings) {
-    const range = { min: b.tempMin, max: b.tempMax };
-    const match = groups.find(g => rangesOverlap(g.range, range));
-    if (match) {
-      // Narrow the group range to the intersection so later bookings must
-      // also fit within it.
-      match.range = {
-        min: Math.max(match.range.min, range.min),
-        max: Math.min(match.range.max, range.max),
-      };
-      match.totalPallets += b.pallets;
-      match.bookingIds.push(b.bookingId);
+    const key = b.cargoType;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.totalPallets += b.pallets;
+      existing.bookingIds.push(b.bookingId);
     } else {
-      groups.push({ range, totalPallets: b.pallets, bookingIds: [b.bookingId] });
+      groups.set(key, {
+        range: { min: b.tempMin, max: b.tempMax },
+        totalPallets: b.pallets,
+        bookingIds: [b.bookingId],
+      });
     }
   }
 
-  return groups.sort((a, b) => b.totalPallets - a.totalPallets); // majority first
+  return [...groups.values()].sort((a, b) => b.totalPallets - a.totalPallets); // majority first
 }
 
 // Return a Map from holdNumber → total sqm of all sections in that hold.

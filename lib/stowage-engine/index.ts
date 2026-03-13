@@ -24,12 +24,18 @@ export function generateStowagePlan(input: EngineInput): EngineOutput {
     ...new Set(input.bookings.map(b => b.podSequence)),
   ].sort((a, b) => a - b);
 
+  // Build portSequenceToCode map from portCalls for real portCode labels.
+  const portSequenceToCode = new Map<number, string>(
+    (input.portCalls ?? []).map(pc => [pc.sequence, pc.portCode]),
+  );
+
   // 4. Calculate stability snapshot at each discharge port.
   const stabilityByPort = calculateStability(
     input.vessel.sections,
     assignments,
     input.bookings,
     portSequences,
+    portSequenceToCode,
   );
 
   // 5. Append STABILITY_WARNING conflicts for any RED indicators.
