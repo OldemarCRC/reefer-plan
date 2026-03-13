@@ -131,6 +131,7 @@
 }
 
 .autoGenCreated,
+.autoGenUpdated,
 .autoGenSkipped {
   display: flex;
   gap: var(--space-2);
@@ -140,6 +141,10 @@
 
 .autoGenCreated {
   color: var(--color-success);
+}
+
+.autoGenUpdated {
+  color: var(--color-info, #60a5fa);
 }
 
 .autoGenSkipped {
@@ -155,6 +160,24 @@
 .autoGenReason {
   color: var(--color-text-tertiary);
   font-style: italic;
+}
+
+.autoGenSummary {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin: 2px 0 4px;
+}
+
+.autoGenDetail {
+  flex: 1;
+}
+
+.autoGenSources {
+  color: var(--color-text-muted);
+}
+
+.autoGenConflicts {
+  color: var(--color-warning, #f59e0b);
 }
 
 .autoGenDismiss {
