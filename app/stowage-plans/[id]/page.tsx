@@ -250,13 +250,15 @@ export default function StowagePlanDetailPage() {
     return map;
   }, [tempZoneConfig]);
 
-  // Compartment capacities (pallets) — from vessel spec
-  const compartmentCapacities: Record<string, number> = {
-    '1A': 480, '1B': 278, '1C': 191, '1D': 186,
-    '2UPD': 143, '2A': 565, '2B': 499, '2C': 485, '2D': 375,
-    '3UPD': 136, '3A': 604, '3B': 577, '3C': 608, '3D': 543,
-    '4UPD': 136, '4A': 583, '4B': 544, '4C': 502, '4D': 336,
-  };
+  // Compartment capacities (pallets) — derived from vessel DB data (sqm / designStowageFactor)
+  const compartmentCapacities = useMemo(() => {
+    const caps: Record<string, number> = {};
+    for (const [sectionId, factors] of Object.entries(sectionFactors)) {
+      const factor = factors.designStowageFactor ?? 1.32;
+      caps[sectionId] = Math.floor(factors.sqm / factor);
+    }
+    return caps;
+  }, [sectionFactors]);
 
   // Compute validation dynamically from current assignments
   const validation = useMemo(() => {
