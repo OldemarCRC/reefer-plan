@@ -157,6 +157,15 @@
   pointer-events: none;
 }
 
+.cargoShortLabel {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  fill: rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+  letter-spacing: 0.04em;
+}
+
 .levelLabel {
   font-family: var(--font-mono);
   font-size: 9px;

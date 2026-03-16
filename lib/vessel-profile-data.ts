@@ -20,6 +20,9 @@ export interface VoyageTempAssignment {
   historicalStowageFactor?: number; // rolling average across completed voyages
   // Confidence level — ESTIMATED = hatched fill, CONFIRMED = solid fill
   confidence?: 'ESTIMATED' | 'CONFIRMED';
+  // POD-based coloring (overrides zoneColor when present)
+  podColor?: string;        // hex color assigned to this compartment's dominant POD
+  cargoShortLabel?: string; // e.g. "BAN", "GRAP", "AVOC" — shown inside the compartment cell
 }
 
 export const voyageTempAssignments: VoyageTempAssignment[] = [

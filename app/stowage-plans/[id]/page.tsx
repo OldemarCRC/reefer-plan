@@ -350,6 +350,26 @@ export default function StowagePlanDetailPage() {
     return `hsl(${hue}, 70%, 50%)`;
   };
 
+  // POD color palette — one distinct color per unique port of destination
+  const POD_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+
+  const podColorMap = useMemo(() => {
+    const pods = [...new Set(bookings.map(b => b.pod).filter(Boolean))];
+    const map: Record<string, string> = {};
+    pods.forEach((pod, i) => { map[pod] = POD_COLORS[i % POD_COLORS.length]; });
+    return map;
+  }, [bookings]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cargo type abbreviation lookup for compartment labels
+  const CARGO_ABBREV: Record<string, string> = {
+    BANANAS: 'BAN', ORGANIC_BANANAS: 'OBAN', PLANTAINS: 'PLAN',
+    FROZEN_FISH: 'FISH', TABLE_GRAPES: 'GRAP', CITRUS: 'CITR',
+    AVOCADOS: 'AVOC', BERRIES: 'BERR', KIWIS: 'KIWI', PINEAPPLES: 'PINE',
+    CHERRIES: 'CHER', BLUEBERRIES: 'BLUE', PLUMS: 'PLUM', PEACHES: 'PEAC',
+    APPLES: 'APPL', PEARS: 'PEAR', PAPAYA: 'PAPA', MANGOES: 'MANG',
+    OTHER_FROZEN: 'FRZN', OTHER_CHILLED: 'CHLD',
+  };
+
   // Transform plan data to VesselProfile format
   const vesselProfileData = useMemo(() => {
     const result: VoyageTempAssignment[] = [];
@@ -373,6 +393,18 @@ export default function StowagePlanDetailPage() {
         // Determine cargo type: use first booking's type if any, otherwise empty
         const cargoType = entries.length > 0 ? entries[0].booking.cargoType : '';
 
+        // POD color: dominant POD = booking with most pallets in this compartment
+        const dominantEntry = entries.length > 0
+          ? entries.reduce((a, b) => a.quantity >= b.quantity ? a : b)
+          : null;
+        const dominantPod = dominantEntry?.booking.pod ?? '';
+        const podColor = dominantPod ? (podColorMap[dominantPod] ?? '#334155') : undefined;
+
+        // Cargo short label for compartment cell
+        const cargoShortLabel = cargoType
+          ? (CARGO_ABBREV[cargoType] ?? cargoType.replace(/_/g, '').slice(0, 4))
+          : undefined;
+
         const factors = sectionFactors[compId];
         result.push({
           compartmentId: compId,
@@ -388,12 +420,14 @@ export default function StowagePlanDetailPage() {
           designStowageFactor: factors?.designStowageFactor,
           historicalStowageFactor: factors?.historicalStowageFactor,
           confidence: (entries.length > 0 && entries[0].booking.isConfirmed) ? 'CONFIRMED' : 'ESTIMATED',
+          podColor,
+          cargoShortLabel,
         });
       }
     }
 
     return result;
-  }, [bookings, tempZoneConfig, sectionFactors]);
+  }, [bookings, tempZoneConfig, sectionFactors, compartmentCapacities, podColorMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Compartment IDs with temperature conflicts — passed to SVG for red highlighting
   const conflictCompartmentIds = useMemo(
@@ -505,18 +539,6 @@ export default function StowagePlanDetailPage() {
     });
   };
 
-  const getCargoTypeColor = (cargoType: string) => {
-    const colors: Record<string, string> = {
-      BANANAS: '#eab308',
-      TABLE_GRAPES: '#8b5cf6',
-      AVOCADOS: '#22c55e',
-      CITRUS: '#f97316',
-      BERRIES: '#ec4899',
-      FROZEN_FISH: '#06b6d4',
-    };
-    return colors[cargoType] || '#64748b';
-  };
-
   // ── Top-down view data ────────────────────────────────────────────────────────
   // Build the slot list for the currently selected section
   const selectedSectionSlots = useMemo((): SectionBookingSlot[] => {
@@ -526,9 +548,9 @@ export default function StowagePlanDetailPage() {
       bookingNumber: b.bookingNumber,
       cargoType: b.cargoType,
       quantity: b.assignments.find(a => a.compartmentId === selectedSectionId)?.quantity ?? 0,
-      color: getCargoTypeColor(b.cargoType),
+      color: podColorMap[b.pod] ?? '#64748b',
     }));
-  }, [selectedSectionId, bookings]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedSectionId, bookings, podColorMap]);
 
   // Resolve temperature + zone colour for the selected section
   const selectedSectionInfo = useMemo(() => {
@@ -918,7 +940,7 @@ export default function StowagePlanDetailPage() {
             <div className={styles.cargoDetail}>
               <span
                 className={styles.cargoDot}
-                style={{ backgroundColor: getCargoTypeColor(selectedBooking.cargoType) }}
+                style={{ backgroundColor: podColorMap[selectedBooking.pod] ?? '#64748b' }}
               />
               <span className={styles.cargoType}>
                 {selectedBooking.cargoType.replace('_', ' ')}
@@ -975,10 +997,10 @@ export default function StowagePlanDetailPage() {
                   title={`${b.bookingNumber} · ${b.cargoType.replace(/_/g, ' ')} · ${b.consignee} · ${assigned}/${b.totalQuantity} pallets`}
                   disabled={isLocked && !isDone}
                 >
-                  <span className={styles.rosterDot} style={{ background: getCargoTypeColor(b.cargoType) }} />
+                  <span className={styles.rosterDot} style={{ background: podColorMap[b.pod] ?? '#64748b' }} />
                   <span className={styles.rosterNum}>{b.bookingNumber}</span>
                   <div className={styles.rosterBar}>
-                    <div className={styles.rosterFill} style={{ width: `${pct}%`, background: getCargoTypeColor(b.cargoType) }} />
+                    <div className={styles.rosterFill} style={{ width: `${pct}%`, background: podColorMap[b.pod] ?? '#64748b' }} />
                   </div>
                   <span className={`${styles.rosterCount} ${isDone ? styles.rosterCountDone : isNone ? styles.rosterCountNone : styles.rosterCountPartial}`}>
                     {isDone ? '✓' : `${remaining} left`}
@@ -1043,6 +1065,17 @@ export default function StowagePlanDetailPage() {
             setHighlightedSectionIds([]);
           }}
         />
+        {/* POD color legend */}
+        {Object.keys(podColorMap).length > 0 && (
+          <div className={styles.podLegend}>
+            {Object.entries(podColorMap).map(([pod, color]) => (
+              <div key={pod} className={styles.podLegendItem}>
+                <span className={styles.podLegendDot} style={{ background: color }} />
+                <span className={styles.podLegendLabel}>{pod}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Top-down cooling section view — rendered when a section is selected */}
@@ -1450,7 +1483,7 @@ export default function StowagePlanDetailPage() {
             <div className={styles.modalMeta}>
               <span
                 className={styles.cargoDot}
-                style={{ backgroundColor: getCargoTypeColor(assigningBooking.cargoType) }}
+                style={{ backgroundColor: podColorMap[assigningBooking.pod] ?? '#64748b' }}
               />
               <span>{assigningBooking.cargoType.replace('_', ' ')}</span>
               <span className={styles.separator}>·</span>

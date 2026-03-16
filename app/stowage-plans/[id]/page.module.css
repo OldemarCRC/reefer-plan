@@ -472,6 +472,35 @@
   margin-bottom: 1rem;
 }
 
+.podLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-1);
+}
+
+.podLegendItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.podLegendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.podLegendLabel {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 /* ── Validation — collapsible sections below SVG ──────────────────────── */
 
 .validationCollapsible {

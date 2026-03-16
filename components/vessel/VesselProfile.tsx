@@ -390,7 +390,8 @@ export default function VesselProfile({
             const isConflict = !isSelected && !isHovered && !!conflictCompartmentIds?.includes(comp.id);
             const isHighlighted = !isSelected && !isHovered && !isConflict && !!highlightedCompartmentIds?.includes(comp.id);
             const isEstimated = comp.assignment?.confidence === 'ESTIMATED';
-            const zoneColor = comp.assignment?.zoneColor || '#1E3A5F';
+            // POD color takes precedence over temperature-based zone color
+            const effectiveColor = comp.assignment?.podColor || comp.assignment?.zoneColor || '#1E3A5F';
             // Capacity switches based on factor toggle
             const displayCapacity = (() => {
               if (!comp.assignment) return 0;
@@ -421,7 +422,7 @@ export default function VesselProfile({
                   width={comp.w}
                   height={comp.h}
                   rx={2}
-                  fill={comp.assignment?.cargoType ? zoneColor : '#111E33'}
+                  fill={comp.assignment?.cargoType ? effectiveColor : '#111E33'}
                   opacity={
                     isSelected ? 0.5 :
                     isHovered ? 0.4 :
@@ -434,7 +435,7 @@ export default function VesselProfile({
                     isHighlighted ? '#22c55e' :
                     isHovered ? '#fff' :
                     isConflict ? '#ef4444' :
-                    inZone ? zoneColor : '#1E3A5F'
+                    inZone ? effectiveColor : '#1E3A5F'
                   }
                   strokeWidth={isSelected ? 2 : isHighlighted ? 2 : isHovered ? 1.5 : isConflict ? 1.5 : 0.8}
                 />
@@ -458,7 +459,7 @@ export default function VesselProfile({
                     width={comp.w - 2}
                     height={comp.h * fillPct - 1}
                     rx={1}
-                    fill={zoneColor}
+                    fill={effectiveColor}
                     opacity={isSelected ? 0.7 : isHovered ? 0.6 : 0.35}
                   />
                 )}
@@ -476,10 +477,10 @@ export default function VesselProfile({
                   />
                 )}
 
-                {/* Compartment label */}
+                {/* Compartment label (+ cargo short label when present) */}
                 <text
                   x={comp.x + comp.w / 2}
-                  y={comp.y + comp.h / 2 + 1}
+                  y={comp.y + comp.h / 2 + (comp.assignment?.cargoShortLabel ? -4 : 1)}
                   textAnchor="middle"
                   dominantBaseline="middle"
                   className={styles.compLabel}
@@ -487,6 +488,18 @@ export default function VesselProfile({
                 >
                   {comp.level}
                 </text>
+                {comp.assignment?.cargoShortLabel && (
+                  <text
+                    x={comp.x + comp.w / 2}
+                    y={comp.y + comp.h / 2 + 7}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    className={styles.cargoShortLabel}
+                    opacity={isHovered || isSelected || inZone ? 1 : 0.8}
+                  >
+                    {comp.assignment.cargoShortLabel}
+                  </text>
+                )}
 
                 {/* Pallet count (when hovered or selected) */}
                 {(isHovered || isSelected) && comp.assignment && (
@@ -532,15 +545,15 @@ export default function VesselProfile({
         {detail && detail.assignment && (
           <div
             className={styles.detailPanel}
-            style={{ borderLeftColor: detail.assignment.zoneColor }}
+            style={{ borderLeftColor: detail.assignment.podColor ?? detail.assignment.zoneColor }}
           >
             <div className={styles.detailHeader}>
               <span className={styles.detailId}>{detail.id}</span>
               <span
                 className={styles.detailZone}
                 style={{
-                  background: `${detail.assignment.zoneColor}20`,
-                  color: detail.assignment.zoneColor,
+                  background: `${(detail.assignment.podColor ?? detail.assignment.zoneColor)}20`,
+                  color: detail.assignment.podColor ?? detail.assignment.zoneColor,
                 }}
               >
                 {detail.assignment.zoneName}
