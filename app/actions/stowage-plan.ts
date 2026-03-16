@@ -1170,8 +1170,10 @@ const SaveCargoAssignmentsSchema = z.object({
   assignments: z.array(z.object({
     shipmentId: z.string().optional(),
     bookingId: z.string().optional(),
+    bookingNumber: z.string().optional(),
     cargoType: z.string(),
     quantity: z.number().int().nonnegative(),
+    snapshotTotalQuantity: z.number().int().nonnegative().optional(),
     compartmentId: z.string().min(1),
   })),
 });
@@ -1195,8 +1197,10 @@ export async function saveCargoAssignments(data: unknown) {
     plan.cargoPositions = validated.assignments.map((a: any) => ({
       shipmentId: a.shipmentId || undefined,
       bookingId: a.bookingId || undefined,
+      bookingNumber: a.bookingNumber || undefined,
       cargoType: a.cargoType,
       quantity: a.quantity,
+      snapshotTotalQuantity: a.snapshotTotalQuantity ?? undefined,
       compartment: {
         id: a.compartmentId,
         holdNumber: getHoldNumber(a.compartmentId),

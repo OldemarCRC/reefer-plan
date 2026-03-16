@@ -200,18 +200,25 @@ export default function StowagePlanDetailPage() {
               });
             }
 
-            const mapped = bookingsResult.data.map((b: any) => ({
-              bookingId: b._id,
-              bookingNumber: b.bookingNumber,
-              cargoType: b.cargoType ?? '',
-              totalQuantity: b.confirmedQuantity ?? b.requestedQuantity ?? 0,
-              pol: b.pol?.portCode ?? '',
-              pod: b.pod?.portCode ?? '',
-              consignee: b.consignee?.name ?? '',
-              shipperName: b.shipper?.name ?? '',
-              assignments: positionsByBooking[b._id] ?? [],
-              isConfirmed: (b.confirmedQuantity ?? 0) > 0,
-            }));
+            const mapped = bookingsResult.data.map((b: any) => {
+              // Use the snapshot quantity saved at plan-creation time if available,
+              // so older plan versions show historical totals rather than current booking values.
+              const savedSnapshot = (p.cargoPositions ?? []).find(
+                (pos: any) => String(pos.bookingId ?? pos.shipmentId ?? '') === b._id
+              );
+              return {
+                bookingId: b._id,
+                bookingNumber: b.bookingNumber,
+                cargoType: b.cargoType ?? '',
+                totalQuantity: savedSnapshot?.snapshotTotalQuantity ?? b.confirmedQuantity ?? b.requestedQuantity ?? 0,
+                pol: b.pol?.portCode ?? '',
+                pod: b.pod?.portCode ?? '',
+                consignee: b.consignee?.name ?? '',
+                shipperName: b.shipper?.name ?? '',
+                assignments: positionsByBooking[b._id] ?? [],
+                isConfirmed: (b.confirmedQuantity ?? 0) > 0,
+              };
+            });
 
             setBookings(mapped);
             // Auto-select first booking
@@ -630,8 +637,10 @@ export default function StowagePlanDetailPage() {
     const allAssignments = bookings.flatMap(b =>
       b.assignments.map(a => ({
         bookingId: b.bookingId,
+        bookingNumber: b.bookingNumber,
         cargoType: b.cargoType,
         quantity: a.quantity,
+        snapshotTotalQuantity: b.totalQuantity,
         compartmentId: a.compartmentId,
       }))
     );
@@ -654,8 +663,10 @@ export default function StowagePlanDetailPage() {
       const allAssignments = bookings.flatMap(b =>
         b.assignments.map(a => ({
           bookingId: b.bookingId,
+          bookingNumber: b.bookingNumber,
           cargoType: b.cargoType,
           quantity: a.quantity,
+          snapshotTotalQuantity: b.totalQuantity,
           compartmentId: a.compartmentId,
         }))
       );
