@@ -519,9 +519,11 @@ const VesselSchema = new Schema({
 const CargoPositionSchema = new Schema({
   shipmentId: { type: Schema.Types.ObjectId, ref: 'Shipment' }, // optional — not all positions come from formal shipments
   bookingId: { type: String },          // booking reference (string for flexibility)
+  bookingNumber: { type: String },      // denormalized booking number snapshot
   cargoUnitId: { type: String },
   cargoType: { type: String },          // e.g. 'BANANAS', 'TABLE_GRAPES' — used for temp-conflict checks
   quantity: { type: Number, default: 0 }, // pallets in this position
+  snapshotTotalQuantity: { type: Number }, // booking's total quantity at plan-save time
   compartment: {
     id: { type: String, required: true },
     holdNumber: { type: Number, required: true },
@@ -678,6 +680,40 @@ StowagePlanSchema.index({ vesselId: 1 });
 StowagePlanSchema.index({ status: 1 });
 
 // ============================================================================
+// COMPATIBILITY GROUP SCHEMA
+// ============================================================================
+
+const CompatibilityGroupSchema = new Schema({
+  groupCode:      { type: String, required: true, unique: true, uppercase: true }, // e.g. "CG_TROPICAL", "CG_FROZEN"
+  groupName:      { type: String, required: true },                                // e.g. "Tropical Fruits"
+  description:    { type: String },
+  canCoexistWith: [{ type: String }],   // array of groupCodes this group is compatible with
+  color:          { type: String, default: '#64748b' },  // hex color for UI display
+  active:         { type: Boolean, default: true },
+  createdBy:      { type: String, required: true },
+}, { timestamps: true });
+
+CompatibilityGroupSchema.index({ active: 1 });
+
+// ============================================================================
+// CARGO PRODUCT SCHEMA
+// ============================================================================
+
+const CargoProductSchema = new Schema({
+  code:                   { type: String, required: true, unique: true, uppercase: true }, // e.g. "BANANAS", "TABLE_GRAPES"
+  name:                   { type: String, required: true },                                // e.g. "Bananas", "Table Grapes"
+  shortLabel:             { type: String, required: true, maxlength: 4 },                 // e.g. "BAN", "GRAP" — used in plan labels
+  compatibilityGroupId:   { type: Schema.Types.ObjectId, ref: 'CompatibilityGroup', required: true },
+  compatibilityGroupCode: { type: String, required: true },                               // denormalized for fast access
+  notes:                  { type: String },
+  active:                 { type: Boolean, default: true },
+  createdBy:              { type: String, required: true },
+}, { timestamps: true });
+
+CargoProductSchema.index({ active: 1 });
+CargoProductSchema.index({ compatibilityGroupId: 1 });
+
+// ============================================================================
 // USER SCHEMA
 // ============================================================================
 
@@ -687,7 +723,7 @@ const UserSchema = new Schema({
   role: {
     type: String,
     required: true,
-    enum: ['ADMIN', 'SHIPPING_PLANNER', 'STEVEDORE', 'CHECKER', 'EXPORTER', 'VIEWER'],
+    enum: ['SUPERUSER', 'ADMIN', 'SHIPPING_PLANNER', 'STEVEDORE', 'CHECKER', 'EXPORTER', 'VIEWER'],
   },
   passwordHash: { type: String, select: false },
   company: { type: String },
@@ -714,6 +750,12 @@ UserSchema.index({ role: 1 }); // email: unique: true is already indexed inline
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mongoose schemas are untyped; type safety lives in server actions
 type AnyModel = Model<any>;
+
+export const CompatibilityGroupModel: AnyModel =
+  mongoose.models.CompatibilityGroup || mongoose.model('CompatibilityGroup', CompatibilityGroupSchema);
+
+export const CargoProductModel: AnyModel =
+  mongoose.models.CargoProduct || mongoose.model('CargoProduct', CargoProductSchema);
 
 export const UnecePortModel: AnyModel =
   mongoose.models.UnecePort || mongoose.model('UnecePort', UnecePortSchema);

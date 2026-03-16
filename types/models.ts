@@ -520,9 +520,11 @@ export interface TemperatureChangelogEntry {
 export interface CargoPosition {
   shipmentId?: string;
   bookingId?: string;
+  bookingNumber?: string;         // denormalized booking number snapshot
   cargoUnitId?: string;
   cargoType?: string;   // e.g. 'BANANAS', 'TABLE_GRAPES' — drives temp-conflict checks
   quantity?: number;    // pallets in this position
+  snapshotTotalQuantity?: number; // booking's total quantity at plan-save time
   compartment: {
     id: string;
     holdNumber: number;
@@ -645,10 +647,42 @@ export interface StowagePlan {
 }
 
 // ----------------------------------------------------------------------------
+// COMPATIBILITY GROUP + CARGO PRODUCT
+// ----------------------------------------------------------------------------
+
+export interface CompatibilityGroup {
+  _id: string;
+  groupCode: string;          // e.g. "CG_TROPICAL", "CG_FROZEN"
+  groupName: string;          // e.g. "Tropical Fruits", "Frozen Products"
+  description?: string;
+  canCoexistWith: string[];   // array of groupCodes compatible with this group
+  color: string;              // hex color for UI display
+  active: boolean;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CargoProduct {
+  _id: string;
+  code: string;                   // e.g. "BANANAS", "TABLE_GRAPES"
+  name: string;                   // e.g. "Bananas", "Table Grapes"
+  shortLabel: string;             // max 4 chars — e.g. "BAN", "GRAP", "AVOC"
+  compatibilityGroupId: string;   // ref: CompatibilityGroup
+  compatibilityGroupCode: string; // denormalized for fast access
+  notes?: string;
+  active: boolean;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ----------------------------------------------------------------------------
 // USER
 // ----------------------------------------------------------------------------
 
-export type UserRole = 
+export type UserRole =
+  | 'SUPERUSER'
   | 'ADMIN'
   | 'SHIPPING_PLANNER'
   | 'STEVEDORE'
