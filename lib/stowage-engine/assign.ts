@@ -1,321 +1,311 @@
 // ============================================================================
 // STOWAGE ENGINE — CARGO ASSIGNMENT
-// Greedy constructive pass + local repair pass + conflict generation.
+// Phase-based algorithm: HoldState tracking, canPlace POL/POD constraint,
+// balance scoring, CargoPositionOutput generation.
 // ============================================================================
 
 import type {
   EngineInput,
   EngineZone,
   CargoAssignment,
+  CargoPositionOutput,
   EngineConflict,
   EngineOutput,
-  EngineSection,
   EngineBooking,
+  SectionEntry,
+  HoldState,
 } from './types';
-import {
-  getCompatibleSections,
-  getSectionRemainingCapacity,
-  isTemperatureCompatible,
-} from './constraints';
+import { isTemperatureCompatible } from './constraints';
 
-// Best-fit section: pick the section whose remaining capacity is >= needed
-// and as close to needed as possible (minimises leftover, avoids fragmentation).
-function bestFitSection(
-  sections: EngineSection[],
-  needed: number,
-  assignments: CargoAssignment[],
-): EngineSection | null {
-  let best: EngineSection | null = null;
-  let bestLeftover = Infinity;
+// ── Level ordering ────────────────────────────────────────────────────────────
+// Top (most accessible for discharge) → bottom (least accessible).
+const LEVEL_ORDER = ['DECK', 'UPD', 'FC', 'A', 'B', 'C', 'D', 'E'];
 
-  for (const s of sections) {
-    const remaining = getSectionRemainingCapacity(s, assignments);
-    if (remaining >= needed) {
-      const leftover = remaining - needed;
-      if (leftover < bestLeftover) {
-        bestLeftover = leftover;
-        best = s;
-      }
-    }
-  }
-  return best;
+// Parse sectionId into hold number and level string.
+// "2UPD" → { holdNumber: 2, level: "UPD" }
+// "3A"   → { holdNumber: 3, level: "A" }
+function parseSection(sectionId: string): { holdNumber: number; level: string } {
+  const match = sectionId.match(/^(\d+)(.+)$/);
+  return {
+    holdNumber: match ? parseInt(match[1], 10) : 1,
+    level: match ? match[2].toUpperCase() : sectionId.toUpperCase(),
+  };
 }
 
-// Determine majority hold pair from zone temperature assignments.
-// Returns the hold numbers that hold the most cargo (by zone count).
-function preferredHolds(zones: EngineZone[], sections: EngineSection[]): Set<number> {
-  const holdCount = new Map<number, number>();
-  for (const z of zones) {
-    if (z.assignedTemperature === null) continue;
-    for (const sid of z.sectionIds) {
-      const sec = sections.find(s => s.sectionId === sid);
-      if (!sec) continue;
-      holdCount.set(sec.holdNumber, (holdCount.get(sec.holdNumber) ?? 0) + 1);
-    }
-  }
-  // Sort holds by count desc, take top 2.
-  const sorted = [...holdCount.entries()].sort((a, b) => b[1] - a[1]);
-  const top = sorted.slice(0, 2).map(([h]) => h);
-  return new Set(top);
+function levelIndex(level: string): number {
+  const idx = LEVEL_ORDER.indexOf(level.toUpperCase());
+  return idx === -1 ? LEVEL_ORDER.length : idx; // unknown → least accessible
 }
 
-// ----------------------------------------------------------------------------
-// Main export
-// ----------------------------------------------------------------------------
+// Returns sectionIds in the same hold that are ABOVE (more accessible than) sectionId.
+function getLevelsAbove(sectionId: string, holdState: HoldState): string[] {
+  const { holdNumber, level } = parseSection(sectionId);
+  const myIdx = levelIndex(level);
+  return Object.keys(holdState).filter(sid => {
+    const p = parseSection(sid);
+    return p.holdNumber === holdNumber && levelIndex(p.level) < myIdx;
+  });
+}
+
+// Returns sectionIds in the same hold that are BELOW (less accessible than) sectionId.
+function getLevelsBelow(sectionId: string, holdState: HoldState): string[] {
+  const { holdNumber, level } = parseSection(sectionId);
+  const myIdx = levelIndex(level);
+  return Object.keys(holdState).filter(sid => {
+    const p = parseSection(sid);
+    return p.holdNumber === holdNumber && levelIndex(p.level) > myIdx;
+  });
+}
+
+// ── POL/POD sequence constraint ───────────────────────────────────────────────
+// A booking can be placed in sectionId only if:
+//   1. Its podSeq is >= the highest podSeq already above it in the hold
+//      (don't bury earlier-discharge cargo under later-discharge cargo)
+//   2. Its podSeq is <= the lowest podSeq already below it in the hold
+//      (don't cover later-discharge cargo that sits below)
+//   3. Its polSeq is >= the highest polSeq already below it in the hold
+//      (monotonic bottom→top loading: no retreat to an earlier port)
+//   4. Its polSeq is <= the lowest polSeq already above it in the hold
+//      (monotonic bottom→top loading: no advance past a later port already above)
+function canPlace(
+  booking: EngineBooking,
+  sectionId: string,
+  holdState: HoldState,
+): boolean {
+  const levelsAbove = getLevelsAbove(sectionId, holdState);
+  const levelsBelow = getLevelsBelow(sectionId, holdState);
+
+  const podMaxAbove = levelsAbove.reduce(
+    (max, l) => Math.max(max, holdState[l].maxPodSeq), 0,
+  );
+  const podMinBelow = levelsBelow.reduce(
+    (min, l) => Math.min(min, holdState[l].minPodSeq), Infinity,
+  );
+  const polMinAbove = levelsAbove.reduce(
+    (min, l) => Math.min(min, holdState[l].minPolSeq), Infinity,
+  );
+  const polMaxBelow = levelsBelow.reduce(
+    (max, l) => Math.max(max, holdState[l].maxPolSeq), 0,
+  );
+
+  return (
+    booking.podSeq >= podMaxAbove &&  // don't bury earlier-discharge cargo
+    booking.podSeq <= podMinBelow &&  // don't cover later-discharge cargo below
+    booking.polSeq >= polMaxBelow &&  // load: monotonic fondo→tope (no retreat)
+    booking.polSeq <= polMinAbove     // load: monotonic fondo→tope (no advance)
+  );
+}
+
+// ── Balance scoring ───────────────────────────────────────────────────────────
+// Preferred hold pair: (1+3) or (2+4) — whichever has more remaining capacity.
+function getPreferredPair(holdState: HoldState): Set<number> {
+  const pairRemaining = (holds: number[]) =>
+    Object.values(holdState)
+      .filter(s => holds.includes(parseSection(s.sectionId).holdNumber))
+      .reduce((sum, s) => sum + (s.capacity - s.palletsUsed), 0);
+
+  const cap13 = pairRemaining([1, 3]);
+  const cap24 = pairRemaining([2, 4]);
+  return new Set(cap13 >= cap24 ? [1, 3] : [2, 4]);
+}
+
+function sectionScore(
+  sectionId: string,
+  palletsUsed: number,
+  capacity: number,
+  preferredPair: Set<number>,
+): number {
+  const balanceScore = capacity > 0 ? palletsUsed / capacity : 1;
+  const bonus = preferredPair.has(parseSection(sectionId).holdNumber) ? -0.2 : 0;
+  return balanceScore + bonus;
+}
+
+// ── Main export ───────────────────────────────────────────────────────────────
 
 export function assignCargo(
   input: EngineInput,
   zones: EngineZone[],
 ): {
   assignments: CargoAssignment[];
+  cargoPositions: CargoPositionOutput[];
   conflicts: EngineConflict[];
   unassigned: EngineOutput['unassignedBookings'];
 } {
   const { sections } = input.vessel;
-  const allBookings = input.bookings;
-  const assignments: CargoAssignment[] = [];
+  const conflicts: EngineConflict[] = [];
   const unassigned: EngineOutput['unassignedBookings'] = [];
 
-  // Determine preferred hold pair (majority cargo holds).
-  const preferred = preferredHolds(zones, sections);
+  // Zone lookup for temperature checks.
+  const zoneMap = new Map(zones.map(z => [z.zoneId, z]));
 
-  // Sort bookings: frozen first, then by podSequence desc (deepest load first),
-  // then by pallets desc.
-  const sorted = [...allBookings].sort((a, b) => {
-    if (a.frozen !== b.frozen) return a.frozen ? -1 : 1;
-    if (b.podSequence !== a.podSequence) return b.podSequence - a.podSequence;
+  // 1. Build sorted work queue from bookings + contractEstimates.
+  //    Index.ts has already enriched polSeq/podSeq on all bookings.
+  //    PRIMARY:   polSeq ASC  (load from first port first)
+  //    SECONDARY: podSeq DESC (furthest destination goes deepest in hold)
+  //    TERTIARY:  pallets DESC (largest first to reduce fragmentation)
+  const workQueue = [
+    ...(input.bookings ?? []),
+    ...(input.contractEstimates ?? []),
+  ].sort((a, b) => {
+    if (a.polSeq !== b.polSeq) return a.polSeq - b.polSeq;
+    if (b.podSeq !== a.podSeq) return b.podSeq - a.podSeq;
     return b.pallets - a.pallets;
   });
 
-  // ── Pre-assignment capacity check ─────────────────────────────────────────
-  // If total requested pallets exceed total vessel capacity, exclude the
-  // lowest-priority bookings (already sorted — exclude from the end).
-  const totalVesselCapacity = sections.reduce((sum, s) => sum + s.maxPallets, 0);
-  const totalRequested = sorted.reduce((sum, b) => sum + b.pallets, 0);
-  const preConflicts: EngineConflict[] = [];
-
-  let bookingsToAssign = sorted;
-  if (totalRequested > totalVesselCapacity) {
-    let remaining = totalVesselCapacity;
-    const included: EngineBooking[] = [];
-    const excluded: EngineBooking[] = [];
-
-    for (const b of sorted) {
-      if (remaining >= b.pallets) {
-        included.push(b);
-        remaining -= b.pallets;
-      } else {
-        excluded.push(b);
-      }
-    }
-
-    for (const b of excluded) {
-      preConflicts.push({
-        type: 'CAPACITY_CONFLICT',
-        bookingIds: [b.bookingId],
-        sectionsInvolved: [],
-        palletsAffected: b.pallets,
-        message: `${b.pallets} pallets of ${b.cargoType} excluded: vessel total capacity (${totalVesselCapacity} pallets) exceeded.`,
-        suggestedActions: ['Split to another voyage or reduce booking quantity.'],
-      });
-      unassigned.push({ bookingId: b.bookingId, reason: 'Vessel over total capacity.' });
-    }
-
-    bookingsToAssign = included;
+  // 2. Initialise HoldState from all vessel sections.
+  const holdState: HoldState = {};
+  for (const section of sections) {
+    holdState[section.sectionId] = {
+      sectionId: section.sectionId,
+      palletsUsed: 0,
+      capacity: Math.floor(section.sqm / (section.designStowageFactor ?? 1.32)),
+      minPolSeq: Infinity,
+      maxPolSeq: 0,
+      minPodSeq: Infinity,
+      maxPodSeq: 0,
+      entries: [],
+    };
   }
 
-  // ── Greedy constructive pass ──────────────────────────────────────────────
-  const unassignedAfterGreedy: EngineBooking[] = [];
+  // 3. Preferred hold pair determined once at the start (full vessel capacity).
+  const preferredPair = getPreferredPair(holdState);
 
-  for (const booking of bookingsToAssign) {
-    let remaining = booking.pallets;
-    const compatible = getCompatibleSections(
-      booking, sections, zones, assignments, allBookings,
-    );
+  // 4. Main assignment loop.
+  for (const booking of workQueue) {
+    let palletsRemaining = booking.pallets;
 
-    if (compatible.length === 0) {
-      unassignedAfterGreedy.push(booking);
-      continue;
-    }
-
-    // Prefer sections in the preferred holds.
-    const preferredSections = compatible.filter(s => preferred.has(s.holdNumber));
-    const fallbackSections  = compatible.filter(s => !preferred.has(s.holdNumber));
-    const orderedSections   = [...preferredSections, ...fallbackSections];
-
-    // Try to fit entire booking into one section first.
-    const single = bestFitSection(orderedSections, remaining, assignments);
-    if (single) {
-      assignments.push({
-        bookingId: booking.bookingId,
-        sectionId: single.sectionId,
-        palletsAssigned: remaining,
-        confidence: booking.confidence,
-        frozen: booking.frozen,
+    while (palletsRemaining > 0) {
+      // Filter sections that pass all three gates:
+      //   a) remaining capacity > 0
+      //   b) temperature compatible with zone
+      //   c) canPlace POL/POD constraint passes
+      const candidates = sections.filter(sec => {
+        const state = holdState[sec.sectionId];
+        if (!state || state.capacity - state.palletsUsed <= 0) return false;
+        const zone = zoneMap.get(sec.zoneId);
+        if (!zone || !isTemperatureCompatible(booking, zone)) return false;
+        if (!canPlace(booking, sec.sectionId, holdState)) return false;
+        return true;
       });
-      continue;
-    }
 
-    // Split across multiple sections.
-    let splitSuccessful = true;
-    for (const sec of orderedSections) {
-      if (remaining <= 0) break;
-      const cap = getSectionRemainingCapacity(sec, assignments);
-      if (cap <= 0) continue;
-      const allocate = Math.min(remaining, cap);
-      assignments.push({
-        bookingId: booking.bookingId,
-        sectionId: sec.sectionId,
-        palletsAssigned: allocate,
-        confidence: booking.confidence,
-        frozen: booking.frozen,
-      });
-      remaining -= allocate;
-    }
+      if (candidates.length === 0) {
+        // Classify the conflict by narrowing down which constraint failed.
+        const hasCompatibleTemp = zones.some(z => isTemperatureCompatible(booking, z));
+        const compatibleTempSections = hasCompatibleTemp
+          ? sections.filter(s => {
+              const z = zoneMap.get(s.zoneId);
+              return z && isTemperatureCompatible(booking, z);
+            })
+          : [];
+        const hasCapacity = compatibleTempSections.some(s => {
+          const st = holdState[s.sectionId];
+          return st && st.capacity - st.palletsUsed > 0;
+        });
 
-    if (remaining > 0) {
-      // Partial — keep what was assigned, record unassigned remainder.
-      unassignedAfterGreedy.push({ ...booking, pallets: remaining });
-      splitSuccessful = false;
-    }
+        let type: EngineConflict['type'];
+        let message: string;
+        const suggestedActions: string[] = [];
 
-    void splitSuccessful; // suppress unused var warning
-  }
-
-  // ── Local repair pass ─────────────────────────────────────────────────────
-  const stillUnassigned: EngineBooking[] = [];
-
-  for (const booking of unassignedAfterGreedy) {
-    let repaired = false;
-
-    for (let attempt = 0; attempt < 3 && !repaired; attempt++) {
-      // Find ESTIMATED (non-frozen) assignments in sections that are compatible
-      // with the booking.
-      const zoneMap = new Map(zones.map(z => [z.zoneId, z]));
-
-      for (const candidate of sections) {
-        const zone = zoneMap.get(candidate.zoneId);
-        if (!zone || !isTemperatureCompatible(booking, zone)) continue;
-
-        const candidateAssignments = assignments.filter(
-          a => a.sectionId === candidate.sectionId && !a.frozen,
-        );
-        if (candidateAssignments.length === 0) continue;
-
-        // Try to move each ESTIMATED assignment in this section to another section.
-        for (const movable of candidateAssignments) {
-          const movableBooking = allBookings.find(b => b.bookingId === movable.bookingId);
-          if (!movableBooking) continue;
-
-          // Find an alternative section for the movable booking.
-          const tempAssignmentsWithoutMovable = assignments.filter(a => a !== movable);
-          const altSections = getCompatibleSections(
-            movableBooking,
-            sections,
-            zones,
-            tempAssignmentsWithoutMovable,
-            allBookings,
-          ).filter(s => s.sectionId !== candidate.sectionId);
-
-          const alt = bestFitSection(altSections, movable.palletsAssigned, tempAssignmentsWithoutMovable);
-          if (!alt) continue;
-
-          // Execute the swap.
-          const idx = assignments.indexOf(movable);
-          assignments[idx] = {
-            ...movable,
-            sectionId: alt.sectionId,
-          };
-
-          // Now try to assign the original booking to candidate.
-          const cap = getSectionRemainingCapacity(candidate, assignments);
-          if (cap >= booking.pallets) {
-            assignments.push({
-              bookingId: booking.bookingId,
-              sectionId: candidate.sectionId,
-              palletsAssigned: booking.pallets,
-              confidence: booking.confidence,
-              frozen: booking.frozen,
-            });
-            repaired = true;
-            break;
-          } else {
-            // Undo the swap.
-            assignments[idx] = movable;
-          }
-        }
-
-        if (repaired) break;
-      }
-    }
-
-    if (!repaired) {
-      stillUnassigned.push(booking);
-    }
-  }
-
-  // ── Conflict generation ───────────────────────────────────────────────────
-  const conflicts: EngineConflict[] = [];
-  const zoneMap = new Map(zones.map(z => [z.zoneId, z]));
-
-  for (const booking of stillUnassigned) {
-    // Classify why the booking couldn't be assigned.
-    const hasCompatibleTemp = zones.some(z => isTemperatureCompatible(booking, z));
-
-    const compatibleZones = zones.filter(z => isTemperatureCompatible(booking, z));
-    const compatibleSections = sections.filter(s => {
-      const z = zoneMap.get(s.zoneId);
-      return z && isTemperatureCompatible(booking, z);
-    });
-    const hasCapacity = compatibleSections.some(
-      s => getSectionRemainingCapacity(s, assignments) > 0,
-    );
-
-    let type: EngineConflict['type'];
-    let message: string;
-    const suggestedActions: string[] = [];
-
-    if (!hasCompatibleTemp) {
-      type = 'TEMPERATURE_CONFLICT';
-      message = `No zone has a compatible temperature for ${booking.cargoType} (range ${booking.tempMin}°C to ${booking.tempMax}°C).`;
-      for (const z of zones) {
-        if (z.assignedTemperature !== null) {
-          const midpoint = (booking.tempMin + booking.tempMax) / 2;
+        if (!hasCompatibleTemp) {
+          type = 'TEMPERATURE_CONFLICT';
+          message = `No zone has a compatible temperature for ${booking.cargoType} (range ${booking.tempMin}°C–${booking.tempMax}°C).`;
           suggestedActions.push(
-            `Change zone ${z.zoneId} temperature to ${midpoint}°C to accommodate this booking.`,
+            `Adjust a zone temperature to the range [${booking.tempMin}, ${booking.tempMax}]°C.`,
+          );
+        } else if (!hasCapacity) {
+          type = 'CAPACITY_CONFLICT';
+          message = `Compatible zones exist but all sections are full for ${palletsRemaining} pallets of ${booking.cargoType}.`;
+          suggestedActions.push('Split to another voyage or reduce booking quantity.');
+        } else {
+          type = 'OVERSTOW_CONFLICT';
+          message =
+            `POL/POD sequence constraints block all sections for ${booking.cargoType}` +
+            ` (POL seq ${booking.polSeq}, POD seq ${booking.podSeq}).` +
+            ` ${palletsRemaining} pallets unplaced.`;
+          suggestedActions.push(
+            'Review loading order — cargo for this port pair cannot be placed without creating an overstow.',
           );
         }
+
+        conflicts.push({
+          type,
+          bookingIds: [booking.bookingId],
+          sectionsInvolved: compatibleTempSections.map(s => s.sectionId),
+          palletsAffected: palletsRemaining,
+          message,
+          suggestedActions,
+        });
+        unassigned.push({ bookingId: booking.bookingId, reason: message });
+        break; // stop trying to place this booking
       }
-    } else if (!hasCapacity) {
-      type = 'CAPACITY_CONFLICT';
-      message = `Compatible zones exist but all sections are full for ${booking.pallets} pallets of ${booking.cargoType}.`;
-      suggestedActions.push(
-        `Reduce booking quantity by ${booking.pallets - Math.max(...compatibleSections.map(s => getSectionRemainingCapacity(s, assignments)))} pallets or split to another voyage.`,
+
+      // Score and rank candidates; pick the lowest score.
+      const best = candidates.reduce(
+        (bestSec, sec) => {
+          const state = holdState[sec.sectionId];
+          const score = sectionScore(sec.sectionId, state.palletsUsed, state.capacity, preferredPair);
+          const bestState = holdState[bestSec.sectionId];
+          const bestScore = sectionScore(bestSec.sectionId, bestState.palletsUsed, bestState.capacity, preferredPair);
+          return score < bestScore ? sec : bestSec;
+        },
+        candidates[0],
       );
-    } else {
-      type = 'OVERSTOW_CONFLICT';
-      message = `Temperature and capacity constraints are met but overstow rules block all sections for ${booking.cargoType} (POD sequence ${booking.podSequence}).`;
-      const involvedSections = compatibleSections
-        .filter(s => getSectionRemainingCapacity(s, assignments) > 0)
-        .map(s => s.sectionId);
-      suggestedActions.push(
-        `Move later-discharge cargo from section(s) [${involvedSections.join(', ')}] to free the access path.`,
-      );
+
+      const bestState = holdState[best.sectionId];
+      const assignable = Math.min(palletsRemaining, bestState.capacity - bestState.palletsUsed);
+
+      // Record the entry in HoldState.
+      const entry: SectionEntry = {
+        bookingId: booking.bookingId,
+        confidence: booking.confidence,
+        polSeq: booking.polSeq,
+        podSeq: booking.podSeq,
+        quantity: assignable,
+      };
+      bestState.entries.push(entry);
+      bestState.palletsUsed   += assignable;
+      bestState.minPolSeq      = Math.min(bestState.minPolSeq, booking.polSeq);
+      bestState.maxPolSeq      = Math.max(bestState.maxPolSeq, booking.polSeq);
+      bestState.minPodSeq      = Math.min(bestState.minPodSeq, booking.podSeq);
+      bestState.maxPodSeq      = Math.max(bestState.maxPodSeq, booking.podSeq);
+
+      palletsRemaining -= assignable;
     }
-
-    const involvedSections = compatibleZones.flatMap(z => z.sectionIds);
-
-    conflicts.push({
-      type,
-      bookingIds: [booking.bookingId],
-      sectionsInvolved: involvedSections,
-      palletsAffected: booking.pallets,
-      message,
-      suggestedActions,
-    });
-
-    unassigned.push({ bookingId: booking.bookingId, reason: message });
   }
 
-  return { assignments, conflicts: [...preConflicts, ...conflicts], unassigned };
+  // 5. Convert HoldState entries → CargoAssignment[] and CargoPositionOutput[].
+  const assignments: CargoAssignment[] = [];
+  const cargoPositions: CargoPositionOutput[] = [];
+
+  for (const [sectionId, state] of Object.entries(holdState)) {
+    for (const entry of state.entries) {
+      const booking = workQueue.find(b => b.bookingId === entry.bookingId);
+      if (!booking) continue;
+
+      assignments.push({
+        bookingId:       entry.bookingId,
+        sectionId,
+        palletsAssigned: entry.quantity,
+        confidence:      booking.confidence,
+        frozen:          booking.frozen,
+      });
+
+      cargoPositions.push({
+        sectionId,
+        bookingId:       booking.bookingId,
+        contractId:      booking.contractId,
+        contractNumber:  booking.contractNumber,
+        shipperName:     booking.shipperName,
+        consigneeName:   booking.consigneeName,
+        snapshotQuantity: entry.quantity,
+        confidence:      booking.confidence,
+        polPortCode:     booking.polPortCode,
+        podPortCode:     booking.podPortCode,
+        polSeq:          entry.polSeq,
+        podSeq:          entry.podSeq,
+      });
+    }
+  }
+
+  return { assignments, cargoPositions, conflicts, unassigned };
 }
