@@ -759,6 +759,29 @@ CountrySchema.index({ code: 1 });
 CountrySchema.index({ name: 1 });
 
 // ============================================================================
+// CUSTOMER SCHEMA — External counterparties (consignees, shippers, agents)
+// ============================================================================
+
+const CustomerSchema = new Schema({
+  customerNumber: { type: String, required: true, unique: true }, // "CUST-0001"
+  name:           { type: String, required: true },               // "Del Monte Fresh Produce"
+  type:           { type: String, required: true, enum: ['CONSIGNEE', 'SHIPPER', 'AGENT'] },
+  countryCode:    { type: String, required: true },               // ISO 3166-1 alpha-2
+  country:        { type: String, required: true },               // Denormalized full name
+  contactName:    { type: String },
+  contactEmail:   { type: String },
+  contactPhone:   { type: String },
+  address:        { type: String },
+  notes:          { type: String },
+  active:         { type: Boolean, default: true },
+  createdBy:      { type: String },
+}, { timestamps: true });
+
+CustomerSchema.index({ type: 1 });
+CustomerSchema.index({ active: 1 });
+CustomerSchema.index({ countryCode: 1 });
+
+// ============================================================================
 // MODELS EXPORT
 // ============================================================================
 
@@ -773,6 +796,9 @@ export const CargoProductModel: AnyModel =
 
 export const CountryModel: AnyModel =
   mongoose.models.Country || mongoose.model('Country', CountrySchema);
+
+export const CustomerModel: AnyModel =
+  mongoose.models.Customer || mongoose.model('Customer', CustomerSchema);
 
 export const UnecePortModel: AnyModel =
   mongoose.models.UnecePort || mongoose.model('UnecePort', UnecePortSchema);

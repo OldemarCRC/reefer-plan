@@ -9,17 +9,18 @@ import { getUsers } from '@/app/actions/user';
 import { getPorts, getUnecePorts } from '@/app/actions/port';
 import { getShippers } from '@/app/actions/shipper';
 import { getAdminBookings } from '@/app/actions/booking';
+import { getCustomers } from '@/app/actions/customer';
 import AdminClient from './AdminClient';
 import type { DisplayContract } from '@/app/contracts/ContractsClient';
 
 export const metadata = { title: 'Admin — Reefer Planner' };
 
-const VALID_TABS = ['voyages','contracts','plans','vessels','services','users','ports','shippers','offices','bookings'];
+const VALID_TABS = ['voyages','contracts','plans','vessels','services','users','ports','shippers','offices','bookings','customers'];
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { tab } = await searchParams;
   const initialTab = VALID_TABS.includes(tab ?? '') ? tab! : 'voyages';
-  const [voyagesResult, contractsRes, officesRes, servicesRes, plansRes, vesselsRes, usersRes, portsRes, shippersRes, unecePortsRes, bookingsRes] = await Promise.all([
+  const [voyagesResult, contractsRes, officesRes, servicesRes, plansRes, vesselsRes, usersRes, portsRes, shippersRes, unecePortsRes, bookingsRes, customersRes] = await Promise.all([
     getAdminVoyages(),
     getContracts(),
     getOffices(),
@@ -31,6 +32,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     getShippers(),
     getUnecePorts(),
     getAdminBookings(),
+    getCustomers(),
   ]);
 
   const voyages  = voyagesResult.success ? voyagesResult.data : [];
@@ -44,6 +46,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const shippers   = shippersRes.success   ? shippersRes.data   : [];
   const unecePorts = unecePortsRes.success ? unecePortsRes.data : [];
   const bookings   = bookingsRes.success   ? bookingsRes.data   : [];
+  const customers  = customersRes.success  ? customersRes.data  : [];
 
   const displayContracts: DisplayContract[] = contracts.map((c: any) => {
     const legacyCps = c.client?.type === 'SHIPPER' ? c.consignees : c.shippers;
@@ -93,6 +96,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         shippers={shippers}
         unecePorts={unecePorts}
         bookings={bookings}
+        customers={customers}
         initialTab={initialTab}
       />
     </AppShell>

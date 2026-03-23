@@ -12,6 +12,9 @@ import { getPorts, createPort, updatePort, importAllPortsFromUnece } from '@/app
 import { createShipper, updateShipper, deactivateShipper } from '@/app/actions/shipper';
 import { createOffice, updateOffice, deleteOffice } from '@/app/actions/office';
 import { approveBooking, rejectBooking, cancelBooking } from '@/app/actions/booking';
+import { createCustomer, updateCustomer, deactivateCustomer } from '@/app/actions/customer';
+import { getCountries } from '@/app/actions/country';
+import CountrySelect from '@/components/ui/CountrySelect';
 import ContractsClient from '@/app/contracts/ContractsClient';
 import type { DisplayContract } from '@/app/contracts/ContractsClient';
 import styles from './page.module.css';
@@ -195,6 +198,23 @@ interface AdminBooking {
   createdAt?: string;
 }
 
+interface AdminCustomer {
+  _id: string;
+  customerNumber: string;
+  name: string;
+  type: 'CONSIGNEE' | 'SHIPPER' | 'AGENT';
+  countryCode: string;
+  country: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  address: string;
+  notes: string;
+  active: boolean;
+  createdBy: string;
+  createdAt: string | null;
+}
+
 const BOOKING_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   CONFIRMED: { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
   PENDING:   { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)' },
@@ -217,7 +237,7 @@ function fmtCargo(type: string): string {
   return type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 }
 
-type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users' | 'ports' | 'shippers' | 'offices' | 'bookings';
+type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users' | 'ports' | 'shippers' | 'offices' | 'bookings' | 'customers';
 
 type ConfirmAction =
   | { type: 'cancel'; voyage: AdminVoyage }
@@ -3671,6 +3691,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'shippers',  label: 'Shippers'      },
   { id: 'offices',   label: 'Offices'       },
   { id: 'bookings',  label: 'Bookings'      },
+  { id: 'customers', label: 'Customers'     },
 ];
 
 interface AdminClientProps {
@@ -3685,10 +3706,11 @@ interface AdminClientProps {
   shippers: AdminShipper[];
   unecePorts: UnecePort[];
   bookings: AdminBooking[];
+  customers: AdminCustomer[];
   initialTab?: string;
 }
 
-export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports, shippers, unecePorts, bookings, initialTab = 'voyages' }: AdminClientProps) {
+export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports, shippers, unecePorts, bookings, customers, initialTab = 'voyages' }: AdminClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>((initialTab as Tab) || 'voyages');
 
@@ -3736,7 +3758,542 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
       {activeTab === 'ports'    && <PortsTab initialPorts={ports} unecePorts={unecePorts} />}
       {activeTab === 'shippers' && <ShippersTab initialShippers={shippers} />}
       {activeTab === 'offices'  && <OfficesTab initialOffices={offices} />}
-      {activeTab === 'bookings' && <BookingsTab initialBookings={bookings} />}
+      {activeTab === 'bookings'  && <BookingsTab initialBookings={bookings} />}
+      {activeTab === 'customers' && <CustomersTab initialCustomers={customers} />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Customers Tab
+// ---------------------------------------------------------------------------
+
+const CUSTOMER_TYPE_LABELS: Record<string, string> = {
+  CONSIGNEE: 'Consignee',
+  SHIPPER:   'Shipper',
+  AGENT:     'Agent',
+};
+
+function CreateCustomerModal({ onClose, onCreated }: {
+  onClose: () => void;
+  onCreated: (c: AdminCustomer) => void;
+}) {
+  const [name, setName]               = useState('');
+  const [type, setType]               = useState<'CONSIGNEE' | 'SHIPPER' | 'AGENT'>('CONSIGNEE');
+  const [countryCode, setCountryCode] = useState('');
+  const [country, setCountry]         = useState('');
+  const [contactName, setContactName] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [address, setAddress]         = useState('');
+  const [notes, setNotes]             = useState('');
+  const [isPending, startTransition]  = useTransition();
+  const [error, setError]             = useState<string | null>(null);
+
+  // When CountrySelect sets a code, also store the resolved name for the server
+  const [countryOptions, setCountryOptions] = useState<{ code: string; name: string; flag: string }[]>([]);
+  useEffect(() => {
+    getCountries().then(setCountryOptions);
+  }, []);
+
+  const handleCountryChange = (code: string) => {
+    setCountryCode(code);
+    const found = countryOptions.find(c => c.code === code);
+    setCountry(found?.name ?? '');
+  };
+
+  const handleSubmit = () => {
+    if (!name.trim() || !countryCode || !type) {
+      setError('Name, Type and Country are required');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await createCustomer({
+        name:         name.trim(),
+        type,
+        countryCode,
+        country,
+        contactName:  contactName.trim() || undefined,
+        contactEmail: contactEmail.trim() || undefined,
+        contactPhone: contactPhone.trim() || undefined,
+        address:      address.trim() || undefined,
+        notes:        notes.trim() || undefined,
+      });
+      if (result.success) {
+        onCreated(result.customer as AdminCustomer);
+      } else {
+        setError(result.error ?? 'Failed to create customer');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h3 className={styles.modalTitle}>New Customer</h3>
+        <div className={styles.formGrid}>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Name *</label>
+            <input
+              className={styles.formInput}
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Del Monte Fresh Produce"
+              maxLength={200}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Type *</label>
+            <select className={styles.formInput} value={type} onChange={e => setType(e.target.value as any)}>
+              <option value="CONSIGNEE">Consignee</option>
+              <option value="SHIPPER">Shipper</option>
+              <option value="AGENT">Agent</option>
+            </select>
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Country *</label>
+            <CountrySelect value={countryCode} onChange={handleCountryChange} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Contact Name</label>
+            <input
+              className={styles.formInput}
+              value={contactName}
+              onChange={e => setContactName(e.target.value)}
+              placeholder="Jane Doe"
+              maxLength={150}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Contact Email</label>
+            <input
+              className={styles.formInput}
+              type="email"
+              value={contactEmail}
+              onChange={e => setContactEmail(e.target.value)}
+              placeholder="jane@example.com"
+              maxLength={200}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Contact Phone</label>
+            <input
+              className={styles.formInput}
+              value={contactPhone}
+              onChange={e => setContactPhone(e.target.value)}
+              placeholder="+1 555 123 4567"
+              maxLength={30}
+            />
+          </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Address</label>
+            <input
+              className={styles.formInput}
+              value={address}
+              onChange={e => setAddress(e.target.value)}
+              placeholder="123 Harbor Blvd, Port City"
+              maxLength={500}
+            />
+          </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Notes</label>
+            <textarea
+              className={styles.formInput}
+              rows={2}
+              style={{ resize: 'vertical', fontFamily: 'inherit' }}
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              maxLength={1000}
+            />
+          </div>
+        </div>
+        {error && <div className={styles.modalError}>{error}</div>}
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
+          <button
+            className={styles.btnPrimary}
+            onClick={handleSubmit}
+            disabled={isPending || !name.trim() || !countryCode}
+          >
+            {isPending ? 'Creating…' : 'Create Customer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditCustomerModal({ customer, onClose, onUpdated }: {
+  customer: AdminCustomer;
+  onClose: () => void;
+  onUpdated: (c: AdminCustomer) => void;
+}) {
+  const [name, setName]               = useState(customer.name);
+  const [type, setType]               = useState<'CONSIGNEE' | 'SHIPPER' | 'AGENT'>(customer.type);
+  const [countryCode, setCountryCode] = useState(customer.countryCode);
+  const [country, setCountry]         = useState(customer.country);
+  const [contactName, setContactName] = useState(customer.contactName);
+  const [contactEmail, setContactEmail] = useState(customer.contactEmail);
+  const [contactPhone, setContactPhone] = useState(customer.contactPhone);
+  const [address, setAddress]         = useState(customer.address);
+  const [notes, setNotes]             = useState(customer.notes);
+  const [isPending, startTransition]  = useTransition();
+  const [error, setError]             = useState<string | null>(null);
+
+  const [countryOptions, setCountryOptions] = useState<{ code: string; name: string; flag: string }[]>([]);
+  useEffect(() => {
+    getCountries().then(setCountryOptions);
+  }, []);
+
+  const handleCountryChange = (code: string) => {
+    setCountryCode(code);
+    const found = countryOptions.find(c => c.code === code);
+    setCountry(found?.name ?? country);
+  };
+
+  const handleSave = () => {
+    if (!name.trim() || !countryCode) {
+      setError('Name and Country are required');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await updateCustomer(customer._id, {
+        name:         name.trim(),
+        type,
+        countryCode,
+        country,
+        contactName:  contactName.trim() || undefined,
+        contactEmail: contactEmail.trim() || undefined,
+        contactPhone: contactPhone.trim() || undefined,
+        address:      address.trim() || undefined,
+        notes:        notes.trim() || undefined,
+      });
+      if (result.success) {
+        onUpdated(result.customer as AdminCustomer);
+      } else {
+        setError(result.error ?? 'Failed to save customer');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h3 className={styles.modalTitle}>Edit Customer — <code>{customer.customerNumber}</code></h3>
+        <div className={styles.formGrid}>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Name *</label>
+            <input
+              className={styles.formInput}
+              value={name}
+              onChange={e => setName(e.target.value)}
+              maxLength={200}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Type *</label>
+            <select className={styles.formInput} value={type} onChange={e => setType(e.target.value as any)}>
+              <option value="CONSIGNEE">Consignee</option>
+              <option value="SHIPPER">Shipper</option>
+              <option value="AGENT">Agent</option>
+            </select>
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Country *</label>
+            <CountrySelect value={countryCode} onChange={handleCountryChange} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Contact Name</label>
+            <input
+              className={styles.formInput}
+              value={contactName}
+              onChange={e => setContactName(e.target.value)}
+              maxLength={150}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Contact Email</label>
+            <input
+              className={styles.formInput}
+              type="email"
+              value={contactEmail}
+              onChange={e => setContactEmail(e.target.value)}
+              maxLength={200}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Contact Phone</label>
+            <input
+              className={styles.formInput}
+              value={contactPhone}
+              onChange={e => setContactPhone(e.target.value)}
+              maxLength={30}
+            />
+          </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Address</label>
+            <input
+              className={styles.formInput}
+              value={address}
+              onChange={e => setAddress(e.target.value)}
+              maxLength={500}
+            />
+          </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Notes</label>
+            <textarea
+              className={styles.formInput}
+              rows={2}
+              style={{ resize: 'vertical', fontFamily: 'inherit' }}
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              maxLength={1000}
+            />
+          </div>
+        </div>
+        {error && <div className={styles.modalError}>{error}</div>}
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
+          <button className={styles.btnPrimary} onClick={handleSave} disabled={isPending}>
+            {isPending ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CustomersTab({ initialCustomers }: { initialCustomers: AdminCustomer[] }) {
+  const router = useRouter();
+  const [customers, setCustomers]         = useState<AdminCustomer[]>(initialCustomers);
+  const [showCreate, setShowCreate]       = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<AdminCustomer | null>(null);
+  const [confirmDeactivate, setConfirmDeactivate] = useState<AdminCustomer | null>(null);
+  const [selectedCustomer, setSelectedCustomer]   = useState<AdminCustomer | null>(null);
+  const [typeFilter, setTypeFilter]       = useState('ALL');
+  const [isPending, startTransition]      = useTransition();
+  const [errorMsg, setErrorMsg]           = useState<string | null>(null);
+
+  const filtered = typeFilter === 'ALL'
+    ? customers
+    : customers.filter(c => c.type === typeFilter);
+
+  const handleDeactivate = () => {
+    if (!confirmDeactivate) return;
+    setErrorMsg(null);
+    startTransition(async () => {
+      const result = await deactivateCustomer(confirmDeactivate._id);
+      if (result.success) {
+        setCustomers(prev => prev.map(c => c._id === confirmDeactivate._id ? { ...c, active: false } : c));
+        setConfirmDeactivate(null);
+        if (selectedCustomer?._id === confirmDeactivate._id) {
+          setSelectedCustomer(prev => prev ? { ...prev, active: false } : prev);
+        }
+        router.refresh();
+      } else {
+        setErrorMsg(result.error ?? 'Failed to deactivate');
+      }
+    });
+  };
+
+  if (selectedCustomer) {
+    return (
+      <div className={styles.tabContent}>
+        <DetailPanel
+          title={`${selectedCustomer.customerNumber} — ${selectedCustomer.name}`}
+          onBack={() => setSelectedCustomer(null)}
+          actions={
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button className={styles.btnSm} onClick={() => setEditingCustomer(selectedCustomer)}>Edit</button>
+              {selectedCustomer.active && (
+                <button className={styles.btnWarn} onClick={() => { setConfirmDeactivate(selectedCustomer); setErrorMsg(null); }}>
+                  Deactivate
+                </button>
+              )}
+            </div>
+          }
+        >
+          <div className={styles.detailGrid}>
+            <DRow label="Customer #" value={<code>{selectedCustomer.customerNumber}</code>} mono />
+            <DRow label="Type" value={CUSTOMER_TYPE_LABELS[selectedCustomer.type]} />
+            <DRow label="Name" value={selectedCustomer.name} />
+            <DRow label="Country" value={`${selectedCustomer.country} (${selectedCustomer.countryCode})`} />
+            <DRow label="Status" value={
+              <span className={styles.badge} style={{
+                background: selectedCustomer.active ? 'var(--color-success-muted)' : 'var(--color-bg-tertiary)',
+                color: selectedCustomer.active ? 'var(--color-success)' : 'var(--color-text-tertiary)',
+              }}>{selectedCustomer.active ? 'Active' : 'Inactive'}</span>
+            } />
+            <DRow label="Contact Name"  value={selectedCustomer.contactName  || undefined} />
+            <DRow label="Contact Email" value={selectedCustomer.contactEmail || undefined} mono />
+            <DRow label="Contact Phone" value={selectedCustomer.contactPhone || undefined} />
+            <DRow label="Address" value={selectedCustomer.address || undefined} full />
+            <DRow label="Notes"   value={selectedCustomer.notes   || undefined} full />
+            <DRow label="Created By" value={selectedCustomer.createdBy || undefined} />
+            <DRow label="Created At"  value={fmtDate(selectedCustomer.createdAt ?? undefined)} />
+          </div>
+        </DetailPanel>
+
+        {editingCustomer && (
+          <EditCustomerModal
+            customer={editingCustomer}
+            onClose={() => setEditingCustomer(null)}
+            onUpdated={c => {
+              setCustomers(prev => prev.map(x => x._id === c._id ? c : x));
+              setSelectedCustomer(c);
+              setEditingCustomer(null);
+              router.refresh();
+            }}
+          />
+        )}
+
+        {confirmDeactivate && (
+          <div className={styles.overlay}>
+            <div className={styles.modal}>
+              <h3 className={styles.modalTitle}>Deactivate Customer</h3>
+              <div className={styles.modalVoyageInfo}>
+                <code className={styles.modalVoyageNumber}>{confirmDeactivate.customerNumber}</code>
+                <span style={{ opacity: 0.7 }}>{confirmDeactivate.name}</span>
+              </div>
+              <p className={styles.modalBody}>
+                Deactivating this customer hides it from dropdown menus. Existing records are not affected.
+              </p>
+              {errorMsg && <div className={styles.modalError}>{errorMsg}</div>}
+              <div className={styles.modalActions}>
+                <button className={styles.btnModalCancel} onClick={() => setConfirmDeactivate(null)} disabled={isPending}>Cancel</button>
+                <button className={styles.btnModalWarn} onClick={handleDeactivate} disabled={isPending}>
+                  {isPending ? 'Deactivating…' : 'Yes, Deactivate'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.tabContent}>
+      <div className={styles.toolbar}>
+        <div className={styles.toolbarLeft}>
+          <span className={styles.toolbarCount}>{filtered.length} customers</span>
+          <div className={styles.filterGroup}>
+            {['ALL', 'CONSIGNEE', 'SHIPPER', 'AGENT'].map(t => (
+              <button
+                key={t}
+                className={`${styles.filterBtn} ${typeFilter === t ? styles['filterBtn--active'] : ''}`}
+                onClick={() => setTypeFilter(t)}
+              >
+                {t === 'ALL' ? 'All' : CUSTOMER_TYPE_LABELS[t]}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button className={styles.btnPrimary} onClick={() => setShowCreate(true)}>+ New Customer</button>
+      </div>
+
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Customer #</th>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Country</th>
+              <th>Contact</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(c => (
+              <tr key={c._id} style={{ opacity: c.active ? 1 : 0.5 }} className={styles.trClickable} onClick={() => setSelectedCustomer(c)}>
+                <td><code style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.8125rem' }}>{c.customerNumber}</code></td>
+                <td style={{ fontWeight: 'var(--weight-medium)' }}>{c.name}</td>
+                <td>
+                  <span className={styles.badge} style={{
+                    background: c.type === 'CONSIGNEE' ? 'var(--color-blue-muted)'
+                              : c.type === 'SHIPPER'   ? 'var(--color-success-muted)'
+                              : 'var(--color-warning-muted)',
+                    color: c.type === 'CONSIGNEE' ? 'var(--color-blue-light)'
+                         : c.type === 'SHIPPER'   ? 'var(--color-success)'
+                         : 'var(--color-warning)',
+                  }}>
+                    {CUSTOMER_TYPE_LABELS[c.type]}
+                  </span>
+                </td>
+                <td className={styles.cellSecondary}>{c.country}</td>
+                <td className={styles.cellSecondary} style={{ fontSize: '0.8125rem' }}>
+                  {c.contactName && <div style={{ fontWeight: 'var(--weight-medium)', color: 'var(--color-text-primary)' }}>{c.contactName}</div>}
+                  {c.contactEmail && <div>{c.contactEmail}</div>}
+                  {!c.contactName && !c.contactEmail && <span style={{ opacity: 0.4 }}>—</span>}
+                </td>
+                <td>
+                  <span className={styles.badge} style={{
+                    background: c.active ? 'var(--color-success-muted)' : 'var(--color-bg-tertiary)',
+                    color: c.active ? 'var(--color-success)' : 'var(--color-text-tertiary)',
+                  }}>
+                    {c.active ? 'Active' : 'Inactive'}
+                  </span>
+                </td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '2rem' }}>
+                  No customers yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {confirmDeactivate && (
+        <div className={styles.overlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Deactivate Customer</h3>
+            <div className={styles.modalVoyageInfo}>
+              <code className={styles.modalVoyageNumber}>{confirmDeactivate.customerNumber}</code>
+              <span style={{ opacity: 0.7 }}>{confirmDeactivate.name}</span>
+            </div>
+            <p className={styles.modalBody}>
+              Deactivating this customer hides it from dropdown menus. Existing records are not affected.
+            </p>
+            {errorMsg && <div className={styles.modalError}>{errorMsg}</div>}
+            <div className={styles.modalActions}>
+              <button className={styles.btnModalCancel} onClick={() => setConfirmDeactivate(null)} disabled={isPending}>Cancel</button>
+              <button className={styles.btnModalWarn} onClick={handleDeactivate} disabled={isPending}>
+                {isPending ? 'Deactivating…' : 'Yes, Deactivate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreate && (
+        <CreateCustomerModal
+          onClose={() => setShowCreate(false)}
+          onCreated={c => {
+            setCustomers(prev => [...prev, c].sort((a, b) => a.name.localeCompare(b.name)));
+            setShowCreate(false);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {editingCustomer && (
+        <EditCustomerModal
+          customer={editingCustomer}
+          onClose={() => setEditingCustomer(null)}
+          onUpdated={c => {
+            setCustomers(prev => prev.map(x => x._id === c._id ? c : x));
+            setEditingCustomer(null);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
