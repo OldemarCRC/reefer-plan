@@ -8,7 +8,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { ContractModel, ServiceModel, OfficeModel, ShipperModel, BookingModel } from '@/lib/db/schemas';
+import { ContractModel, ServiceModel, OfficeModel, ShipperModel, BookingModel, CustomerModel } from '@/lib/db/schemas';
 import { auth } from '@/auth';
 import { toTitleCase, toLower } from '@/lib/utils/normalize';
 
@@ -48,15 +48,17 @@ const ContractCounterpartyInputSchema = z.object({
 
 const CreateContractSchema = z.object({
   officeId: z.string().min(1, 'Office ID is required'),
+  customerId: z.string().optional(),
   client: z.object({
-    type: z.enum(['SHIPPER', 'CONSIGNEE']),
-    name: z.string().min(1).max(200),
-    contact: z.string().min(1),
-    email: z.string().email(),
-    country: z.string().min(1),
+    type: z.enum(['SHIPPER', 'CONSIGNEE', 'AGENT']),
+    name: z.string().max(200).optional(),
+    contact: z.string().optional(),
+    email: z.string().email().optional().or(z.literal('')),
+    country: z.string().optional(),
   }),
-  cargoType:    CargoTypeSchema,
-  weeklyPallets: z.number().int().min(1, 'Weekly pallets must be at least 1'),
+  cargoType:    CargoTypeSchema.optional(),
+  weeklyPallets: z.number().int().min(0).optional(),
+  notes: z.string().optional(),
   shippers:       z.array(CounterpartySchema).default([]),
   consignees:     z.array(CounterpartySchema).default([]),
   counterparties: z.array(ContractCounterpartyInputSchema).default([]),
@@ -69,14 +71,15 @@ const CreateContractSchema = z.object({
 
 const UpdateContractSchema = z.object({
   client: z.object({
-    type: z.enum(['SHIPPER', 'CONSIGNEE']),
+    type: z.enum(['SHIPPER', 'CONSIGNEE', 'AGENT']),
     name: z.string().min(1).max(200),
     contact: z.string().min(1),
     email: z.string().email(),
     country: z.string().min(1),
   }).partial().optional(),
   cargoType:    CargoTypeSchema.optional(),
-  weeklyPallets: z.number().int().min(1).optional(),
+  weeklyPallets: z.number().int().min(0).optional(),
+  notes: z.string().optional(),
   shippers: z.array(CounterpartySchema).optional(),
   consignees: z.array(CounterpartySchema).optional(),
   originPort: PortInfoSchema.optional(),
@@ -151,8 +154,22 @@ export async function createContract(data: unknown) {
       return { success: false, error: `Service ${service.serviceCode} has no shortCode configured` };
     }
 
+    // Resolve client data — prefer Customer collection when customerId provided
+    let customerDoc: any = null;
+    if (validated.customerId) {
+      customerDoc = await CustomerModel.findById(validated.customerId).lean();
+      if (!customerDoc) return { success: false, error: 'Customer not found' };
+    }
+
+    const clientName    = customerDoc ? customerDoc.name                  : (validated.client.name ?? '');
+    const clientContact = customerDoc ? (customerDoc.contactName ?? '')    : (validated.client.contact ?? '');
+    const clientEmail   = customerDoc ? (customerDoc.contactEmail ?? '')   : (validated.client.email ?? '');
+    const clientCountry = customerDoc ? (customerDoc.countryCode ?? '')    : (validated.client.country ?? '');
+
+    if (!clientName) return { success: false, error: 'Client name is required' };
+
     // Auto-generate client number
-    const clientNumber = await resolveClientNumber(validated.client.name);
+    const clientNumber = await resolveClientNumber(clientName);
 
     // Auto-generate contract number
     const year = new Date().getFullYear();
@@ -167,16 +184,18 @@ export async function createContract(data: unknown) {
       contractNumber,
       officeId: validated.officeId,
       officeCode: office.code,
+      ...(validated.customerId ? { customerId: validated.customerId } : {}),
       client: {
-        ...validated.client,
-        name:    toTitleCase(validated.client.name),
-        contact: toTitleCase(validated.client.contact),
-        email:   toLower(validated.client.email),
-        country: validated.client.country.toUpperCase(),
+        type:         validated.client.type,
+        name:         toTitleCase(clientName),
+        contact:      toTitleCase(clientContact),
+        email:        toLower(clientEmail),
+        country:      clientCountry.toUpperCase(),
         clientNumber,
       },
-      cargoType: validated.cargoType,
-      weeklyPallets: validated.weeklyPallets,
+      ...(validated.cargoType ? { cargoType: validated.cargoType } : {}),
+      ...(validated.weeklyPallets !== undefined ? { weeklyPallets: validated.weeklyPallets } : {}),
+      ...(validated.notes ? { notes: validated.notes } : {}),
       shippers: validated.shippers,
       consignees: validated.consignees,
       counterparties: validated.counterparties,

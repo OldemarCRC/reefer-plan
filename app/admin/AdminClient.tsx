@@ -3726,7 +3726,7 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
       {activeTab === 'voyages'   && <VoyagesTab initialVoyages={voyages} />}
       {activeTab === 'contracts' && (
         <div className={styles.tabContent}>
-          <ContractsClient contracts={contracts} offices={offices.filter(o => o.active)} services={services} shippers={shippers} adminMode />
+          <ContractsClient contracts={contracts} offices={offices.filter(o => o.active)} services={services} shippers={shippers} customers={customers} adminMode />
         </div>
       )}
       {activeTab === 'plans'    && <PlansTab initialPlans={plans} />}

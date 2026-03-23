@@ -74,11 +74,24 @@ interface ShipperOption {
   code: string;
 }
 
+interface CustomerOption {
+  _id: string;
+  customerNumber: string;
+  name: string;
+  type: 'CONSIGNEE' | 'SHIPPER' | 'AGENT';
+  countryCode: string;
+  country: string;
+  contactName: string;
+  contactEmail: string;
+  active: boolean;
+}
+
 interface ContractsClientProps {
   contracts: DisplayContract[];
   offices: OfficeOption[];
   services: ServiceOption[];
   shippers?: ShipperOption[];
+  customers?: CustomerOption[];
   /** When true, row clicks open an inline detail panel instead of navigating to /contracts/[id] */
   adminMode?: boolean;
 }
@@ -148,24 +161,29 @@ function CreateContractModal({
   offices,
   services,
   shippers = [],
+  customers = [],
   onClose,
 }: {
   offices: OfficeOption[];
   services: ServiceOption[];
   shippers?: ShipperOption[];
+  customers?: CustomerOption[];
   onClose: () => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Customer selection
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerId, setCustomerId] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
+  const [customerDropOpen, setCustomerDropOpen] = useState(false);
+
   // Form state
   const [officeId, setOfficeId] = useState('');
-  const [clientType, setClientType] = useState<'SHIPPER' | 'CONSIGNEE'>('SHIPPER');
-  const [clientName, setClientName] = useState('');
-  const [clientContact, setClientContact] = useState('');
-  const [clientEmail, setClientEmail] = useState('');
-  const [clientCountry, setClientCountry] = useState('');
+  const [clientType, setClientType] = useState<'SHIPPER' | 'CONSIGNEE' | 'AGENT'>('SHIPPER');
+  const [notes, setNotes] = useState('');
   const [cargoType, setCargoType] = useState<CargoType | ''>('');
   const [weeklyPallets, setWeeklyPallets] = useState('');
   const [serviceId, setServiceId] = useState('');
@@ -225,6 +243,29 @@ function CreateContractModal({
     updateShipperRow(idx, 'cargoTypes', types);
   };
 
+  // --- Customer search helpers ---
+  const activeCustomers = customers.filter((c) => c.active);
+  const filteredCustomers = customerSearch.trim()
+    ? activeCustomers.filter((c) =>
+        c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+        c.customerNumber.toLowerCase().includes(customerSearch.toLowerCase())
+      )
+    : activeCustomers;
+
+  const handleSelectCustomer = (c: CustomerOption) => {
+    setCustomerId(c._id);
+    setSelectedCustomer(c);
+    setClientType(c.type);
+    setCustomerSearch('');
+    setCustomerDropOpen(false);
+  };
+
+  const clearCustomer = () => {
+    setCustomerId('');
+    setSelectedCustomer(null);
+    setClientType('SHIPPER');
+  };
+
   // Weekly total for CONSIGNEE shippers vs weeklyPallets
   const shipperWeeklyTotal = shipperRows
     .filter((r) => r.shipperId)
@@ -237,16 +278,16 @@ function CreateContractModal({
   const handleSubmit = () => {
     setErrorMsg(null);
 
-    if (!officeId || !clientName || !clientContact || !clientEmail || !clientCountry) {
-      setErrorMsg('Please fill in all client fields.');
+    if (!officeId) {
+      setErrorMsg('Please select an office.');
       return;
     }
-    if (!cargoType) {
+    if (!customerId) {
+      setErrorMsg('Please select a customer.');
+      return;
+    }
+    if (clientType !== 'AGENT' && !cargoType) {
       setErrorMsg('Please select a cargo type.');
-      return;
-    }
-    if (!weeklyPallets || parseInt(weeklyPallets) < 1) {
-      setErrorMsg('Weekly pallets must be at least 1.');
       return;
     }
     if (!serviceId || !originPort || !destinationPort) {
@@ -267,17 +308,13 @@ function CreateContractModal({
     // Build counterparties for CONSIGNEE: validate selected shippers have cargo types
     const validShipperRows = shipperRows.filter((r) => r.shipperId && r.cargoTypes.length > 0);
 
-    const payload = {
+    const payload: any = {
       officeId,
-      client: {
-        type: clientType,
-        name: clientName,
-        contact: clientContact,
-        email: clientEmail,
-        country: clientCountry,
-      },
-      cargoType: cargoType as CargoType,
-      weeklyPallets: parseInt(weeklyPallets),
+      customerId,
+      client: { type: clientType },
+      ...(cargoType ? { cargoType: cargoType as CargoType } : {}),
+      ...(weeklyPallets ? { weeklyPallets: parseInt(weeklyPallets) } : {}),
+      ...(notes.trim() ? { notes: notes.trim() } : {}),
       shippers: clientType === 'CONSIGNEE'
         ? validCounterparties.map((cp) => ({
             name: cp.name,
@@ -332,7 +369,7 @@ function CreateContractModal({
     });
   };
 
-  const counterpartyLabel = clientType === 'SHIPPER' ? 'Consignees' : 'Shippers';
+  const counterpartyLabel = clientType === 'SHIPPER' ? 'Consignees' : clientType === 'CONSIGNEE' ? 'Shippers' : null;
 
   return (
     <div className={styles.overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -351,71 +388,93 @@ function CreateContractModal({
             </select>
           </div>
 
-          {/* Client type */}
+          {/* Customer select */}
           <div className={styles.formRow}>
-            <label className={styles.formLabel}>Client Type</label>
-            <div className={styles.toggleGroup}>
-              <button
-                type="button"
-                className={`${styles.toggleBtn} ${clientType === 'SHIPPER' ? styles['toggleBtn--active'] : ''}`}
-                onClick={() => setClientType('SHIPPER')}
-              >
-                Shipper
-              </button>
-              <button
-                type="button"
-                className={`${styles.toggleBtn} ${clientType === 'CONSIGNEE' ? styles['toggleBtn--active'] : ''}`}
-                onClick={() => setClientType('CONSIGNEE')}
-              >
-                Consignee
-              </button>
-            </div>
+            <label className={styles.formLabel}>Customer *</label>
+            {selectedCustomer ? (
+              <div className={styles.selectedCustomerCard}>
+                <div>
+                  <div className={styles.selectedCustomerName}>{selectedCustomer.name}</div>
+                  <div className={styles.selectedCustomerMeta}>
+                    {selectedCustomer.customerNumber} ·{' '}
+                    <span className={styles.customerTypeBadge}>{selectedCustomer.type}</span>
+                    {' · '}{selectedCustomer.countryCode}
+                    {selectedCustomer.contactName && ` · ${selectedCustomer.contactName}`}
+                  </div>
+                </div>
+                <button type="button" className={styles.btnRemove} onClick={clearCustomer}>Change</button>
+              </div>
+            ) : (
+              <div style={{ position: 'relative' }}>
+                <input
+                  className={styles.formInput}
+                  value={customerSearch}
+                  onChange={(e) => { setCustomerSearch(e.target.value); setCustomerDropOpen(true); }}
+                  onFocus={() => setCustomerDropOpen(true)}
+                  onBlur={() => setTimeout(() => setCustomerDropOpen(false), 150)}
+                  placeholder="Search by name or customer number…"
+                  autoComplete="off"
+                />
+                {customerDropOpen && (filteredCustomers.length > 0 || customerSearch.trim()) && (
+                  <div className={styles.customerDropdown}>
+                    {filteredCustomers.slice(0, 10).map((c) => (
+                      <button
+                        key={c._id}
+                        type="button"
+                        className={styles.customerDropItem}
+                        onMouseDown={() => handleSelectCustomer(c)}
+                      >
+                        <span className={styles.customerDropName}>{c.name}</span>
+                        <span className={styles.customerDropMeta}>{c.customerNumber} · {c.type}</span>
+                      </button>
+                    ))}
+                    {filteredCustomers.length === 0 && (
+                      <div className={styles.customerDropEmpty}>No customers found</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Client info */}
-          <div className={styles.formRow}>
-            <label className={styles.formLabel}>Client Name</label>
-            <input className={styles.formInput} value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Company name" required maxLength={120} />
-          </div>
-          <div className={styles.formGrid2}>
-            <div className={styles.formRow}>
-              <label className={styles.formLabel}>Contact</label>
-              <input className={styles.formInput} value={clientContact} onChange={(e) => setClientContact(e.target.value)} placeholder="Contact person" required maxLength={120} />
-            </div>
-            <div className={styles.formRow}>
-              <label className={styles.formLabel}>Email</label>
-              <input className={styles.formInput} type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="email@example.com" required maxLength={200} />
-            </div>
-          </div>
-          <div className={styles.formRow}>
-            <label className={styles.formLabel}>Country</label>
-            <CountrySelect value={clientCountry} onChange={setClientCountry} placeholder="Search country…" required />
-          </div>
-
-          {/* Cargo type + weekly pallets */}
+          {/* Cargo type + weekly pallets (not shown for AGENT) */}
           <div className={styles.formDivider} />
-          <div className={styles.formGrid2}>
+          {clientType === 'AGENT' ? (
             <div className={styles.formRow}>
-              <label className={styles.formLabel}>Primary Cargo Type</label>
-              <select className={styles.formSelect} value={cargoType} onChange={(e) => setCargoType(e.target.value as CargoType)}>
-                <option value="">Select cargo...</option>
-                {CARGO_TYPES.map((ct) => (
-                  <option key={ct} value={ct}>{formatCargo(ct)}</option>
-                ))}
-              </select>
-            </div>
-            <div className={styles.formRow}>
-              <label className={styles.formLabel}>Weekly Pallets (contract cap)</label>
-              <input
+              <label className={styles.formLabel}>Notes</label>
+              <textarea
                 className={styles.formInput}
-                type="number"
-                min="1"
-                value={weeklyPallets}
-                onChange={(e) => setWeeklyPallets(e.target.value)}
-                placeholder="e.g. 200"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Describe the scope or terms of this agent contract…"
+                rows={3}
+                style={{ resize: 'vertical' }}
               />
             </div>
-          </div>
+          ) : (
+            <div className={styles.formGrid2}>
+              <div className={styles.formRow}>
+                <label className={styles.formLabel}>Primary Cargo Type *</label>
+                <select className={styles.formSelect} value={cargoType} onChange={(e) => setCargoType(e.target.value as CargoType)}>
+                  <option value="">Select cargo...</option>
+                  {CARGO_TYPES.map((ct) => (
+                    <option key={ct} value={ct}>{formatCargo(ct)}</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.formRow}>
+                <label className={styles.formLabel}>Weekly Pallets (contract cap)</label>
+                <input
+                  className={styles.formInput}
+                  type="number"
+                  min="0"
+                  value={weeklyPallets}
+                  onChange={(e) => setWeeklyPallets(e.target.value)}
+                  placeholder="e.g. 200"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Service & Route */}
           <div className={styles.formDivider} />
@@ -461,7 +520,9 @@ function CreateContractModal({
             </div>
           </div>
 
-          {/* Counterparties */}
+          {/* Counterparties (not shown for AGENT contracts) */}
+          {counterpartyLabel && (
+          <>
           <div className={styles.formDivider} />
           <div className={styles.formRow}>
             <label className={styles.formLabel}>{counterpartyLabel}</label>
@@ -582,9 +643,11 @@ function CreateContractModal({
                 </div>
               ))}
               <button type="button" className={styles.btnAddCp} onClick={addCounterparty}>
-                + Add {counterpartyLabel.slice(0, -1)}
+                + Add {counterpartyLabel!.slice(0, -1)}
               </button>
             </>
+          )}
+          </>
           )}
         </div>
 
@@ -838,7 +901,7 @@ function EditContractModal({
 // Main Component
 // ---------------------------------------------------------------------------
 
-export default function ContractsClient({ contracts, offices, services, shippers = [], adminMode = false }: ContractsClientProps) {
+export default function ContractsClient({ contracts, offices, services, shippers = [], customers = [], adminMode = false }: ContractsClientProps) {
   const router = useRouter();
   const [searchText, setSearchText] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -1144,6 +1207,7 @@ export default function ContractsClient({ contracts, offices, services, shippers
           offices={offices}
           services={services}
           shippers={shippers}
+          customers={customers}
           onClose={() => setShowCreate(false)}
         />
       )}

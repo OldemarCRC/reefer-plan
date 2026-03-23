@@ -187,16 +187,18 @@ const ContractSchema = new Schema({
   contractNumber: { type: String, required: true, unique: true },
   officeId: { type: Schema.Types.ObjectId, ref: 'Office', required: true },
   officeCode: { type: String, required: true },
+  customerId: { type: Schema.Types.ObjectId, ref: 'Customer' },  // optional link to Customer collection
   client: {
-    type: { type: String, enum: ['SHIPPER', 'CONSIGNEE'], required: true },
-    name: { type: String, required: true },
-    clientNumber: { type: String, required: true },
-    contact: { type: String, required: true },
-    email: { type: String, required: true },
-    country: { type: String, required: true },
+    type: { type: String, enum: ['SHIPPER', 'CONSIGNEE', 'AGENT'], required: true },
+    name: { type: String },
+    clientNumber: { type: String },
+    contact: { type: String },
+    email: { type: String },
+    country: { type: String },
   },
-  cargoType:    { type: String, required: true },   // primary cargo for this contract
-  weeklyPallets: { type: Number, required: true, min: 1 }, // contract-level weekly capacity
+  cargoType:    { type: String },              // primary cargo for this contract (optional for AGENT)
+  weeklyPallets: { type: Number, min: 0 },    // contract-level weekly capacity (optional)
+  notes: { type: String },                     // free-text notes (useful for AGENT contracts)
   shippers: [CounterpartySchema],       // kept for backward compat with existing docs
   consignees: [CounterpartySchema],     // kept for backward compat with existing docs
   counterparties: [ContractCounterpartySchema], // new: refs Shipper collection
