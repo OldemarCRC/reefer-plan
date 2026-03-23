@@ -745,6 +745,20 @@ const UserSchema = new Schema({
 UserSchema.index({ role: 1 }); // email: unique: true is already indexed inline
 
 // ============================================================================
+// COUNTRY SCHEMA — ISO 3166-1 alpha-2 country reference data
+// ============================================================================
+
+const CountrySchema = new Schema({
+  name:   { type: String, required: true, unique: true }, // "Chile", "Netherlands"
+  code:   { type: String, required: true, unique: true }, // "CL", "NL" (ISO 3166-1 alpha-2)
+  flag:   { type: String, required: true },               // "🇨🇱", "🇳🇱" (emoji)
+  active: { type: Boolean, default: true },
+}, { timestamps: false });
+
+CountrySchema.index({ code: 1 });
+CountrySchema.index({ name: 1 });
+
+// ============================================================================
 // MODELS EXPORT
 // ============================================================================
 
@@ -756,6 +770,9 @@ export const CompatibilityGroupModel: AnyModel =
 
 export const CargoProductModel: AnyModel =
   mongoose.models.CargoProduct || mongoose.model('CargoProduct', CargoProductSchema);
+
+export const CountryModel: AnyModel =
+  mongoose.models.Country || mongoose.model('Country', CountrySchema);
 
 export const UnecePortModel: AnyModel =
   mongoose.models.UnecePort || mongoose.model('UnecePort', UnecePortSchema);
