@@ -117,7 +117,7 @@ export async function createOffice(data: unknown) {
     const office = await OfficeModel.create({
       ...validated,
       name:         toTitleCase(validated.name),
-      country:      toTitleCase(validated.country),
+      country:      validated.country.toUpperCase(),
       contactName:  validated.contactName  ? toTitleCase(validated.contactName)  : undefined,
       contactEmail: validated.contactEmail ? toLower(validated.contactEmail)     : undefined,
     });
@@ -147,7 +147,7 @@ export async function updateOffice(officeId: unknown, data: unknown) {
 
     const normalizedUpdate: Record<string, any> = { ...validated };
     if (validated.name         !== undefined) normalizedUpdate.name         = toTitleCase(validated.name);
-    if (validated.country      !== undefined) normalizedUpdate.country      = toTitleCase(validated.country);
+    if (validated.country      !== undefined) normalizedUpdate.country      = validated.country.toUpperCase();
     if (validated.contactName  !== undefined) normalizedUpdate.contactName  = validated.contactName ? toTitleCase(validated.contactName) : undefined;
     if (validated.contactEmail !== undefined) normalizedUpdate.contactEmail = validated.contactEmail ? toLower(validated.contactEmail) : undefined;
 

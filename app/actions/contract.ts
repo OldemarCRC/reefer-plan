@@ -172,7 +172,7 @@ export async function createContract(data: unknown) {
         name:    toTitleCase(validated.client.name),
         contact: toTitleCase(validated.client.contact),
         email:   toLower(validated.client.email),
-        country: toTitleCase(validated.client.country),
+        country: validated.client.country.toUpperCase(),
         clientNumber,
       },
       cargoType: validated.cargoType,
@@ -222,7 +222,8 @@ export async function updateContract(contractId: unknown, updates: unknown) {
     if (validated.client) {
       for (const [k, v] of Object.entries(validated.client)) {
         if (v === undefined) continue;
-        if (k === 'name' || k === 'contact' || k === 'country') setFields[`client.${k}`] = toTitleCase(v as string);
+        if (k === 'name' || k === 'contact') setFields[`client.${k}`] = toTitleCase(v as string);
+        else if (k === 'country') setFields[`client.${k}`] = (v as string).toUpperCase();
         else if (k === 'email') setFields[`client.${k}`] = toLower(v as string);
         else setFields[`client.${k}`] = v;
       }

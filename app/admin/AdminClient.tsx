@@ -991,14 +991,8 @@ function CreateVesselModal({ onClose, onCreated }: {
             />
           </div>
           <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Flag * (2-letter ISO)</label>
-            <input
-              className={`${styles.formInput} ${styles.formInputMono}`}
-              value={flag}
-              onChange={e => setFlag(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2))}
-              placeholder="PA"
-              maxLength={2}
-            />
+            <label className={styles.formLabel}>Flag (country) *</label>
+            <CountrySelect value={flag} onChange={setFlag} placeholder="Search flag state…" required />
           </div>
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>Call Sign</label>
@@ -1074,7 +1068,7 @@ function CreateVesselModal({ onClose, onCreated }: {
           <button
             className={styles.btnPrimary}
             onClick={handleSubmit}
-            disabled={isPending || !name.trim() || imoNumber.length !== 7 || flag.length !== 2}
+            disabled={isPending || !name.trim() || imoNumber.length !== 7 || !flag}
           >
             {isPending ? 'Creating…' : 'Create Vessel'}
           </button>
@@ -1106,7 +1100,7 @@ function EditVesselModal({ vessel, onClose, onUpdated }: {
   const [error, setError] = useState<string | null>(null);
 
   const handleSave = () => {
-    if (!name.trim() || !flag.trim()) {
+    if (!name.trim() || !flag) {
       setError('Vessel name and flag are required');
       return;
     }
@@ -1115,7 +1109,7 @@ function EditVesselModal({ vessel, onClose, onUpdated }: {
       const result = await updateVessel(vessel._id, {
         name: name.trim(),
         imoNumber: imoNumber.trim() || undefined,
-        flag: flag.trim().toUpperCase(),
+        flag: flag.toUpperCase(),
         callSign: callSign.trim() || undefined,
         built: builtYear ? Number(builtYear) : undefined,
         capacity: (totalPallets || totalSqm) ? {
@@ -1160,13 +1154,8 @@ function EditVesselModal({ vessel, onClose, onUpdated }: {
             />
           </div>
           <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Flag * (2-letter ISO)</label>
-            <input
-              className={`${styles.formInput} ${styles.formInputMono}`}
-              value={flag}
-              onChange={e => setFlag(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2))}
-              maxLength={2}
-            />
+            <label className={styles.formLabel}>Flag (country) *</label>
+            <CountrySelect value={flag} onChange={setFlag} placeholder="Search flag state…" required />
           </div>
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>Call Sign</label>
@@ -2962,17 +2951,17 @@ function CreateShipperModal({ onClose, onCreated }: {
   onClose: () => void;
   onCreated: (s: AdminShipper) => void;
 }) {
-  const [name, setName] = useState('');
-  const [code, setCode] = useState('');
-  const [contact, setContact] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [country, setCountry] = useState('');
+  const [name, setName]      = useState('');
+  const [code, setCode]      = useState('');
+  const [contact, setContact]= useState('');
+  const [email, setEmail]    = useState('');
+  const [phone, setPhone]    = useState('');
+  const [country, setCountry]= useState('');   // ISO code e.g. "CO"
   const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]    = useState<string | null>(null);
 
   const handleSubmit = () => {
-    if (!name.trim() || !code.trim() || !contact.trim() || !email.trim() || !country.trim()) {
+    if (!name.trim() || !code.trim() || !contact.trim() || !email.trim() || !country) {
       setError('Name, Code, Contact, Email and Country are required');
       return;
     }
@@ -2984,7 +2973,7 @@ function CreateShipperModal({ onClose, onCreated }: {
         contact: contact.trim(),
         email: email.trim(),
         phone: phone.trim() || undefined,
-        country: country.trim(),
+        country,
       });
       if (result.success) {
         onCreated(result.data as AdminShipper);
@@ -3009,7 +2998,7 @@ function CreateShipperModal({ onClose, onCreated }: {
           </div>
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>Country *</label>
-            <input className={`${styles.formInput} ${styles.formInputMono}`} value={country} onChange={e => setCountry(e.target.value.toUpperCase())} placeholder="CO" maxLength={100} />
+            <CountrySelect value={country} onChange={setCountry} placeholder="Search country…" required />
           </div>
           <div className={styles.formGroupFull}>
             <label className={styles.formLabel}>Contact Person *</label>
@@ -3027,7 +3016,7 @@ function CreateShipperModal({ onClose, onCreated }: {
         {error && <div className={styles.modalError}>{error}</div>}
         <div className={styles.modalActions}>
           <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
-          <button className={styles.btnPrimary} onClick={handleSubmit} disabled={isPending || !name.trim() || !code.trim() || !email.trim()}>
+          <button className={styles.btnPrimary} onClick={handleSubmit} disabled={isPending || !name.trim() || !code.trim() || !email.trim() || !country}>
             {isPending ? 'Creating…' : 'Create Shipper'}
           </button>
         </div>
@@ -3041,17 +3030,17 @@ function EditShipperModal({ shipper, onClose, onUpdated }: {
   onClose: () => void;
   onUpdated: (s: AdminShipper) => void;
 }) {
-  const [name, setName] = useState(shipper.name);
-  const [code, setCode] = useState(shipper.code);
-  const [contact, setContact] = useState(shipper.contact);
-  const [email, setEmail] = useState(shipper.email);
-  const [phone, setPhone] = useState(shipper.phone ?? '');
-  const [country, setCountry] = useState(shipper.country);
+  const [name, setName]      = useState(shipper.name);
+  const [code, setCode]      = useState(shipper.code);
+  const [contact, setContact]= useState(shipper.contact);
+  const [email, setEmail]    = useState(shipper.email);
+  const [phone, setPhone]    = useState(shipper.phone ?? '');
+  const [country, setCountry]= useState(shipper.country); // ISO code e.g. "CO"
   const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]    = useState<string | null>(null);
 
   const handleSave = () => {
-    if (!name.trim() || !code.trim() || !contact.trim() || !email.trim() || !country.trim()) {
+    if (!name.trim() || !code.trim() || !contact.trim() || !email.trim() || !country) {
       setError('Name, Code, Contact, Email and Country are required');
       return;
     }
@@ -3063,7 +3052,7 @@ function EditShipperModal({ shipper, onClose, onUpdated }: {
         contact: contact.trim(),
         email: email.trim(),
         phone: phone.trim() || undefined,
-        country: country.trim(),
+        country,
       });
       if (result.success) {
         onUpdated(result.data as AdminShipper);
@@ -3088,7 +3077,7 @@ function EditShipperModal({ shipper, onClose, onUpdated }: {
           </div>
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>Country *</label>
-            <input className={`${styles.formInput} ${styles.formInputMono}`} value={country} onChange={e => setCountry(e.target.value.toUpperCase())} maxLength={100} />
+            <CountrySelect value={country} onChange={setCountry} placeholder="Search country…" required />
           </div>
           <div className={styles.formGroupFull}>
             <label className={styles.formLabel}>Contact Person *</label>
@@ -3106,7 +3095,7 @@ function EditShipperModal({ shipper, onClose, onUpdated }: {
         {error && <div className={styles.modalError}>{error}</div>}
         <div className={styles.modalActions}>
           <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
-          <button className={styles.btnPrimary} onClick={handleSave} disabled={isPending}>
+          <button className={styles.btnPrimary} onClick={handleSave} disabled={isPending || !country}>
             {isPending ? 'Saving…' : 'Save Changes'}
           </button>
         </div>
@@ -3276,17 +3265,17 @@ function CreateOfficeModal({ onClose, onCreated }: {
   onClose: () => void;
   onCreated: (o: AdminOffice) => void;
 }) {
-  const [code, setCode] = useState('');
-  const [name, setName] = useState('');
-  const [country, setCountry] = useState('');
-  const [contactName, setContactName] = useState('');
+  const [code, setCode]           = useState('');
+  const [name, setName]           = useState('');
+  const [country, setCountry]     = useState('');  // ISO code e.g. "CL"
+  const [contactName, setContactName]   = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]         = useState<string | null>(null);
 
   const handleSubmit = () => {
-    if (!code.trim() || !name.trim() || !country.trim()) {
+    if (!code.trim() || !name.trim() || !country) {
       setError('Code, Name and Country are required');
       return;
     }
@@ -3295,7 +3284,7 @@ function CreateOfficeModal({ onClose, onCreated }: {
       const result = await createOffice({
         code: code.trim(),
         name: name.trim(),
-        country: country.trim(),
+        country,
         contactName: contactName.trim() || undefined,
         contactEmail: contactEmail.trim() || undefined,
         contactPhone: contactPhone.trim() || undefined,
@@ -3325,13 +3314,7 @@ function CreateOfficeModal({ onClose, onCreated }: {
           </div>
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>Country *</label>
-            <input
-              className={styles.formInput}
-              value={country}
-              onChange={e => setCountry(e.target.value)}
-              placeholder="Chile"
-              maxLength={100}
-            />
+            <CountrySelect value={country} onChange={setCountry} placeholder="Search country…" required />
           </div>
           <div className={styles.formGroupFull}>
             <label className={styles.formLabel}>Name *</label>
@@ -3381,7 +3364,7 @@ function CreateOfficeModal({ onClose, onCreated }: {
           <button
             className={styles.btnPrimary}
             onClick={handleSubmit}
-            disabled={isPending || !code.trim() || !name.trim() || !country.trim()}
+            disabled={isPending || !code.trim() || !name.trim() || !country}
           >
             {isPending ? 'Creating…' : 'Create Office'}
           </button>
@@ -3396,16 +3379,16 @@ function EditOfficeModal({ office, onClose, onUpdated }: {
   onClose: () => void;
   onUpdated: (o: AdminOffice) => void;
 }) {
-  const [name, setName] = useState(office.name);
-  const [country, setCountry] = useState(office.country);
-  const [contactName, setContactName] = useState(office.contactName ?? '');
+  const [name, setName]           = useState(office.name);
+  const [country, setCountry]     = useState(office.country);  // ISO code e.g. "CL"
+  const [contactName, setContactName]   = useState(office.contactName ?? '');
   const [contactEmail, setContactEmail] = useState(office.contactEmail ?? '');
   const [contactPhone, setContactPhone] = useState(office.contactPhone ?? '');
   const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]         = useState<string | null>(null);
 
   const handleSave = () => {
-    if (!name.trim() || !country.trim()) {
+    if (!name.trim() || !country) {
       setError('Name and Country are required');
       return;
     }
@@ -3413,7 +3396,7 @@ function EditOfficeModal({ office, onClose, onUpdated }: {
     startTransition(async () => {
       const result = await updateOffice(office._id, {
         name: name.trim(),
-        country: country.trim(),
+        country,
         contactName: contactName.trim() || undefined,
         contactEmail: contactEmail.trim() || undefined,
         contactPhone: contactPhone.trim() || undefined,
@@ -3442,12 +3425,7 @@ function EditOfficeModal({ office, onClose, onUpdated }: {
           </div>
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>Country *</label>
-            <input
-              className={styles.formInput}
-              value={country}
-              onChange={e => setCountry(e.target.value)}
-              maxLength={100}
-            />
+            <CountrySelect value={country} onChange={setCountry} placeholder="Search country…" required />
           </div>
           <div className={styles.formGroupFull}>
             <label className={styles.formLabel}>Name *</label>
@@ -3493,7 +3471,7 @@ function EditOfficeModal({ office, onClose, onUpdated }: {
         {error && <div className={styles.modalError}>{error}</div>}
         <div className={styles.modalActions}>
           <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
-          <button className={styles.btnPrimary} onClick={handleSave} disabled={isPending}>
+          <button className={styles.btnPrimary} onClick={handleSave} disabled={isPending || !country}>
             {isPending ? 'Saving…' : 'Save Changes'}
           </button>
         </div>

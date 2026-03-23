@@ -41,7 +41,7 @@ export async function createShipper(data: unknown) {
       contact: toTitleCase(validated.contact),
       email:   toLower(validated.email),
       phone:   validated.phone?.trim(),
-      country: toTitleCase(validated.country),
+      country: validated.country.toUpperCase(),
     });
 
     return { success: true, data: JSON.parse(JSON.stringify(shipper)) };
@@ -105,7 +105,7 @@ export async function updateShipper(id: string, data: unknown) {
     if (validated.name)    normalizedUpdate.name    = toTitleCase(validated.name);
     if (validated.contact) normalizedUpdate.contact = toTitleCase(validated.contact);
     if (validated.email)   normalizedUpdate.email   = toLower(validated.email);
-    if (validated.country) normalizedUpdate.country = toTitleCase(validated.country);
+    if (validated.country) normalizedUpdate.country = validated.country.toUpperCase();
     if (validated.phone !== undefined) normalizedUpdate.phone = validated.phone?.trim();
 
     const shipper = await ShipperModel.findByIdAndUpdate(

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createContract, updateContract, deactivateContract, activateContract, getContractById } from '@/app/actions/contract';
 import ContractShippersPanel from '@/app/contracts/[id]/ContractShippersPanel';
+import CountrySelect from '@/components/ui/CountrySelect';
 import styles from './page.module.css';
 import type { CargoType } from '@/types/models';
 
@@ -388,7 +389,7 @@ function CreateContractModal({
           </div>
           <div className={styles.formRow}>
             <label className={styles.formLabel}>Country</label>
-            <input className={styles.formInput} value={clientCountry} onChange={(e) => setClientCountry(e.target.value)} placeholder="e.g. Netherlands" required maxLength={60} />
+            <CountrySelect value={clientCountry} onChange={setClientCountry} placeholder="Search country…" required />
           </div>
 
           {/* Cargo type + weekly pallets */}
@@ -732,7 +733,7 @@ function EditContractModal({
           </div>
           <div className={styles.formRow}>
             <label className={styles.formLabel}>Country</label>
-            <input className={styles.formInput} value={clientCountry} onChange={(e) => setClientCountry(e.target.value)} maxLength={60} />
+            <CountrySelect value={clientCountry} onChange={setClientCountry} placeholder="Search country…" required />
           </div>
 
           {/* Cargo + Pallets */}

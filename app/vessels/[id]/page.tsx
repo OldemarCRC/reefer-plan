@@ -11,6 +11,14 @@ import type { ZoneConfig } from '@/components/vessel/ConfigureZonesModal';
 import Link from 'next/link';
 import styles from './page.module.css';
 
+function flagDisplay(code: string): string {
+  if (!code) return '—';
+  if (code.length === 2 && /^[A-Z]{2}$/.test(code)) {
+    return code.split('').map(c => String.fromCodePoint(0x1f1e6 - 65 + c.charCodeAt(0))).join('') + ' ' + code;
+  }
+  return code; // fallback for legacy full-name values
+}
+
 // Colors cycled across temperature zones (index = zone order in vessel.temperatureZones)
 const ZONE_COLORS = [
   '#3B82F6', '#06B6D4', '#8B5CF6', '#EC4899',
@@ -272,7 +280,7 @@ export default async function VesselDetailPage({
               <span className={styles.imo}>IMO {vessel.imoNumber}</span>
             </div>
             <p className={styles.pageSubtitle}>
-              {vessel.flag} · {vesselLayout.holds.length || vessel.holds?.length || 4} holds ·{' '}
+              {flagDisplay(vessel.flag)} · {vesselLayout.holds.length || vessel.holds?.length || 4} holds ·{' '}
               {vesselLayout.holds.reduce((n, h) => n + h.levels.length, 0) || 19} compartments ·{' '}
               {profileAssignments.reduce((n, a) => n + a.palletsCapacity, 0).toLocaleString()} pallets
             </p>
