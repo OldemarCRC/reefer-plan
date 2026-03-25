@@ -4,6 +4,8 @@ import { useState, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './page.module.css';
 import { createBookingFromContract, approveBooking, rejectBooking, updateBookingQuantity } from '@/app/actions/booking';
+import ContractSelect from '@/components/ui/ContractSelect';
+import type { ContractSelectItem } from '@/components/ui/ContractSelect';
 import type { CargoType } from '@/types/models';
 import { CARGO_WEIGHT_PER_UNIT } from '@/types/models';
 
@@ -107,6 +109,8 @@ export interface ContractOption {
   shippers: CounterpartyInfo[];
   consignees: CounterpartyInfo[];
   counterparties?: ShipperCounterpartyInfo[];
+  cargoType?: string;
+  weeklyPallets?: number;
   validFrom?: string;
   validTo?: string;
 }
@@ -573,18 +577,23 @@ function CreateBookingModal({
           <div className={styles.modalBody}>
             <div className={styles.formRow}>
               <label className={styles.formLabel}>Contract</label>
-              <select
-                className={styles.formSelect}
+              <ContractSelect
+                contracts={contracts.map((c): ContractSelectItem => ({
+                  id: c.id,
+                  contractNumber: c.contractNumber,
+                  serviceCode: c.serviceCode,
+                  clientName: c.clientName,
+                  clientType: c.clientType,
+                  cargoType: c.cargoType,
+                  polCode: c.originPort.portCode,
+                  podCode: c.destinationPort.portCode,
+                  polName: c.originPort.portName,
+                  podName: c.destinationPort.portName,
+                  weeklyPallets: c.weeklyPallets,
+                }))}
                 value={selectedContractId}
-                onChange={(e) => setSelectedContractId(e.target.value)}
-              >
-                <option value="">Select a contract...</option>
-                {contracts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.contractNumber} — {c.clientName} ({c.clientType})
-                  </option>
-                ))}
-              </select>
+                onChange={(id) => setSelectedContractId(id)}
+              />
             </div>
             {selectedContract && (() => {
               const isLegacy = selectedContract.shippers.length > 0 || selectedContract.consignees.length > 0;
@@ -592,11 +601,41 @@ function CreateBookingModal({
               const noShippers = !isLegacy && activeCounterparties.length === 0;
               return (
                 <>
-                  <div className={styles.contractInfo}>
-                    <span>Service: {selectedContract.serviceCode}</span>
-                    <span>Office: {selectedContract.officeCode}</span>
-                    <span>Route: {selectedContract.originPort.portCode} → {selectedContract.destinationPort.portCode}</span>
-                    <span>{activeCounterparties.length} shipper(s) assigned</span>
+                  <div className={styles.contractCard}>
+                    <div className={styles.contractCardRow}>
+                      <span className={styles.contractCardLabel}>Client</span>
+                      <span className={styles.contractCardValue}>{selectedContract.clientName} <span className={styles.contractCardMeta}>({selectedContract.clientType})</span></span>
+                    </div>
+                    {selectedContract.cargoType && (
+                      <div className={styles.contractCardRow}>
+                        <span className={styles.contractCardLabel}>Cargo</span>
+                        <span className={styles.contractCardValue}>{selectedContract.cargoType.replace(/_/g, ' ')}</span>
+                      </div>
+                    )}
+                    <div className={styles.contractCardRow}>
+                      <span className={styles.contractCardLabel}>Route</span>
+                      <span className={styles.contractCardValue}>{selectedContract.originPort.portName} → {selectedContract.destinationPort.portName}</span>
+                    </div>
+                    <div className={styles.contractCardRow}>
+                      <span className={styles.contractCardLabel}>Service</span>
+                      <span className={`${styles.contractCardValue} ${styles.contractCardMono}`}>{selectedContract.serviceCode}</span>
+                    </div>
+                    {selectedContract.weeklyPallets != null && (
+                      <div className={styles.contractCardRow}>
+                        <span className={styles.contractCardLabel}>Weekly cap</span>
+                        <span className={styles.contractCardValue}>{selectedContract.weeklyPallets} pal/wk</span>
+                      </div>
+                    )}
+                    <div className={styles.contractCardRow}>
+                      <span className={styles.contractCardLabel}>Office</span>
+                      <span className={`${styles.contractCardValue} ${styles.contractCardMono}`}>{selectedContract.officeCode}</span>
+                    </div>
+                    {!isLegacy && (
+                      <div className={styles.contractCardRow}>
+                        <span className={styles.contractCardLabel}>Shippers</span>
+                        <span className={styles.contractCardValue}>{activeCounterparties.length} active</span>
+                      </div>
+                    )}
                   </div>
                   {noShippers && (
                     <p className={styles.noVoyagesMsg}>

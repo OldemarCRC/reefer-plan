@@ -55,6 +55,8 @@ export default async function BookingsPage() {
       cargoTypes: cp.cargoTypes,
       active: cp.active !== false,
     })),
+    cargoType: c.cargoType || undefined,
+    weeklyPallets: c.weeklyPallets ?? undefined,
     validFrom: c.validFrom,
     validTo: c.validTo,
   }));

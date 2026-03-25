@@ -626,6 +626,44 @@
   color: var(--color-text-primary);
 }
 
+/* --- Contract confirmation card (booking request wizard) --- */
+
+.contractCard {
+  padding: var(--space-3);
+  background: var(--color-bg-tertiary);
+  border: var(--border-default);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+}
+
+.contractCardRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.contractCardLabel {
+  flex-shrink: 0;
+  width: 76px;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+}
+
+.contractCardValue {
+  color: var(--color-text-primary);
+  font-size: var(--text-xs);
+}
+
+.contractCardMono {
+  font-family: var(--font-mono);
+}
+
 .errorMsg {
   color: var(--color-danger);
   font-size: var(--text-sm);

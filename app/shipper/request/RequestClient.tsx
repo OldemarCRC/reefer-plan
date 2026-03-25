@@ -4,6 +4,8 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { getUpcomingVoyagesForService } from '@/app/actions/shipper';
 import { createBookingFromContract } from '@/app/actions/booking';
+import ContractSelect from '@/components/ui/ContractSelect';
+import type { ContractSelectItem } from '@/components/ui/ContractSelect';
 import styles from '../shipper.module.css';
 
 const CARGO_TYPES = [
@@ -227,25 +229,58 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
             <div className={styles.wizardTitle}>Select Contract</div>
             <div className={styles.formGroup}>
               <label className={styles.formLabel}>Active Contract</label>
-              <select
-                className={styles.formSelect}
+              <ContractSelect
+                contracts={initialContracts.map((c: any): ContractSelectItem => ({
+                  id: c._id,
+                  contractNumber: c.contractNumber,
+                  serviceCode: c.serviceCode ?? c.serviceId?.serviceCode ?? '',
+                  clientName: c.client?.name ?? '',
+                  cargoType: c.cargoType,
+                  polCode: c.originPort?.portCode ?? '',
+                  podCode: c.destinationPort?.portCode ?? '',
+                  polName: c.originPort?.portName,
+                  podName: c.destinationPort?.portName,
+                  weeklyPallets: c.weeklyPallets,
+                }))}
                 value={selectedContractId}
-                onChange={e => setSelectedContractId(e.target.value)}
-              >
-                <option value="">— Select a contract —</option>
-                {initialContracts.map((c: any) => (
-                  <option key={c._id} value={c._id}>
-                    {c.contractNumber} — {c.serviceCode} · {c.originPort?.portCode} → {c.destinationPort?.portCode}
-                  </option>
-                ))}
-              </select>
+                onChange={(id) => setSelectedContractId(id)}
+              />
             </div>
 
             {selectedContract && (
-              <div style={{ background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                <div><strong>Service:</strong> {selectedContract.serviceCode}</div>
-                <div><strong>Route:</strong> {selectedContract.originPort?.portName} → {selectedContract.destinationPort?.portName}</div>
-                <div><strong>Valid:</strong> {fmtDate(selectedContract.validFrom)} – {fmtDate(selectedContract.validTo)}</div>
+              <div className={styles.contractCard}>
+                <div className={styles.contractCardRow}>
+                  <span className={styles.contractCardLabel}>Client</span>
+                  <span className={styles.contractCardValue}>{selectedContract.client?.name ?? '—'}</span>
+                </div>
+                {selectedContract.cargoType && (
+                  <div className={styles.contractCardRow}>
+                    <span className={styles.contractCardLabel}>Cargo</span>
+                    <span className={styles.contractCardValue}>{selectedContract.cargoType.replace(/_/g, ' ')}</span>
+                  </div>
+                )}
+                <div className={styles.contractCardRow}>
+                  <span className={styles.contractCardLabel}>Route</span>
+                  <span className={styles.contractCardValue}>
+                    {selectedContract.originPort?.portName} → {selectedContract.destinationPort?.portName}
+                  </span>
+                </div>
+                <div className={styles.contractCardRow}>
+                  <span className={styles.contractCardLabel}>Service</span>
+                  <span className={`${styles.contractCardValue} ${styles.contractCardMono}`}>
+                    {selectedContract.serviceCode ?? selectedContract.serviceId?.serviceCode ?? '—'}
+                  </span>
+                </div>
+                {selectedContract.weeklyPallets && (
+                  <div className={styles.contractCardRow}>
+                    <span className={styles.contractCardLabel}>Weekly cap</span>
+                    <span className={styles.contractCardValue}>{selectedContract.weeklyPallets} pal/wk</span>
+                  </div>
+                )}
+                <div className={styles.contractCardRow}>
+                  <span className={styles.contractCardLabel}>Valid</span>
+                  <span className={styles.contractCardValue}>{fmtDate(selectedContract.validFrom)} – {fmtDate(selectedContract.validTo)}</span>
+                </div>
               </div>
             )}
 
