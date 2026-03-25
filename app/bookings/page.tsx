@@ -32,6 +32,7 @@ export default async function BookingsPage() {
     podCode: b.podCode || b.pod?.portCode || '—',
     status: b.status || 'PENDING',
     estimateSource: b.estimateSource || 'CONTRACT_DEFAULT',
+    serviceCode: b.serviceCode || '',
   }));
 
   const contracts: ContractOption[] = rawContracts.map((c: any) => ({

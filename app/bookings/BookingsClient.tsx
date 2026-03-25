@@ -75,6 +75,7 @@ export interface DisplayBooking {
   podCode: string;
   status: string;
   estimateSource: string;
+  serviceCode: string;
 }
 
 interface CounterpartyInfo {
@@ -256,6 +257,7 @@ export default function BookingsClient({
               <tr>
                 <th>Booking</th>
                 <th>Voyage</th>
+                <th>Service</th>
                 <th>Client</th>
                 <th>Shipper</th>
                 <th>Consignee</th>
@@ -271,7 +273,7 @@ export default function BookingsClient({
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className={styles.cellMuted} style={{ textAlign: 'center', padding: '2rem' }}>
+                  <td colSpan={13} className={styles.cellMuted} style={{ textAlign: 'center', padding: '2rem' }}>
                     No bookings match the current filters.
                   </td>
                 </tr>
@@ -288,6 +290,7 @@ export default function BookingsClient({
                       </div>
                     </td>
                     <td className={styles.cellMuted}>{b.voyageNumber}</td>
+                    <td className={styles.cellMuted}>{b.serviceCode || '—'}</td>
                     <td>{b.clientName}</td>
                     <td className={styles.cellMuted}>{b.shipperName}</td>
                     <td className={styles.cellMuted}>{b.consigneeName}</td>

@@ -215,6 +215,7 @@ export async function getShipperDashboard(shipperCode: string, shipperId?: strin
       status: b.status,
       pol: b.pol ?? null,
       pod: b.pod ?? null,
+      consignee: b.consignee ?? null,
       createdAt: b.createdAt ? b.createdAt.toISOString() : null,
     }));
 

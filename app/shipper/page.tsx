@@ -158,6 +158,7 @@ export default async function ShipperDashboardPage() {
                   <th>Booking #</th>
                   <th>Voyage</th>
                   <th>Cargo</th>
+                  <th>Consignee</th>
                   <th>Req.</th>
                   <th>Conf.</th>
                   <th>Route</th>
@@ -176,6 +177,7 @@ export default async function ShipperDashboardPage() {
                       </td>
                       <td data-label="Voyage" className={styles.mono}>{b.voyageNumber || '—'}</td>
                       <td data-label="Cargo">{b.cargoType.replace(/_/g, ' ')}</td>
+                      <td data-label="Consignee">{b.consignee?.name || '—'}</td>
                       <td data-label="Req." className={styles.mono}>{b.requestedQuantity}</td>
                       <td data-label="Conf." className={styles.mono}>{b.confirmedQuantity || '—'}</td>
                       <td data-label="Route">

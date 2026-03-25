@@ -82,9 +82,12 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
     return shipper?.weeklyEstimate ?? null;
   })();
 
-  // Available cargo types from contract
+  // If the contract has a top-level cargoType, that's the only option
+  const contractCargoType: string | null = selectedContract?.cargoType ?? null;
+
   const contractCargoTypes = (() => {
     if (!selectedContract) return CARGO_TYPES;
+    if (contractCargoType) return [contractCargoType];
     const shipper = (selectedContract.shippers ?? []).find((s: any) => s.code === shipperCode);
     return shipper?.cargoTypes?.length ? shipper.cargoTypes : CARGO_TYPES;
   })();
@@ -118,8 +121,12 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
   const handleStep2Next = () => {
     if (!selectedVoyageId) return;
     setError(null);
-    // Pre-fill cargoType if contract only has one
-    if (contractCargoTypes.length === 1) setCargoType(contractCargoTypes[0]);
+    // Lock to contract's cargoType if set; otherwise auto-select if only one option
+    if (contractCargoType) {
+      setCargoType(contractCargoType);
+    } else if (contractCargoTypes.length === 1) {
+      setCargoType(contractCargoTypes[0]);
+    }
     if (weeklyHint) setQuantity(String(weeklyHint));
     setStep(3);
   };
@@ -315,17 +322,24 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
             </div>
 
             <div className={styles.formGroup}>
-              <label className={styles.formLabel}>Cargo Type *</label>
-              <select
-                className={styles.formSelect}
-                value={cargoType}
-                onChange={e => setCargoType(e.target.value)}
-              >
-                <option value="">— Select cargo type —</option>
-                {contractCargoTypes.map((ct: string) => (
-                  <option key={ct} value={ct}>{ct.replace(/_/g, ' ')}</option>
-                ))}
-              </select>
+              <label className={styles.formLabel}>Cargo Type</label>
+              {contractCargoType ? (
+                <div style={{ padding: 'var(--space-2) var(--space-3)', background: 'var(--color-bg-tertiary)', border: 'var(--border-default)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', fontWeight: 'var(--weight-medium)' }}>
+                  {contractCargoType.replace(/_/g, ' ')}
+                  <span style={{ marginLeft: '0.5rem', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>(fixed by contract)</span>
+                </div>
+              ) : (
+                <select
+                  className={styles.formSelect}
+                  value={cargoType}
+                  onChange={e => setCargoType(e.target.value)}
+                >
+                  <option value="">— Select cargo type —</option>
+                  {contractCargoTypes.map((ct: string) => (
+                    <option key={ct} value={ct}>{ct.replace(/_/g, ' ')}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div className={styles.formGroup}>

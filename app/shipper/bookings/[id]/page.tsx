@@ -112,6 +112,10 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
             <span>{booking.cargoType?.replace(/_/g, ' ')}</span>
           </div>
           <div className={styles.detailField}>
+            <label>Service</label>
+            <span style={{ fontFamily: 'var(--font-mono)' }}>{booking.serviceCode || '—'}</span>
+          </div>
+          <div className={styles.detailField}>
             <label>Requested Pallets</label>
             <span style={{ fontFamily: 'var(--font-mono)' }}>{booking.requestedQuantity}</span>
           </div>

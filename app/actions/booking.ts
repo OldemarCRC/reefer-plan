@@ -101,6 +101,21 @@ export async function createBookingFromContract(data: unknown) {
       return { success: false, error: 'Contract is not active' };
     }
 
+    // Validate cargoType matches contract if contract has a fixed cargoType
+    if (contract.cargoType && validated.cargoType !== contract.cargoType) {
+      return { success: false, error: `Cargo type must be ${contract.cargoType} for this contract` };
+    }
+
+    // Prevent duplicate active bookings for same contract + voyage
+    const existingBooking = await BookingModel.findOne({
+      contractId: validated.contractId,
+      voyageId: validated.voyageId,
+      status: { $nin: ['CANCELLED', 'REJECTED'] },
+    }).lean();
+    if (existingBooking) {
+      return { success: false, error: 'A booking for this contract and voyage already exists. Edit the existing booking to change quantities.' };
+    }
+
     // Look up voyage
     const voyage = await VoyageModel.findById(validated.voyageId).lean();
     if (!voyage) {

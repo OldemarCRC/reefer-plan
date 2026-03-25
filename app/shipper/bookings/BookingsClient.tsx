@@ -15,6 +15,7 @@ interface ShipperBooking {
   requestedQuantity: number;
   confirmedQuantity: number;
   standbyQuantity: number;
+  consignee: { name: string; code: string } | null;
   pol: { portCode: string; portName: string } | null;
   pod: { portCode: string; portName: string } | null;
   status: string;
@@ -118,6 +119,7 @@ export default function BookingsClient({
                 <th>Voyage</th>
                 <th>Service</th>
                 <th>Cargo Type</th>
+                <th>Consignee</th>
                 <th>Req.</th>
                 <th>Conf.</th>
                 <th>Stby.</th>
@@ -140,6 +142,7 @@ export default function BookingsClient({
                     <td data-label="Voyage" className={styles.mono}>{b.voyageNumber || '—'}</td>
                     <td data-label="Service" className={styles.mono}>{b.serviceCode}</td>
                     <td data-label="Cargo Type">{b.cargoType.replace(/_/g, ' ')}</td>
+                    <td data-label="Consignee">{b.consignee?.name || '—'}</td>
                     <td data-label="Req." className={styles.mono}>{b.requestedQuantity}</td>
                     <td data-label="Conf." className={styles.mono}>{b.confirmedQuantity || '—'}</td>
                     <td data-label="Stby." className={styles.mono}>{b.standbyQuantity || '—'}</td>
