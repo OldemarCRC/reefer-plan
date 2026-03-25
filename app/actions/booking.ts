@@ -106,14 +106,20 @@ export async function createBookingFromContract(data: unknown) {
       return { success: false, error: `Cargo type must be ${contract.cargoType} for this contract` };
     }
 
-    // Prevent duplicate active bookings for same contract + voyage
+    // Prevent duplicate active bookings for same contract + voyage + shipper
+    const shipperOrQuery: any[] = [{ 'shipper.code': validated.shipperCode }];
+    if (validated.shipperId) shipperOrQuery.push({ shipperId: validated.shipperId });
     const existingBooking = await BookingModel.findOne({
       contractId: validated.contractId,
       voyageId: validated.voyageId,
+      $or: shipperOrQuery,
       status: { $nin: ['CANCELLED', 'REJECTED'] },
     }).lean();
     if (existingBooking) {
-      return { success: false, error: 'A booking for this contract and voyage already exists. Edit the existing booking to change quantities.' };
+      return {
+        success: false,
+        error: `A booking already exists for shipper "${validated.shipperCode}" on this contract and voyage. To change quantities, edit the existing booking.`,
+      };
     }
 
     // Look up voyage
