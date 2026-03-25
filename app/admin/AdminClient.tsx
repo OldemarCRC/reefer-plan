@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { cancelVoyage, hardDeleteVoyage } from '@/app/actions/voyage';
 import { deleteStowagePlan } from '@/app/actions/stowage-plan';
 import { createVessel, updateVessel } from '@/app/actions/vessel';
-import { deleteService, createService, updateService } from '@/app/actions/service';
+import { deleteService, createService, updateService, assignVesselToService, removeVesselFromService } from '@/app/actions/service';
 import { createUser, updateUser, deleteUser, resendUserConfirmation } from '@/app/actions/user';
 import { getPorts, createPort, updatePort, importAllPortsFromUnece } from '@/app/actions/port';
 import { createShipper, updateShipper, deactivateShipper } from '@/app/actions/shipper';
@@ -132,6 +132,7 @@ interface AdminService {
   frequency?: string;
   cycleDurationWeeks?: number;
   active: boolean;
+  vesselPool?: string[];
   portRotation: Array<{
     portCode: string;
     portName: string;
@@ -1789,7 +1790,7 @@ function EditServiceModal({ service, onClose, onUpdated }: {
 // Services Tab
 // ---------------------------------------------------------------------------
 
-function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
+function ServicesTab({ initialServices, vessels }: { initialServices: AdminService[]; vessels: AdminVessel[] }) {
   const router = useRouter();
   const [services, setServices] = useState<AdminService[]>(initialServices);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -1798,6 +1799,8 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selectedService, setSelectedService] = useState<AdminService | null>(null);
+  const [addVesselId, setAddVesselId] = useState('');
+  const [poolError, setPoolError] = useState<string | null>(null);
 
   const confirmService = services.find(s => s._id === confirmId);
 
@@ -1833,8 +1836,44 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
       .map(p => p.portCode)
       .join(' → ');
 
+  const handleAddVessel = () => {
+    if (!selectedService || !addVesselId) return;
+    setPoolError(null);
+    startTransition(async () => {
+      const result = await assignVesselToService(selectedService._id, addVesselId);
+      if (result.success) {
+        const updated = result.data as AdminService;
+        setServices(prev => prev.map(s => s._id === updated._id ? { ...s, vesselPool: updated.vesselPool } : s));
+        setSelectedService(prev => prev ? { ...prev, vesselPool: updated.vesselPool } : prev);
+        setAddVesselId('');
+        router.refresh();
+      } else {
+        setPoolError(result.error ?? 'Failed to add vessel');
+      }
+    });
+  };
+
+  const handleRemoveVessel = (vesselId: string) => {
+    if (!selectedService) return;
+    setPoolError(null);
+    startTransition(async () => {
+      const result = await removeVesselFromService(selectedService._id, vesselId);
+      if (result.success) {
+        const updated = result.data as AdminService;
+        setServices(prev => prev.map(s => s._id === updated._id ? { ...s, vesselPool: updated.vesselPool } : s));
+        setSelectedService(prev => prev ? { ...prev, vesselPool: updated.vesselPool } : prev);
+        router.refresh();
+      } else {
+        setPoolError(result.error ?? 'Failed to remove vessel');
+      }
+    });
+  };
+
   if (selectedService) {
     const sortedPorts = [...selectedService.portRotation].sort((a: any, b: any) => a.sequence - b.sequence);
+    const poolIds = selectedService.vesselPool ?? [];
+    const poolVessels = vessels.filter(v => poolIds.includes(v._id));
+    const unassignedVessels = vessels.filter(v => !poolIds.includes(v._id) && v.active !== false);
     return (
       <div className={styles.tabContent}>
         <DetailPanel
@@ -1879,6 +1918,63 @@ function ServicesTab({ initialServices }: { initialServices: AdminService[] }) {
                 </table>
               </>
             )}
+
+            {/* Vessel Pool */}
+            <div className={styles.detailSectionHeading}>Vessel Pool ({poolVessels.length} vessels)</div>
+            {poolVessels.length === 0 ? (
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-3)' }}>
+                No vessels assigned. Voyage wizard will show all vessels.
+              </div>
+            ) : (
+              <table className={styles.detailTable} style={{ marginBottom: 'var(--space-3)' }}>
+                <thead>
+                  <tr><th>Vessel</th><th>IMO</th><th>Flag</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {poolVessels.map(v => (
+                    <tr key={v._id}>
+                      <td><strong>{v.name}</strong></td>
+                      <td><code>{v.imoNumber ?? '—'}</code></td>
+                      <td>{v.flag ?? '—'}</td>
+                      <td>
+                        <button
+                          className={styles.btnWarn}
+                          style={{ padding: '2px 8px', fontSize: 'var(--text-xs)' }}
+                          onClick={() => handleRemoveVessel(v._id)}
+                          disabled={isPending}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {unassignedVessels.length > 0 && (
+              <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                <select
+                  className={styles.formSelect}
+                  style={{ flex: 1, maxWidth: 260 }}
+                  value={addVesselId}
+                  onChange={e => setAddVesselId(e.target.value)}
+                >
+                  <option value="">— Add vessel to pool —</option>
+                  {unassignedVessels.map(v => (
+                    <option key={v._id} value={v._id}>{v.name}</option>
+                  ))}
+                </select>
+                <button
+                  className={styles.btnPrimary}
+                  style={{ whiteSpace: 'nowrap' }}
+                  onClick={handleAddVessel}
+                  disabled={!addVesselId || isPending}
+                >
+                  Add
+                </button>
+              </div>
+            )}
+            {poolError && <div className={styles.errorMsg} style={{ marginTop: 'var(--space-2)' }}>{poolError}</div>}
           </div>
         </DetailPanel>
         {editingService && (
@@ -3742,7 +3838,7 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
       )}
       {activeTab === 'plans'    && <PlansTab initialPlans={plans} />}
       {activeTab === 'vessels'  && <VesselsTab initialVessels={vessels} />}
-      {activeTab === 'services' && <ServicesTab initialServices={services as AdminService[]} />}
+      {activeTab === 'services' && <ServicesTab initialServices={services as AdminService[]} vessels={vessels as AdminVessel[]} />}
       {activeTab === 'users'    && <UsersTab initialUsers={users} initialShippers={shippers} />}
       {activeTab === 'ports'    && <PortsTab initialPorts={ports} unecePorts={unecePorts} />}
       {activeTab === 'shippers' && <ShippersTab initialShippers={shippers} />}

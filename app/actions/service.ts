@@ -9,6 +9,7 @@
 'use server'
 
 import { z } from 'zod';
+import { auth } from '@/auth';
 import connectDB from '@/lib/db/connect';
 import { ServiceModel, VoyageModel } from '@/lib/db/schemas';
 import type { Service } from '@/types/models';
@@ -565,6 +566,11 @@ export async function assignVesselToService(
   vesselId: unknown
 ) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role;
+    if (role !== 'ADMIN' && role !== 'SHIPPING_PLANNER') return { success: false, error: 'Forbidden' };
+
     const id = ServiceIdSchema.parse(serviceId);
     const vId = z.string().parse(vesselId);
     
@@ -610,6 +616,11 @@ export async function removeVesselFromService(
   vesselId: unknown
 ) {
   try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role;
+    if (role !== 'ADMIN' && role !== 'SHIPPING_PLANNER') return { success: false, error: 'Forbidden' };
+
     const id = ServiceIdSchema.parse(serviceId);
     const vId = z.string().parse(vesselId);
     

@@ -25,6 +25,7 @@ interface ServiceData {
     weeksFromStart: number;
     operations: string[];
   }[];
+  vesselPool?: string[];
   cargoTypes: string[];
 }
 
@@ -268,30 +269,44 @@ export default function NewVoyagePage() {
               )}
 
               {/* ---- STEP 2: Vessel ---- */}
-              {step === 2 && (
-                <div className={styles.stepContent}>
-                  <h2>Select Vessel</h2>
-                  <p className={styles.stepDescription}>
-                    Choose the vessel that will operate this <strong>{selectedService?.serviceCode}</strong> voyage.
-                  </p>
-                  <div className={styles.cardGrid}>
-                    {vessels.map(vessel => (
-                      <div
-                        key={vessel._id}
-                        className={`${styles.selectCard} ${selectedVessel?._id === vessel._id ? styles.selected : ''}`}
-                        onClick={() => handleVesselSelect(vessel)}
-                      >
-                        <div className={styles.cardTop}>
-                          <span className={styles.cardCode}>IMO {vessel.imoNumber ?? '—'}</span>
-                          <span className={styles.cardBadge}>{vessel.flag ?? '—'}</span>
-                        </div>
-                        <div className={styles.cardName}>{vessel.name}</div>
-                        <div className={styles.vesselSpec}>Reefer Vessel</div>
+              {step === 2 && (() => {
+                const pool = selectedService?.vesselPool ?? [];
+                const poolVessels = pool.length > 0 ? vessels.filter(v => pool.includes(v._id)) : vessels;
+                const isFiltered = pool.length > 0;
+                return (
+                  <div className={styles.stepContent}>
+                    <h2>Select Vessel</h2>
+                    <p className={styles.stepDescription}>
+                      Choose the vessel that will operate this <strong>{selectedService?.serviceCode}</strong> voyage.
+                      {isFiltered && (
+                        <> Showing {poolVessels.length} vessel{poolVessels.length !== 1 ? 's' : ''} assigned to this service.</>
+                      )}
+                    </p>
+                    {isFiltered && poolVessels.length === 0 && (
+                      <div className={styles.errorBox} style={{ marginBottom: 'var(--space-4)' }}>
+                        No vessels are assigned to the {selectedService?.serviceCode} vessel pool.
+                        Ask an administrator to assign vessels in the Admin → Services panel.
                       </div>
-                    ))}
+                    )}
+                    <div className={styles.cardGrid}>
+                      {poolVessels.map(vessel => (
+                        <div
+                          key={vessel._id}
+                          className={`${styles.selectCard} ${selectedVessel?._id === vessel._id ? styles.selected : ''}`}
+                          onClick={() => handleVesselSelect(vessel)}
+                        >
+                          <div className={styles.cardName} style={{ fontSize: '1rem', fontWeight: 700, marginBottom: 4 }}>{vessel.name}</div>
+                          <div className={styles.cardTop}>
+                            <span className={styles.cardCode}>IMO {vessel.imoNumber ?? '—'}</span>
+                            <span className={styles.cardBadge}>{vessel.flag ?? '—'}</span>
+                          </div>
+                          <div className={styles.vesselSpec}>Reefer Vessel</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* ---- STEP 3: Dates ---- */}
               {step === 3 && (
