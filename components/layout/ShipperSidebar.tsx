@@ -67,9 +67,10 @@ interface ShipperSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
   mobileOpen?: boolean;
+  shipperName?: string;
 }
 
-export default function ShipperSidebar({ collapsed, onToggle, mobileOpen = false }: ShipperSidebarProps) {
+export default function ShipperSidebar({ collapsed, onToggle, mobileOpen = false, shipperName }: ShipperSidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
 
@@ -115,8 +116,15 @@ export default function ShipperSidebar({ collapsed, onToggle, mobileOpen = false
             />
           </svg>
         </div>
-        <span className={styles.brandText}>Reefer Planner</span>
-        <span className={styles.portalBadge}>Shipper</span>
+        <div className={styles.brandContent}>
+          <div className={styles.brandMeta}>
+            <span className={styles.brandText}>Reefer Planner</span>
+            <span className={styles.portalBadge}>Shipper</span>
+          </div>
+          {shipperName && (
+            <span className={styles.brandCompany}>{shipperName}</span>
+          )}
+        </div>
       </div>
 
       {/* Navigation */}
@@ -159,7 +167,7 @@ export default function ShipperSidebar({ collapsed, onToggle, mobileOpen = false
         <div className={styles.userAvatar}>{initials}</div>
         <div className={styles.userInfo}>
           <div className={styles.userName}>{userName}</div>
-          <div className={styles.userRole}>Exporter</div>
+          <div className={styles.userRole}>{shipperName ?? 'Shipper'}</div>
         </div>
       </div>
 

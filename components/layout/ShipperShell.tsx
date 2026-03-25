@@ -10,9 +10,10 @@ const SHIPPER_SIDEBAR_KEY = 'reefer-shipper-sidebar-collapsed';
 
 interface ShipperShellProps {
   children: React.ReactNode;
+  shipperName?: string;
 }
 
-export default function ShipperShell({ children }: ShipperShellProps) {
+export default function ShipperShell({ children, shipperName }: ShipperShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -68,6 +69,7 @@ export default function ShipperShell({ children }: ShipperShellProps) {
         collapsed={effectiveCollapsed}
         onToggle={toggleSidebar}
         mobileOpen={mobileOpen}
+        shipperName={shipperName}
       />
 
       <main className={`${styles.main} ${effectiveCollapsed ? styles['main--collapsed'] : ''}`}>
