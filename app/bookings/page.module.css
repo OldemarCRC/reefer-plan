@@ -276,6 +276,23 @@
   color: white;
 }
 
+.btnEdit {
+  padding: 3px 10px;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btnEdit:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
 /* --- Modal overlay + modal --- */
 
 .overlay {

@@ -7,6 +7,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getBookingById } from '@/app/actions/booking';
 import { getShipperSchedules } from '@/app/actions/shipper';
+import EditBookingButton from './EditBookingButton';
 import styles from '../../shipper.module.css';
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -43,12 +44,13 @@ function countryFlag(country: string) {
   );
 }
 
-export default async function BookingDetailPage({ params }: { params: { id: string } }) {
+export default async function BookingDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await auth();
   const shipperCode = (session?.user as any)?.shipperCode as string | null;
   const shipperId   = (session?.user as any)?.shipperId   as string | null;
 
-  const result = await getBookingById(params.id);
+  const result = await getBookingById(id);
   if (!result.success || !result.data) {
     notFound();
   }
@@ -90,6 +92,13 @@ export default async function BookingDetailPage({ params }: { params: { id: stri
           <span className={styles.badge} style={{ background: bookingStatus.bg, color: bookingStatus.color }}>
             {booking.status}
           </span>
+          {(booking.status === 'PENDING' || booking.status === 'CONFIRMED') && (
+            <EditBookingButton
+              bookingId={booking._id}
+              bookingNumber={booking.bookingNumber}
+              requestedQuantity={booking.requestedQuantity}
+            />
+          )}
         </div>
         <p className={styles.pageSubtitle}>Requested {fmtDate(booking.requestedDate)}</p>
       </div>

@@ -250,6 +250,7 @@ export interface Booking {
   confirmedDate?: Date;
   approvedBy?: string;
   rejectionReason?: string;
+  notes?: string;
   createdAt: Date;
   updatedAt: Date;
 }

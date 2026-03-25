@@ -2036,7 +2036,7 @@ const USER_ROLES = [
   { value: 'SHIPPING_PLANNER', label: 'Shipping Planner' },
   { value: 'STEVEDORE',        label: 'Stevedore' },
   { value: 'CHECKER',          label: 'Checker' },
-  { value: 'EXPORTER',         label: 'Exporter' },
+  { value: 'EXPORTER',         label: 'Shipper' },
   { value: 'VIEWER',           label: 'Viewer' },
 ];
 
@@ -2122,16 +2122,18 @@ function CreateUserModal({ onClose, onCreated, shippers }: {
               ))}
             </select>
           </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Company</label>
-            <input
-              className={styles.formInput}
-              value={company}
-              onChange={e => setCompany(e.target.value)}
-              placeholder="Acme Exports Ltd."
-              maxLength={100}
-            />
-          </div>
+          {role !== 'EXPORTER' && (
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>Company</label>
+              <input
+                className={styles.formInput}
+                value={company}
+                onChange={e => setCompany(e.target.value)}
+                placeholder="Acme Exports Ltd."
+                maxLength={100}
+              />
+            </div>
+          )}
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>Base Port</label>
             <input
@@ -2154,7 +2156,7 @@ function CreateUserModal({ onClose, onCreated, shippers }: {
           </div>
           {role === 'EXPORTER' && (
             <div className={styles.formGroupFull}>
-              <label className={styles.formLabel}>Linked Shipper *</label>
+              <label className={styles.formLabel}>Shipper *</label>
               <select
                 className={styles.formSelect}
                 value={shipperId}
@@ -2257,15 +2259,17 @@ function EditUserModal({ user, onClose, onUpdated, shippers }: {
               ))}
             </select>
           </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Company</label>
-            <input
-              className={styles.formInput}
-              value={company}
-              onChange={e => setCompany(e.target.value)}
-              maxLength={100}
-            />
-          </div>
+          {role !== 'EXPORTER' && (
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>Company</label>
+              <input
+                className={styles.formInput}
+                value={company}
+                onChange={e => setCompany(e.target.value)}
+                maxLength={100}
+              />
+            </div>
+          )}
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>Base Port</label>
             <input
@@ -2287,7 +2291,7 @@ function EditUserModal({ user, onClose, onUpdated, shippers }: {
           </div>
           {role === 'EXPORTER' && (
             <div className={styles.formGroupFull}>
-              <label className={styles.formLabel}>Linked Shipper</label>
+              <label className={styles.formLabel}>Shipper</label>
               <select
                 className={styles.formSelect}
                 value={shipperId}
@@ -2384,10 +2388,12 @@ function UsersTab({ initialUsers, initialShippers }: { initialUsers: AdminUser[]
             } />
             <DRow label="Company" value={selectedUser.company} />
             <DRow label="Port" value={selectedUser.port} />
-            <DRow label="Linked Shipper" value={(() => {
-              const s = shippers.find(sh => sh._id === selectedUser.shipperId);
-              return s ? `${s.code} — ${s.name}` : (selectedUser.shipperCode || undefined);
-            })()} mono />
+            {selectedUser.role === 'EXPORTER' && (
+              <DRow label="Shipper" value={(() => {
+                const s = shippers.find(sh => sh._id === selectedUser.shipperId);
+                return s ? `${s.code} — ${s.name}` : (selectedUser.shipperCode || undefined);
+              })()} mono />
+            )}
             <DRow label="Email Status" value={
               selectedUser.emailConfirmed
                 ? <span className={styles.badge} style={{ background: 'var(--color-success-muted)', color: 'var(--color-success)' }}>Confirmed</span>

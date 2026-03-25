@@ -3,7 +3,7 @@
 import { useState, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './page.module.css';
-import { createBookingFromContract, approveBooking, rejectBooking } from '@/app/actions/booking';
+import { createBookingFromContract, approveBooking, rejectBooking, updateBookingQuantity } from '@/app/actions/booking';
 import type { CargoType } from '@/types/models';
 import { CARGO_WEIGHT_PER_UNIT } from '@/types/models';
 
@@ -165,6 +165,7 @@ export default function BookingsClient({
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [approveTarget, setApproveTarget] = useState<DisplayBooking | null>(null);
   const [rejectTarget, setRejectTarget] = useState<DisplayBooking | null>(null);
+  const [editTarget, setEditTarget] = useState<DisplayBooking | null>(null);
 
   const filtered = useMemo(() => {
     return bookings.filter((b) => {
@@ -321,22 +322,32 @@ export default function BookingsClient({
                     </td>
                     <td><StatusBadge status={b.status} /></td>
                     <td>
-                      {b.status === 'PENDING' && (
-                        <div className={styles.actionBtns}>
+                      <div className={styles.actionBtns}>
+                        {b.status === 'PENDING' && (
+                          <>
+                            <button
+                              className={styles.btnApprove}
+                              onClick={() => setApproveTarget(b)}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              className={styles.btnReject}
+                              onClick={() => setRejectTarget(b)}
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        {b.status !== 'CANCELLED' && (
                           <button
-                            className={styles.btnApprove}
-                            onClick={() => setApproveTarget(b)}
+                            className={styles.btnEdit}
+                            onClick={() => setEditTarget(b)}
                           >
-                            Approve
+                            Edit
                           </button>
-                          <button
-                            className={styles.btnReject}
-                            onClick={() => setRejectTarget(b)}
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -364,6 +375,12 @@ export default function BookingsClient({
         <RejectModal
           booking={rejectTarget}
           onClose={() => setRejectTarget(null)}
+        />
+      )}
+      {editTarget && (
+        <EditModal
+          booking={editTarget}
+          onClose={() => setEditTarget(null)}
         />
       )}
     </>
@@ -916,6 +933,119 @@ function RejectModal({
               onClick={handleReject}
             >
               {isPending ? 'Rejecting...' : 'Confirm Rejection'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Edit Modal (Admin/Planner)
+// ---------------------------------------------------------------------------
+
+const ALL_EDIT_STATUSES: Array<{ value: string; label: string }> = [
+  { value: 'PENDING',   label: 'Pending' },
+  { value: 'CONFIRMED', label: 'Confirmed' },
+  { value: 'PARTIAL',   label: 'Partial' },
+  { value: 'STANDBY',   label: 'Standby' },
+  { value: 'REJECTED',  label: 'Rejected' },
+  { value: 'CANCELLED', label: 'Cancelled' },
+];
+
+function EditModal({
+  booking,
+  onClose,
+}: {
+  booking: DisplayBooking;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [qty, setQty] = useState(booking.requestedQuantity);
+  const [notes, setNotes] = useState('');
+  const [status, setStatus] = useState(booking.status);
+  const [error, setError] = useState('');
+
+  function handleSave() {
+    if (qty < 1) { setError('Quantity must be at least 1'); return; }
+    setError('');
+    startTransition(async () => {
+      try {
+        const result = await updateBookingQuantity({
+          bookingId: booking._id,
+          requestedQuantity: qty,
+          notes: notes.trim() || undefined,
+          status: status !== booking.status ? status : undefined,
+        });
+        if (!result.success) {
+          setError(result.error || 'Failed to update');
+          return;
+        }
+        router.refresh();
+        onClose();
+      } catch (e: any) {
+        setError(e.message || 'Failed to update booking');
+      }
+    });
+  }
+
+  return (
+    <div className={styles.overlay} onClick={onClose}>
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <h2 className={styles.modalTitle}>Edit Booking</h2>
+        <div className={styles.approveInfo}>
+          <span className={styles.cellMono}>{booking.bookingNumber}</span>
+          <span>{booking.clientName} · {formatCargo(booking.cargoType)}</span>
+        </div>
+
+        {error && <div className={styles.modalError}>{error}</div>}
+
+        <div className={styles.modalBody}>
+          <div className={styles.formRow}>
+            <label className={styles.formLabel}>Requested Quantity</label>
+            <input
+              type="number"
+              className={styles.formInput}
+              min={1}
+              max={10000}
+              value={qty}
+              onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))}
+            />
+          </div>
+          <div className={styles.formRow}>
+            <label className={styles.formLabel}>Status</label>
+            <select
+              className={styles.formSelect}
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              {ALL_EDIT_STATUSES.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className={styles.formRow}>
+            <label className={styles.formLabel}>Notes (optional)</label>
+            <textarea
+              className={styles.formTextarea}
+              rows={3}
+              placeholder="Add a note..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              maxLength={1000}
+            />
+          </div>
+
+          <div className={styles.modalActions}>
+            <button className={styles.btnModalCancel} onClick={onClose}>Cancel</button>
+            <button
+              className={styles.btnApproveAction}
+              disabled={isPending}
+              onClick={handleSave}
+            >
+              {isPending ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </div>

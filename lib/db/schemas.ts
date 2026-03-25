@@ -291,6 +291,7 @@ const BookingSchema = new Schema({
   confirmedDate: { type: Date },
   approvedBy: { type: String },
   rejectionReason: { type: String },
+  notes: { type: String },
 }, {
   timestamps: true,
 });

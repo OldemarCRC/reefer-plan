@@ -58,6 +58,13 @@ const CancelBookingSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
+const UpdateBookingQuantitySchema = z.object({
+  bookingId: z.string().min(1),
+  requestedQuantity: z.number().int().min(1).max(10000),
+  notes: z.string().max(1000).optional(),
+  status: z.enum(['PENDING', 'CONFIRMED', 'PARTIAL', 'STANDBY', 'REJECTED', 'CANCELLED']).optional(),
+});
+
 // ----------------------------------------------------------------------------
 // AUTO-NUMBERING HELPER
 // Format: {officeCode}{serviceShortCode}{voyageNumber}{seq:3}
@@ -353,6 +360,66 @@ export async function cancelBooking(data: unknown) {
     }
     console.error('Error cancelling booking:', error);
     return { success: false, error: 'Failed to cancel booking' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// UPDATE BOOKING QUANTITY / NOTES / STATUS
+// EXPORTER: own bookings only, status limited to CANCELLED
+// ADMIN/SHIPPING_PLANNER: any booking, any valid status
+// ----------------------------------------------------------------------------
+
+export async function updateBookingQuantity(data: unknown) {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role;
+    const isPlanner = role === 'ADMIN' || role === 'SHIPPING_PLANNER';
+    const isExporter = role === 'EXPORTER';
+    if (!isPlanner && !isExporter) return { success: false, error: 'Forbidden' };
+
+    const validated = UpdateBookingQuantitySchema.parse(data);
+    await connectDB();
+
+    const booking = await BookingModel.findById(validated.bookingId);
+    if (!booking) return { success: false, error: 'Booking not found' };
+
+    if (isExporter) {
+      // Ownership check
+      const shipperCode = (session.user as any).shipperCode;
+      const shipperId   = (session.user as any).shipperId;
+      const owns =
+        (shipperId && booking.shipperId?.toString() === shipperId) ||
+        (shipperCode && booking.shipper?.code === shipperCode);
+      if (!owns) return { success: false, error: 'Forbidden' };
+
+      // Exporters can only edit PENDING or CONFIRMED bookings
+      if (booking.status !== 'PENDING' && booking.status !== 'CONFIRMED') {
+        return { success: false, error: 'Booking cannot be edited in its current status' };
+      }
+      // Exporters can only cancel, not change to other statuses
+      if (validated.status && validated.status !== 'CANCELLED') {
+        return { success: false, error: 'Forbidden: you can only cancel bookings' };
+      }
+    }
+
+    booking.requestedQuantity = validated.requestedQuantity;
+    if (validated.notes !== undefined) booking.notes = validated.notes;
+    if (validated.status) {
+      booking.status = validated.status;
+      if (validated.status === 'CANCELLED') {
+        booking.approvedBy = (session.user as any).name ?? (session.user as any).email ?? 'system';
+      }
+    }
+    await booking.save();
+
+    return { success: true, data: JSON.parse(JSON.stringify(booking)) };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: `Validation error: ${error.issues[0].message}` };
+    }
+    console.error('Error updating booking quantity:', error);
+    return { success: false, error: 'Failed to update booking' };
   }
 }
 
