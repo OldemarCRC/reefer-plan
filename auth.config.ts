@@ -95,6 +95,7 @@ export default {
         (session.user as any).role           = token.role;
         (session.user as any).id             = token.sub;
         (session.user as any).shipperCode    = token.shipperCode ?? null;
+        (session.user as any).shipperId      = token.shipperId ?? null;
         (session.user as any).sessionVersion = token.sessionVersion;
       }
       return session;
