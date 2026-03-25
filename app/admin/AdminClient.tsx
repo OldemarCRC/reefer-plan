@@ -2386,11 +2386,16 @@ function UsersTab({ initialUsers, initialShippers }: { initialUsers: AdminUser[]
                 color: selectedUser.role === 'ADMIN' ? 'var(--color-warning)' : 'var(--color-text-secondary)',
               }}>{roleLabel(selectedUser.role)}</span>
             } />
-            <DRow label="Company" value={selectedUser.company} />
+            {selectedUser.role !== 'EXPORTER' && (
+              <DRow label="Company" value={selectedUser.company} />
+            )}
             <DRow label="Port" value={selectedUser.port} />
             {selectedUser.role === 'EXPORTER' && (
               <DRow label="Shipper" value={(() => {
-                const s = shippers.find(sh => sh._id === selectedUser.shipperId);
+                const s = shippers.find(sh =>
+                  (selectedUser.shipperId && sh._id === selectedUser.shipperId) ||
+                  (selectedUser.shipperCode && sh.code === selectedUser.shipperCode)
+                );
                 return s ? `${s.code} — ${s.name}` : (selectedUser.shipperCode || undefined);
               })()} mono />
             )}
