@@ -31,6 +31,7 @@ const CreateUserSchema = z.object({
   canSendEmailsToCaptains: z.boolean().optional(),
   shipperCode: z.string().max(20).optional(),
   shipperId: z.string().optional().nullable(),
+  officeIds: z.array(z.string()).default([]),
 });
 
 const UpdateUserSchema = z.object({
@@ -41,6 +42,7 @@ const UpdateUserSchema = z.object({
   canSendEmailsToCaptains: z.boolean().optional(),
   shipperCode: z.string().max(20).optional().nullable(),
   shipperId: z.string().optional().nullable(),
+  officeIds: z.array(z.string()).optional(),
 });
 
 // ----------------------------------------------------------------------------
@@ -70,6 +72,7 @@ export async function getUsers() {
       canSendEmailsToCaptains: u.canSendEmailsToCaptains ?? false,
       shipperCode: u.shipperCode ?? '',
       shipperId: u.shipperId?.toString() ?? null,
+      officeIds: (u.offices ?? []).map((id: any) => id.toString()),
       emailConfirmed: u.emailConfirmed ?? false,
       lastLogin: u.lastLogin ? u.lastLogin.toISOString() : null,
       createdAt: u.createdAt ? u.createdAt.toISOString() : null,
@@ -115,6 +118,7 @@ export async function createUser(input: unknown) {
       canSendEmailsToCaptains: data.canSendEmailsToCaptains ?? false,
       shipperCode: data.shipperCode ? toUpperCode(data.shipperCode) : '',
       shipperId: data.shipperId || undefined,
+      offices: data.officeIds ?? [],
       emailConfirmToken,
       emailConfirmed: false,
     });
@@ -142,6 +146,7 @@ export async function createUser(input: unknown) {
         canSendEmailsToCaptains: user.canSendEmailsToCaptains ?? false,
         shipperCode: (user as any).shipperCode ?? '',
         shipperId: (user as any).shipperId?.toString() ?? null,
+        officeIds: ((user as any).offices ?? []).map((id: any) => id.toString()),
         emailConfirmed: false,
         lastLogin: null,
         createdAt: user.createdAt?.toISOString() ?? null,
@@ -180,6 +185,7 @@ export async function updateUser(id: unknown, input: unknown) {
     if (data.canSendEmailsToCaptains !== undefined) update.canSendEmailsToCaptains = data.canSendEmailsToCaptains;
     if (data.shipperCode !== undefined) update.shipperCode = data.shipperCode ? toUpperCode(data.shipperCode) : '';
     if (data.shipperId !== undefined) update.shipperId = data.shipperId || null;
+    if (data.officeIds !== undefined) update.offices = data.officeIds;
 
     const user = await UserModel.findByIdAndUpdate(userId, update, { new: true }).lean() as any;
     if (!user) return { success: false, error: 'User not found' };
@@ -196,6 +202,7 @@ export async function updateUser(id: unknown, input: unknown) {
         canSendEmailsToCaptains: user.canSendEmailsToCaptains ?? false,
         shipperCode: user.shipperCode ?? '',
         shipperId: user.shipperId?.toString() ?? null,
+        officeIds: (user.offices ?? []).map((id: any) => id.toString()),
         emailConfirmed: user.emailConfirmed ?? false,
         lastLogin: user.lastLogin ? user.lastLogin.toISOString() : null,
         createdAt: user.createdAt ? user.createdAt.toISOString() : null,

@@ -708,6 +708,7 @@ export interface User {
   canSendEmailsToCaptains?: boolean;
   shipperCode?: string;
   shipperId?: string;
+  offices?: string[];       // Office IDs assigned to this user
   createdAt: Date;
   updatedAt: Date;
 }

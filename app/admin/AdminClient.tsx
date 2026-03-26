@@ -119,6 +119,7 @@ interface AdminUser {
   canSendEmailsToCaptains: boolean;
   shipperCode: string;
   shipperId?: string | null;
+  officeIds?: string[];
   emailConfirmed: boolean;
   lastLogin: string | null;
   createdAt: string | null;
@@ -2137,10 +2138,11 @@ const USER_ROLES = [
   { value: 'VIEWER',           label: 'Viewer' },
 ];
 
-function CreateUserModal({ onClose, onCreated, shippers }: {
+function CreateUserModal({ onClose, onCreated, shippers, offices }: {
   onClose: () => void;
   onCreated: (u: AdminUser) => void;
   shippers: AdminShipper[];
+  offices: AdminOffice[];
 }) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -2149,6 +2151,7 @@ function CreateUserModal({ onClose, onCreated, shippers }: {
   const [port, setPort] = useState('');
   const [canSend, setCanSend] = useState(false);
   const [shipperId, setShipperId] = useState('');
+  const [selectedOfficeIds, setSelectedOfficeIds] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -2169,6 +2172,7 @@ function CreateUserModal({ onClose, onCreated, shippers }: {
         canSendEmailsToCaptains: canSend,
         shipperId: role === 'EXPORTER' ? shipperId || undefined : undefined,
         shipperCode: role === 'EXPORTER' ? selectedShipper?.code || undefined : undefined,
+        officeIds: role !== 'EXPORTER' ? selectedOfficeIds : [],
       });
       if (result.success) {
         onCreated(result.data as AdminUser);
@@ -2266,6 +2270,26 @@ function CreateUserModal({ onClose, onCreated, shippers }: {
               </select>
             </div>
           )}
+          {role !== 'EXPORTER' && offices.length > 0 && (
+            <div className={styles.formGroupFull}>
+              <label className={styles.formLabel}>Offices (leave empty for global access)</label>
+              <div className={styles.officeServiceList}>
+                {offices.filter(o => o.active !== false).map(o => (
+                  <label key={o._id} className={styles.officeServiceItem}>
+                    <input
+                      type="checkbox"
+                      checked={selectedOfficeIds.includes(o._id)}
+                      onChange={e => {
+                        if (e.target.checked) setSelectedOfficeIds(prev => [...prev, o._id]);
+                        else setSelectedOfficeIds(prev => prev.filter(id => id !== o._id));
+                      }}
+                    />
+                    <span>{o.code} — {o.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {error && <div className={styles.modalError}>{error}</div>}
@@ -2289,11 +2313,12 @@ function CreateUserModal({ onClose, onCreated, shippers }: {
 // Edit User Modal
 // ---------------------------------------------------------------------------
 
-function EditUserModal({ user, onClose, onUpdated, shippers }: {
+function EditUserModal({ user, onClose, onUpdated, shippers, offices }: {
   user: AdminUser;
   onClose: () => void;
   onUpdated: (u: AdminUser) => void;
   shippers: AdminShipper[];
+  offices: AdminOffice[];
 }) {
   const [name, setName] = useState(user.name);
   const [role, setRole] = useState(user.role);
@@ -2301,6 +2326,7 @@ function EditUserModal({ user, onClose, onUpdated, shippers }: {
   const [port, setPort] = useState(user.port);
   const [canSend, setCanSend] = useState(user.canSendEmailsToCaptains);
   const [shipperId, setShipperId] = useState(user.shipperId ?? '');
+  const [selectedOfficeIds, setSelectedOfficeIds] = useState<string[]>(user.officeIds ?? []);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -2317,6 +2343,7 @@ function EditUserModal({ user, onClose, onUpdated, shippers }: {
         canSendEmailsToCaptains: canSend,
         shipperId: role === 'EXPORTER' ? shipperId || null : null,
         shipperCode: role === 'EXPORTER' ? selectedShipper?.code ?? '' : '',
+        officeIds: role !== 'EXPORTER' ? selectedOfficeIds : [],
       });
       if (result.success) {
         onUpdated({ ...user, ...result.data } as AdminUser);
@@ -2401,6 +2428,26 @@ function EditUserModal({ user, onClose, onUpdated, shippers }: {
               </select>
             </div>
           )}
+          {role !== 'EXPORTER' && offices.length > 0 && (
+            <div className={styles.formGroupFull}>
+              <label className={styles.formLabel}>Offices (leave empty for global access)</label>
+              <div className={styles.officeServiceList}>
+                {offices.filter(o => o.active !== false).map(o => (
+                  <label key={o._id} className={styles.officeServiceItem}>
+                    <input
+                      type="checkbox"
+                      checked={selectedOfficeIds.includes(o._id)}
+                      onChange={e => {
+                        if (e.target.checked) setSelectedOfficeIds(prev => [...prev, o._id]);
+                        else setSelectedOfficeIds(prev => prev.filter(id => id !== o._id));
+                      }}
+                    />
+                    <span>{o.code} — {o.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {error && <div className={styles.modalError}>{error}</div>}
@@ -2424,10 +2471,11 @@ function EditUserModal({ user, onClose, onUpdated, shippers }: {
 // Users Tab
 // ---------------------------------------------------------------------------
 
-function UsersTab({ initialUsers, initialShippers }: { initialUsers: AdminUser[]; initialShippers: AdminShipper[] }) {
+function UsersTab({ initialUsers, initialShippers, initialOffices }: { initialUsers: AdminUser[]; initialShippers: AdminShipper[]; initialOffices: AdminOffice[] }) {
   const router = useRouter();
   const [users, setUsers] = useState<AdminUser[]>(initialUsers);
   const [shippers] = useState<AdminShipper[]>(initialShippers);
+  const [offices] = useState<AdminOffice[]>(initialOffices);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
@@ -2509,6 +2557,7 @@ function UsersTab({ initialUsers, initialShippers }: { initialUsers: AdminUser[]
           <EditUserModal
             user={editingUser}
             shippers={shippers}
+            offices={offices}
             onClose={() => setEditingUser(null)}
             onUpdated={updated => { setUsers(prev => prev.map(u => u._id === updated._id ? updated : u)); setSelectedUser(updated); setEditingUser(null); }}
           />
@@ -2628,6 +2677,7 @@ function UsersTab({ initialUsers, initialShippers }: { initialUsers: AdminUser[]
       {showCreate && (
         <CreateUserModal
           shippers={shippers}
+          offices={offices}
           onClose={() => setShowCreate(false)}
           onCreated={u => {
             setUsers(prev => [...prev, u].sort((a, b) => a.name.localeCompare(b.name)));
@@ -2640,6 +2690,7 @@ function UsersTab({ initialUsers, initialShippers }: { initialUsers: AdminUser[]
         <EditUserModal
           user={editingUser}
           shippers={shippers}
+          offices={offices}
           onClose={() => setEditingUser(null)}
           onUpdated={updated => {
             setUsers(prev => prev.map(u => u._id === updated._id ? updated : u));
@@ -3905,7 +3956,7 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
       {activeTab === 'plans'    && <PlansTab initialPlans={plans} />}
       {activeTab === 'vessels'  && <VesselsTab initialVessels={vessels} />}
       {activeTab === 'services' && <ServicesTab initialServices={services as AdminService[]} vessels={vessels as AdminVessel[]} />}
-      {activeTab === 'users'    && <UsersTab initialUsers={users} initialShippers={shippers} />}
+      {activeTab === 'users'    && <UsersTab initialUsers={users} initialShippers={shippers} initialOffices={offices} />}
       {activeTab === 'ports'    && <PortsTab initialPorts={ports} unecePorts={unecePorts} />}
       {activeTab === 'shippers' && <ShippersTab initialShippers={shippers} />}
       {activeTab === 'offices'  && <OfficesTab initialOffices={offices} allServices={services as AdminService[]} />}

@@ -6,7 +6,7 @@ import Credentials from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import authConfig from './auth.config';
 import connectDB from './lib/db/connect';
-import { UserModel } from './lib/db/schemas';
+import { UserModel, OfficeModel } from './lib/db/schemas';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -50,6 +50,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           const sessionVersion = (updated as any)?.sessionVersion ?? 1;
 
+          const officeIds = ((user as any).offices ?? []).map((id: any) => id.toString());
+
           return {
             id: String((user as any)._id),
             email: (user as any).email as string,
@@ -57,6 +59,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             role: (user as any).role,
             shipperCode: (user as any).shipperCode ?? null,
             shipperId: (user as any).shipperId?.toString() ?? null,
+            officeIds,
             sessionVersion,
           } as any;
         } catch (err) {
@@ -81,8 +84,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.shipperCode    = (user as any).shipperCode ?? null;
         token.shipperId      = (user as any).shipperId ?? null;
         token.sessionVersion = (user as any).sessionVersion;
+        token.officeIds      = (user as any).officeIds ?? [];
         // Record the absolute login time for the hard 8-hour limit.
         token.loginAt        = Date.now();
+
+        // Build serviceFilter: union of all service codes from assigned offices.
+        // ADMINs with no offices → [] means global access (no filter applied).
+        const officeIds = (user as any).officeIds ?? [];
+        if (officeIds.length > 0) {
+          try {
+            const offices = await OfficeModel.find({ _id: { $in: officeIds } }).select('services').lean();
+            token.serviceFilter = [...new Set((offices as any[]).flatMap((o: any) => o.services ?? []))];
+          } catch {
+            token.serviceFilter = [];
+          }
+        } else {
+          token.serviceFilter = [];
+        }
       } else {
         // ── Refresh: validate sessionVersion against the DB ──
         // If another device has logged in since this token was issued, the DB counter

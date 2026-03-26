@@ -97,6 +97,8 @@ export default {
         (session.user as any).shipperCode    = token.shipperCode ?? null;
         (session.user as any).shipperId      = token.shipperId ?? null;
         (session.user as any).sessionVersion = token.sessionVersion;
+        (session.user as any).officeIds      = token.officeIds ?? [];
+        (session.user as any).serviceFilter  = token.serviceFilter ?? [];
       }
       return session;
     },
