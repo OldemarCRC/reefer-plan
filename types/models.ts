@@ -148,6 +148,8 @@ export interface Office {
   contactEmail?: string;
   contactPhone?: string;
   active: boolean;
+  services: string[];          // serviceCode array e.g. ['CARIBANEX', 'SEACAT']
+  parentOfficeId?: string;     // ref → Office._id (optional hub/branch relationship)
   createdAt: Date;
   updatedAt: Date;
 }

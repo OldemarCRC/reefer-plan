@@ -24,6 +24,7 @@ const CreateOfficeSchema = z.object({
   contactEmail: z.string().email('Invalid email').max(200).optional().or(z.literal('')),
   contactPhone: z.string().max(30).optional(),
   active: z.boolean().default(true),
+  services: z.array(z.string()).default([]),
 });
 
 const UpdateOfficeSchema = CreateOfficeSchema.partial();

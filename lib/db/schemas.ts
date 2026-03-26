@@ -156,6 +156,8 @@ const OfficeSchema = new Schema({
   contactEmail: { type: String, default: '' },
   contactPhone: { type: String, default: '' },
   active: { type: Boolean, default: true },
+  services: [{ type: String }],
+  parentOfficeId: { type: Schema.Types.ObjectId, ref: 'Office', required: false },
 }, {
   timestamps: true,
 });

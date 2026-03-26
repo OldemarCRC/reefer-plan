@@ -183,6 +183,8 @@ interface AdminOffice {
   contactEmail?: string;
   contactPhone?: string;
   active: boolean;
+  services?: string[];
+  parentOfficeId?: string;
   createdAt?: string;
 }
 
@@ -3367,16 +3369,47 @@ function ShippersTab({ initialShippers }: { initialShippers: AdminShipper[] }) {
 // Offices Tab
 // ---------------------------------------------------------------------------
 
-function CreateOfficeModal({ onClose, onCreated }: {
+function OfficeServiceChecklist({ allServices, selected, onChange }: {
+  allServices: AdminService[];
+  selected: string[];
+  onChange: (codes: string[]) => void;
+}) {
+  const toggle = (code: string) =>
+    onChange(selected.includes(code) ? selected.filter(c => c !== code) : [...selected, code]);
+
+  if (allServices.length === 0) {
+    return <p style={{ fontSize: 'var(--text-xs)', opacity: 0.5, margin: 0 }}>No services defined yet.</p>;
+  }
+
+  return (
+    <div className={styles.officeServiceList}>
+      {allServices.filter(s => s.active).map(s => (
+        <label key={s._id} className={styles.officeServiceItem}>
+          <input
+            type="checkbox"
+            checked={selected.includes(s.serviceCode)}
+            onChange={() => toggle(s.serviceCode)}
+          />
+          <code style={{ fontSize: 'var(--text-xs)', fontWeight: 700 }}>{s.serviceCode}</code>
+          <span style={{ fontSize: 'var(--text-xs)', opacity: 0.7 }}>{s.serviceName}</span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function CreateOfficeModal({ onClose, onCreated, allServices }: {
   onClose: () => void;
   onCreated: (o: AdminOffice) => void;
+  allServices: AdminService[];
 }) {
   const [code, setCode]           = useState('');
   const [name, setName]           = useState('');
-  const [country, setCountry]     = useState('');  // ISO code e.g. "CL"
+  const [country, setCountry]     = useState('');
   const [contactName, setContactName]   = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
   const [error, setError]         = useState<string | null>(null);
 
@@ -3394,6 +3427,7 @@ function CreateOfficeModal({ onClose, onCreated }: {
         contactName: contactName.trim() || undefined,
         contactEmail: contactEmail.trim() || undefined,
         contactPhone: contactPhone.trim() || undefined,
+        services: selectedServices,
       });
       if (result.success) {
         onCreated(result.data as AdminOffice);
@@ -3463,6 +3497,14 @@ function CreateOfficeModal({ onClose, onCreated }: {
               maxLength={30}
             />
           </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Services</label>
+            <OfficeServiceChecklist
+              allServices={allServices}
+              selected={selectedServices}
+              onChange={setSelectedServices}
+            />
+          </div>
         </div>
         {error && <div className={styles.modalError}>{error}</div>}
         <div className={styles.modalActions}>
@@ -3480,16 +3522,18 @@ function CreateOfficeModal({ onClose, onCreated }: {
   );
 }
 
-function EditOfficeModal({ office, onClose, onUpdated }: {
+function EditOfficeModal({ office, onClose, onUpdated, allServices }: {
   office: AdminOffice;
   onClose: () => void;
   onUpdated: (o: AdminOffice) => void;
+  allServices: AdminService[];
 }) {
   const [name, setName]           = useState(office.name);
-  const [country, setCountry]     = useState(office.country);  // ISO code e.g. "CL"
+  const [country, setCountry]     = useState(office.country);
   const [contactName, setContactName]   = useState(office.contactName ?? '');
   const [contactEmail, setContactEmail] = useState(office.contactEmail ?? '');
   const [contactPhone, setContactPhone] = useState(office.contactPhone ?? '');
+  const [selectedServices, setSelectedServices] = useState<string[]>(office.services ?? []);
   const [isPending, startTransition] = useTransition();
   const [error, setError]         = useState<string | null>(null);
 
@@ -3506,6 +3550,7 @@ function EditOfficeModal({ office, onClose, onUpdated }: {
         contactName: contactName.trim() || undefined,
         contactEmail: contactEmail.trim() || undefined,
         contactPhone: contactPhone.trim() || undefined,
+        services: selectedServices,
       });
       if (result.success) {
         onUpdated(result.data as AdminOffice);
@@ -3573,6 +3618,14 @@ function EditOfficeModal({ office, onClose, onUpdated }: {
               maxLength={30}
             />
           </div>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Services</label>
+            <OfficeServiceChecklist
+              allServices={allServices}
+              selected={selectedServices}
+              onChange={setSelectedServices}
+            />
+          </div>
         </div>
         {error && <div className={styles.modalError}>{error}</div>}
         <div className={styles.modalActions}>
@@ -3586,7 +3639,7 @@ function EditOfficeModal({ office, onClose, onUpdated }: {
   );
 }
 
-function OfficesTab({ initialOffices }: { initialOffices: AdminOffice[] }) {
+function OfficesTab({ initialOffices, allServices }: { initialOffices: AdminOffice[]; allServices: AdminService[] }) {
   const router = useRouter();
   const [offices, setOffices] = useState<AdminOffice[]>(initialOffices);
   const [showCreate, setShowCreate] = useState(false);
@@ -3634,6 +3687,17 @@ function OfficesTab({ initialOffices }: { initialOffices: AdminOffice[] }) {
             <DRow label="Contact Name" value={selectedOffice.contactName} />
             <DRow label="Contact Email" value={selectedOffice.contactEmail} mono />
             <DRow label="Contact Phone" value={selectedOffice.contactPhone} />
+            <DRow label="Services" value={
+              selectedOffice.services && selectedOffice.services.length > 0
+                ? <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
+                    {selectedOffice.services.map(sc => (
+                      <span key={sc} className={styles.badge} style={{ background: 'var(--color-blue-muted)', color: 'var(--color-blue-light)' }}>
+                        {sc}
+                      </span>
+                    ))}
+                  </div>
+                : <span style={{ opacity: 0.4 }}>None assigned</span>
+            } />
             <DRow label="Created" value={fmtDate(selectedOffice.createdAt)} />
           </div>
         </DetailPanel>
@@ -3642,6 +3706,7 @@ function OfficesTab({ initialOffices }: { initialOffices: AdminOffice[] }) {
             office={editingOffice}
             onClose={() => setEditingOffice(null)}
             onUpdated={o => { setOffices(prev => prev.map(x => x._id === o._id ? o : x)); setSelectedOffice(o); setEditingOffice(null); router.refresh(); }}
+            allServices={allServices}
           />
         )}
       </div>
@@ -3743,6 +3808,7 @@ function OfficesTab({ initialOffices }: { initialOffices: AdminOffice[] }) {
             setShowCreate(false);
             router.refresh();
           }}
+          allServices={allServices}
         />
       )}
       {editingOffice && (
@@ -3754,6 +3820,7 @@ function OfficesTab({ initialOffices }: { initialOffices: AdminOffice[] }) {
             setEditingOffice(null);
             router.refresh();
           }}
+          allServices={allServices}
         />
       )}
     </div>
@@ -3841,7 +3908,7 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
       {activeTab === 'users'    && <UsersTab initialUsers={users} initialShippers={shippers} />}
       {activeTab === 'ports'    && <PortsTab initialPorts={ports} unecePorts={unecePorts} />}
       {activeTab === 'shippers' && <ShippersTab initialShippers={shippers} />}
-      {activeTab === 'offices'  && <OfficesTab initialOffices={offices} />}
+      {activeTab === 'offices'  && <OfficesTab initialOffices={offices} allServices={services as AdminService[]} />}
       {activeTab === 'bookings'  && <BookingsTab initialBookings={bookings} />}
       {activeTab === 'customers' && <CustomersTab initialCustomers={customers} />}
     </div>
