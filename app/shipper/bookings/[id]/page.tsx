@@ -9,6 +9,7 @@ import { getBookingById } from '@/app/actions/booking';
 import { getShipperSchedules } from '@/app/actions/shipper';
 import EditBookingButton from './EditBookingButton';
 import styles from '../../shipper.module.css';
+import { FlagIcon } from '@/lib/utils/flagIcon';
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   PENDING:   { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)' },
@@ -37,12 +38,6 @@ function fmtDateTime(d?: string | null) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function countryFlag(country: string) {
-  if (!country || country.length !== 2) return '';
-  return country.toUpperCase().replace(/./g, c =>
-    String.fromCodePoint(c.charCodeAt(0) + 127397)
-  );
-}
 
 export default async function BookingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -200,7 +195,7 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
                 <div key={i} className={styles.timelineItem}>
                   <div className={dotClass} />
                   <div className={styles.timelinePort}>
-                    {countryFlag(pc.country)} {pc.portName}
+                    <FlagIcon code={pc.country} /> {pc.portName}
                     {(isPol || isPod) && (
                       <span style={{
                         marginLeft: '0.5rem',

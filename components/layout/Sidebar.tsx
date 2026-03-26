@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react';
 import styles from './Sidebar.module.css';
 import { getPortWeather } from '@/app/actions/weather';
 import { getFleetStatus } from '@/app/actions/voyage';
+import { FlagIcon } from '@/lib/utils/flagIcon';
 // getServicePortsForWeather is kept for future use when user auth is available
 // import { getServicePortsForWeather } from '@/app/actions/service';
 
@@ -75,12 +76,12 @@ const icons = {
 // Replace with getServicePortsForWeather() once user auth filters by office/service.
 
 const SIDEBAR_PORTS = [
-  { code: 'CLVAP', label: 'Valparaíso', flag: '🇨🇱', city: 'Valparaíso', country: 'CL' },
-  { code: 'ECGYE', label: 'Guayaquil',  flag: '🇪🇨', city: 'Guayaquil',  country: 'EC' },
-  { code: 'USILG', label: 'Wilmington', flag: '🇺🇸', city: 'Wilmington', country: 'US' },
-  { code: 'COSMR', label: 'Santa Marta',flag: '🇨🇴', city: 'Santa Marta',country: 'CO' },
-  { code: 'NLVLI', label: 'Flushing',   flag: '🇳🇱', city: 'Flushing',   country: 'NL' },
-  { code: 'GBPME', label: 'Portsmouth', flag: '🇬🇧', city: 'Portsmouth', country: 'GB' },
+  { code: 'CLVAP', label: 'Valparaíso', country: 'CL', city: 'Valparaíso' },
+  { code: 'ECGYE', label: 'Guayaquil',  country: 'EC', city: 'Guayaquil'  },
+  { code: 'USILG', label: 'Wilmington', country: 'US', city: 'Wilmington' },
+  { code: 'COSMR', label: 'Santa Marta',country: 'CO', city: 'Santa Marta'},
+  { code: 'NLVLI', label: 'Flushing',   country: 'NL', city: 'Flushing'   },
+  { code: 'GBPME', label: 'Portsmouth', country: 'GB', city: 'Portsmouth' },
 ];
 
 // --- Navigation items ---
@@ -130,7 +131,7 @@ interface SidebarProps {
 interface PortTemp {
   code: string;
   label: string;
-  flag: string;
+  country: string;
   temp: number | null;
 }
 
@@ -154,7 +155,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProp
     Promise.all(
       SIDEBAR_PORTS.map(async (p) => {
         const temp = await getPortWeather(p.city, p.country);
-        return { code: p.code, label: p.label, flag: p.flag, temp };
+        return { code: p.code, label: p.label, country: p.country, temp };
       })
     ).then(setPortTemps);
 
@@ -263,7 +264,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProp
           <span
             className={styles.widgetCollapsedHint}
             title={portTemps.length > 0
-              ? portTemps.map(p => `${p.flag} ${p.label} ${p.temp !== null ? `${p.temp > 0 ? '+' : ''}${p.temp}°` : '—'}`).join(' · ')
+              ? portTemps.map(p => `[${p.country}] ${p.label} ${p.temp !== null ? `${p.temp > 0 ? '+' : ''}${p.temp}°` : '—'}`).join(' · ')
               : 'Port temperatures loading…'}
           >🌡</span>
           {/* Full content — hidden when collapsed */}
@@ -273,7 +274,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProp
           ) : (
             portTemps.map((p) => (
               <div key={p.code} className={styles.tempRow}>
-                <span className={styles.tempFlag}>{p.flag}</span>
+                <span className={styles.tempFlag}><FlagIcon code={p.country} /></span>
                 <span className={styles.tempPort}>{p.label}</span>
                 <span className={`${styles.tempValue} ${p.temp !== null ? tempClass(p.temp) : ''}`}>
                   {p.temp !== null ? `${p.temp > 0 ? '+' : ''}${p.temp}°` : '—'}

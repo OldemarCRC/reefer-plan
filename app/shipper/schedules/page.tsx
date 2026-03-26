@@ -4,6 +4,7 @@
 
 import { getShipperSchedules } from '@/app/actions/shipper';
 import styles from '../shipper.module.css';
+import { FlagIcon } from '@/lib/utils/flagIcon';
 
 const VOYAGE_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   PLANNED:     { bg: 'var(--color-bg-tertiary)',   color: 'var(--color-text-tertiary)' },
@@ -18,12 +19,6 @@ function fmtDate(d?: string | null) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function countryFlag(country: string) {
-  if (!country || country.length !== 2) return '';
-  return country.toUpperCase().replace(/./g, c =>
-    String.fromCodePoint(c.charCodeAt(0) + 127397)
-  );
-}
 
 export default async function ShipperSchedulesPage() {
   const result = await getShipperSchedules();
@@ -91,7 +86,7 @@ export default async function ShipperSchedulesPage() {
                             {ports.map((pc: any, i: number) => (
                               <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
-                                  {countryFlag(pc.country)} {pc.portCode}
+                                  <FlagIcon code={pc.country} /> {pc.portCode}
                                 </span>
                                 {pc.eta && (
                                   <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>

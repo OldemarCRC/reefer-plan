@@ -3,6 +3,7 @@ import { Space_Grotesk, Inter } from 'next/font/google';
 import Providers from '@/components/layout/Providers';
 import { auth } from '@/auth';
 import './globals.css';
+import 'flag-icons/css/flag-icons.min.css';
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],

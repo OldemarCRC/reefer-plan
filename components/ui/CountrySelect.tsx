@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, KeyboardEvent } from 'react';
 import { getCountries, CountryOption } from '@/app/actions/country';
 import styles from './CountrySelect.module.css';
+import { FlagIcon } from '@/lib/utils/flagIcon';
 
 interface CountrySelectProps {
   value: string;                     // ISO alpha-2 code, e.g. "CL"
@@ -36,12 +37,12 @@ export default function CountrySelect({
       return;
     }
     const found = countries.find((c) => c.code === value);
-    if (found) setInputText(`${found.flag} ${found.name}`);
+    if (found) setInputText(found.name);
   }, [value, countries]);
 
   const filtered = inputText
     ? countries.filter((c) => {
-        const q = inputText.replace(/[\p{Emoji}]/gu, '').trim().toLowerCase();
+        const q = inputText.trim().toLowerCase();
         if (!q) return true;
         return (
           c.name.toLowerCase().includes(q) ||
@@ -51,7 +52,7 @@ export default function CountrySelect({
     : countries;
 
   function selectCountry(c: CountryOption) {
-    setInputText(`${c.flag} ${c.name}`);
+    setInputText(c.name);
     onChange(c.code);
     setOpen(false);
   }
@@ -71,7 +72,7 @@ export default function CountrySelect({
       // Reset to last valid selection if input doesn't match
       const found = countries.find((c) => c.code === value);
       if (found) {
-        setInputText(`${found.flag} ${found.name}`);
+        setInputText(found.name);
       } else {
         setInputText('');
         onChange('');
@@ -100,10 +101,15 @@ export default function CountrySelect({
 
   return (
     <div className={styles.wrapper} ref={containerRef}>
+      {value && !open && (
+        <span className={styles.inputFlagPrefix}>
+          <FlagIcon code={value} />
+        </span>
+      )}
       <input
         ref={inputRef}
         type="text"
-        className={styles.input}
+        className={`${styles.input} ${value && !open ? styles.inputWithFlag : ''}`}
         value={inputText}
         placeholder={placeholder}
         required={required}
@@ -124,7 +130,7 @@ export default function CountrySelect({
               onMouseDown={() => selectCountry(c)}
               onMouseEnter={() => setHighlighted(i)}
             >
-              <span className={styles.flag}>{c.flag}</span>
+              <span className={styles.flag}><FlagIcon code={c.code} /></span>
               <span className={styles.name}>{c.name}</span>
               <span className={styles.code}>{c.code}</span>
             </li>

@@ -7,6 +7,7 @@ import { createBookingFromContract } from '@/app/actions/booking';
 import ContractSelect from '@/components/ui/ContractSelect';
 import type { ContractSelectItem } from '@/components/ui/ContractSelect';
 import styles from '../shipper.module.css';
+import { FlagIcon } from '@/lib/utils/flagIcon';
 
 const CARGO_TYPES = [
   'BANANAS', 'ORGANIC_BANANAS', 'PLANTAINS', 'FROZEN_FISH', 'TABLE_GRAPES',
@@ -20,12 +21,6 @@ function fmtDate(d?: string | null) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function countryFlag(country: string) {
-  if (!country || country.length !== 2) return '';
-  return country.toUpperCase().replace(/./g, c =>
-    String.fromCodePoint(c.charCodeAt(0) + 127397)
-  );
-}
 
 interface RequestClientProps {
   shipperCode: string;
@@ -321,7 +316,7 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
                       {ports.map((pc: any, i: number) => (
                         <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <span className={`${styles.portDot} ${pc.operations?.includes('LOAD') ? styles['portDot--load'] : styles['portDot--discharge']}`}>
-                            {countryFlag(pc.country)} {pc.portCode}
+                            <FlagIcon code={pc.country} /> {pc.portCode}
                           </span>
                           {i < ports.length - 1 && <span className={styles.portArrow} style={{ fontSize: '11px' }}> →</span>}
                         </span>

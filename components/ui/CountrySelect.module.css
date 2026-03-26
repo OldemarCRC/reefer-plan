@@ -66,6 +66,26 @@
   font-size: 1.1rem;
   line-height: 1;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* Flag shown inside the input box when a country is selected */
+.inputFlagPrefix {
+  position: absolute;
+  left: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  font-size: 1rem;
+}
+
+/* Extra left padding so the flag doesn't overlap the text */
+.inputWithFlag {
+  padding-left: 2rem;
 }
 
 .name {

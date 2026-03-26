@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getShipperDashboard } from '@/app/actions/shipper';
 import styles from './shipper.module.css';
+import { FlagIcon } from '@/lib/utils/flagIcon';
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   PENDING:   { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)' },
@@ -22,12 +23,6 @@ function fmtDate(d?: string | null) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function countryFlag(country: string) {
-  if (!country || country.length !== 2) return '';
-  return country.toUpperCase().replace(/./g, c =>
-    String.fromCodePoint(c.charCodeAt(0) + 127397)
-  );
-}
 
 export default async function ShipperDashboardPage() {
   const session = await auth();
@@ -116,14 +111,14 @@ export default async function ShipperDashboardPage() {
                   <div className={styles.portChain}>
                     {loadPorts.map((pc: any, i: number) => (
                       <span key={i} className={`${styles.portDot} ${styles['portDot--load']}`}>
-                        {countryFlag(pc.country)} {pc.portCode}
+                        <FlagIcon code={pc.country} /> {pc.portCode}
                         {i < loadPorts.length - 1 && <span className={styles.portDotSep} />}
                       </span>
                     ))}
                     {dischPorts.length > 0 && <span className={`${styles.portDot} ${styles.portArrow}`}> → </span>}
                     {dischPorts.map((pc: any, i: number) => (
                       <span key={i} className={`${styles.portDot} ${styles['portDot--discharge']}`}>
-                        {countryFlag(pc.country)} {pc.portCode}
+                        <FlagIcon code={pc.country} /> {pc.portCode}
                         {i < dischPorts.length - 1 && <span className={styles.portDotSep} />}
                       </span>
                     ))}

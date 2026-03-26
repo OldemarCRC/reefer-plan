@@ -2,14 +2,7 @@ import AppShell from '@/components/layout/AppShell';
 import { getVessels } from '@/app/actions/vessel';
 import styles from './page.module.css';
 import Link from 'next/link';
-
-function flagDisplay(code: string): string {
-  if (!code || code === '—') return '—';
-  if (code.length === 2 && /^[A-Z]{2}$/.test(code)) {
-    return code.split('').map(c => String.fromCodePoint(0x1f1e6 - 65 + c.charCodeAt(0))).join('');
-  }
-  return code; // fallback for legacy full-name values
-}
+import { FlagIcon } from '@/lib/utils/flagIcon';
 
 export default async function VesselsPage() {
   const vessels = await getVessels().catch(() => []);
@@ -111,7 +104,11 @@ export default async function VesselsPage() {
 
               {/* Footer */}
               <div className={styles.cardFooter}>
-                <span className={styles.flag}>{flagDisplay(v.flag)}</span>
+                <span className={styles.flag}>
+                  {v.flag && v.flag !== '—' && v.flag.length === 2
+                    ? <FlagIcon code={v.flag} />
+                    : (v.flag || '—')}
+                </span>
                 <Link href={`/vessels/${v._id}`} className={styles.btnGhost}>
                   View Profile →
                 </Link>
