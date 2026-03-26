@@ -3,7 +3,8 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { deleteVoyage, updatePortRotation, resequencePortCallsByEta } from '@/app/actions/voyage';
+import { deleteVoyage, updatePortRotation, resequencePortCallsByEta, closeVoyage } from '@/app/actions/voyage';
+import { updateBookingDestination } from '@/app/actions/booking';
 import { deleteStowagePlan, markCaptainResponse } from '@/app/actions/stowage-plan';
 import styles from './page.module.css';
 import clientStyles from './VoyageDetailClient.module.css';
@@ -990,5 +991,240 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
         </div>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Close Voyage Button
+// Shown on COMPLETED voyages for ADMIN / SHIPPING_PLANNER.
+// Prompts for the ATD of the last port before sealing the voyage as CLOSED.
+// ---------------------------------------------------------------------------
+
+export function CloseVoyageButton({
+  voyageId,
+  voyageNumber,
+  lastPortName,
+}: {
+  voyageId: string;
+  voyageNumber: string;
+  lastPortName: string;
+}) {
+  const router = useRouter();
+  const [showModal, setShowModal] = useState(false);
+  const [atd, setAtd] = useState('');
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  // Max value for the datetime input = now (no future ATDs)
+  const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16);
+
+  function handleClose() {
+    if (!atd) { setError('Please enter the ATD'); return; }
+    setError(null);
+    startTransition(async () => {
+      const result = await closeVoyage(voyageId, new Date(atd));
+      if (result.success) {
+        router.push('/voyages');
+        router.refresh();
+      } else {
+        setError(result.error ?? 'Failed to close voyage');
+      }
+    });
+  }
+
+  return (
+    <>
+      <button
+        className={clientStyles.btnClose}
+        onClick={() => { setShowModal(true); setAtd(''); setError(null); }}
+      >
+        Close Voyage
+      </button>
+
+      {showModal && (
+        <div className={clientStyles.modalOverlay} onClick={() => { if (!isPending) setShowModal(false); }}>
+          <div className={clientStyles.modal} onClick={e => e.stopPropagation()}>
+            <h3 className={clientStyles.modalTitle}>Close Voyage</h3>
+            <p className={clientStyles.modalBody}>
+              Closing <strong>{voyageNumber}</strong> seals it for statistics. No further edits will be
+              allowed. Enter the actual departure time of the last port (<strong>{lastPortName}</strong>).
+            </p>
+
+            <div className={clientStyles.closeAtdRow}>
+              <label className={clientStyles.closeAtdLabel}>
+                ATD — {lastPortName}
+              </label>
+              <input
+                type="datetime-local"
+                className={clientStyles.dateInput}
+                value={atd}
+                max={nowLocal}
+                onChange={e => setAtd(e.target.value)}
+                disabled={isPending}
+              />
+            </div>
+
+            {error && <p className={clientStyles.closeError}>{error}</p>}
+
+            <div className={clientStyles.modalActions}>
+              <button
+                className={clientStyles.btnModalCancel}
+                onClick={() => setShowModal(false)}
+                disabled={isPending}
+              >
+                Cancel
+              </button>
+              <button
+                className={clientStyles.btnClose}
+                onClick={handleClose}
+                disabled={isPending || !atd}
+              >
+                {isPending ? 'Closing…' : 'Confirm Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Change Destination Button
+// Per-booking row button shown when voyage is IN_PROGRESS for ADMIN / PLANNER.
+// ---------------------------------------------------------------------------
+
+interface DischargePort {
+  portCode: string;
+  portName: string;
+}
+
+export function ChangeDestinationButton({
+  bookingId,
+  bookingNumber,
+  currentPodCode,
+  currentPodName,
+  currentConsigneeName,
+  dischargePorts,
+}: {
+  bookingId: string;
+  bookingNumber: string;
+  currentPodCode: string;
+  currentPodName: string;
+  currentConsigneeName: string;
+  dischargePorts: DischargePort[];
+}) {
+  const router = useRouter();
+  const [showModal, setShowModal] = useState(false);
+  const [podPortCode, setPodPortCode] = useState(currentPodCode);
+  const [consigneeName, setConsigneeName] = useState(currentConsigneeName);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedPort = dischargePorts.find(p => p.portCode === podPortCode);
+  const podPortName = selectedPort?.portName ?? currentPodName;
+
+  function openModal() {
+    setPodPortCode(currentPodCode);
+    setConsigneeName(currentConsigneeName);
+    setError(null);
+    setShowModal(true);
+  }
+
+  function handleSave() {
+    if (!podPortCode || !consigneeName.trim()) {
+      setError('POD port and consignee name are required');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await updateBookingDestination(bookingId, {
+        podPortCode,
+        podPortName,
+        consigneeName: consigneeName.trim(),
+      });
+      if (result.success) {
+        setShowModal(false);
+        router.refresh();
+      } else {
+        setError(result.error ?? 'Failed to update destination');
+      }
+    });
+  }
+
+  return (
+    <>
+      <button
+        className={clientStyles.btnChangeDest}
+        onClick={openModal}
+        title={`Change destination for ${bookingNumber}`}
+      >
+        Divert
+      </button>
+
+      {showModal && (
+        <div className={clientStyles.modalOverlay} onClick={() => { if (!isPending) setShowModal(false); }}>
+          <div className={clientStyles.modal} onClick={e => e.stopPropagation()}>
+            <h3 className={clientStyles.modalTitle}>Change Destination</h3>
+            <p className={clientStyles.modalBody}>
+              Booking <strong>{bookingNumber}</strong> — cargo is in transit.
+              Update the discharge port and/or consignee below.
+            </p>
+
+            <div className={clientStyles.destFieldRow}>
+              <label className={clientStyles.destLabel}>New POD</label>
+              <select
+                className={clientStyles.destSelect}
+                value={podPortCode}
+                onChange={e => setPodPortCode(e.target.value)}
+                disabled={isPending}
+              >
+                {dischargePorts.length === 0 && (
+                  <option value="">No discharge ports on this voyage</option>
+                )}
+                {dischargePorts.map(p => (
+                  <option key={p.portCode} value={p.portCode}>
+                    {p.portCode} — {p.portName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className={clientStyles.destFieldRow}>
+              <label className={clientStyles.destLabel}>Consignee</label>
+              <input
+                type="text"
+                className={clientStyles.destInput}
+                value={consigneeName}
+                onChange={e => setConsigneeName(e.target.value)}
+                disabled={isPending}
+                maxLength={200}
+              />
+            </div>
+
+            {error && <p className={clientStyles.closeError}>{error}</p>}
+
+            <div className={clientStyles.modalActions}>
+              <button
+                className={clientStyles.btnModalCancel}
+                onClick={() => setShowModal(false)}
+                disabled={isPending}
+              >
+                Cancel
+              </button>
+              <button
+                className={clientStyles.btnSave}
+                onClick={handleSave}
+                disabled={isPending || !podPortCode || !consigneeName.trim()}
+              >
+                {isPending ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

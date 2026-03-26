@@ -70,7 +70,7 @@ export default async function DashboardPage() {
 
   // Calculate dashboard stats
   const activeVoyages = voyages.filter((v: any) =>
-    v.status === 'IN_PROGRESS' || v.status === 'PLANNED' || v.status === 'CONFIRMED'
+    v.status === 'IN_PROGRESS' || v.status === 'PLANNED'
   ).length;
 
   const pendingBookingsCount = bookings.filter((b: any) =>

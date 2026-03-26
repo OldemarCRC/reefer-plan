@@ -103,7 +103,7 @@ export const mockVoyages: MockVoyage[] = [
     voyageNumber: 'ACON-082026',
     vesselName: 'ACONCAGUA BAY',
     serviceCode: 'SEABAN',
-    status: 'ESTIMATED',
+    status: 'PLANNED',
     startDate: '2026-04-27',
     estimatedEndDate: '2026-06-01',
     portCalls: [

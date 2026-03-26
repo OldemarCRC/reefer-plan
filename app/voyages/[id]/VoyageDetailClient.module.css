@@ -23,6 +23,52 @@
   cursor: not-allowed;
 }
 
+/* --- Close Voyage button (amber — distinct from red danger) --- */
+
+.btnClose {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  border: 1px solid var(--color-warning);
+  background: transparent;
+  color: var(--color-warning);
+  transition: all var(--transition-fast);
+}
+
+.btnClose:hover:not(:disabled) {
+  background: var(--color-warning-muted);
+}
+
+.btnClose:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- Close voyage ATD form row --- */
+
+.closeAtdRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: 1rem;
+}
+
+.closeAtdLabel {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.closeError {
+  font-size: var(--text-xs);
+  color: var(--color-danger);
+  margin: 0 0 0.75rem 0;
+}
+
 /* --- Confirmation modal --- */
 
 .modalOverlay {
@@ -576,6 +622,61 @@
 }
 
 .reasonInput:focus {
+  outline: none;
+  border-color: var(--color-cyan);
+}
+
+/* --- Change Destination button (small, per-row) --- */
+
+.btnChangeDest {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  border: 1px solid var(--color-cyan);
+  background: transparent;
+  color: var(--color-cyan);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btnChangeDest:hover:not(:disabled) {
+  background: var(--color-blue-muted);
+}
+
+/* --- Change Destination modal fields --- */
+
+.destFieldRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: 1rem;
+}
+
+.destLabel {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.destSelect,
+.destInput {
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.destSelect:focus,
+.destInput:focus {
   outline: none;
   border-color: var(--color-cyan);
 }

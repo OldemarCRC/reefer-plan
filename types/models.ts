@@ -72,13 +72,11 @@ export interface Service {
 // VOYAGE (Viaje - cada "vuelta" de un barco)
 // ----------------------------------------------------------------------------
 
-export type VoyageStatus = 
+export type VoyageStatus =
   | 'PLANNED'
-  | 'ESTIMATED'
-  | 'CONFIRMED'
   | 'IN_PROGRESS'
   | 'COMPLETED'
-  | 'CLOSED'      // Para estadísticas - no más cambios
+  | 'CLOSED'
   | 'CANCELLED';
 
 export type PortCallStatus = 'SCHEDULED' | 'CANCELLED' | 'COMPLETED' | 'SKIPPED';
@@ -251,6 +249,13 @@ export interface Booking {
   approvedBy?: string;
   rejectionReason?: string;
   notes?: string;
+  changelog?: Array<{
+    changedAt: Date;
+    changedBy: string;
+    field: string;
+    fromValue: string;
+    toValue: string;
+  }>;
   createdAt: Date;
   updatedAt: Date;
 }

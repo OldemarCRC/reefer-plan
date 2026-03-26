@@ -137,7 +137,6 @@ interface PortTemp {
 
 interface FleetStatus {
   inTransit: number;
-  confirmed: number;
   planned: number;
 }
 
@@ -168,7 +167,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProp
     return pathname.startsWith(href);
   };
 
-  const totalActive = fleet ? fleet.inTransit + fleet.confirmed : 0;
+  const totalActive = fleet ? fleet.inTransit + fleet.planned : 0;
 
   return (
     <aside className={`${styles.sidebar} app-sidebar ${collapsed ? styles['sidebar--collapsed'] : ''} ${mobileOpen ? styles['sidebar--mobileOpen'] : ''}`}>
@@ -232,7 +231,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProp
           <span
             className={styles.widgetCollapsedHint}
             title={fleet
-              ? `Fleet: ${fleet.inTransit} in transit · ${fleet.confirmed} confirmed · ${fleet.planned} planned`
+              ? `Fleet: ${fleet.inTransit} in transit · ${fleet.planned} planned`
               : 'Fleet status loading…'}
           >⛴</span>
           {/* Full content — hidden when collapsed */}
@@ -241,11 +240,6 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProp
             <span className={styles.fleetIcon}>⛴</span>
             <span className={styles.fleetText}>In Transit</span>
             <span className={styles.fleetCount}>{fleet?.inTransit ?? '—'}</span>
-          </div>
-          <div className={styles.fleetRow}>
-            <span className={styles.fleetIcon}>⚓</span>
-            <span className={styles.fleetText}>Confirmed</span>
-            <span className={styles.fleetCount}>{fleet?.confirmed ?? '—'}</span>
           </div>
           {fleet?.planned ? (
             <div className={styles.fleetRow}>

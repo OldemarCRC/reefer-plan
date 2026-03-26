@@ -250,12 +250,11 @@ type ConfirmAction =
 // ---------------------------------------------------------------------------
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  IN_PROGRESS:  { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
-  CONFIRMED:    { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
-  PLANNED:      { bg: 'var(--color-blue-muted)',    color: 'var(--color-blue-light)' },
-  ESTIMATED:    { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)' },
+  PLANNED:      { bg: 'var(--color-blue-muted)',    color: 'var(--color-blue-light)'    },
+  IN_PROGRESS:  { bg: 'var(--color-success-muted)', color: 'var(--color-success)'       },
   COMPLETED:    { bg: 'var(--color-bg-tertiary)',   color: 'var(--color-text-tertiary)' },
-  CANCELLED:    { bg: 'var(--color-danger-muted)',  color: 'var(--color-danger)' },
+  CLOSED:       { bg: 'var(--color-bg-tertiary)',   color: 'var(--color-text-tertiary)' },
+  CANCELLED:    { bg: 'var(--color-danger-muted)',  color: 'var(--color-danger)'        },
 };
 
 function StatusBadge({ status }: { status: string }) {

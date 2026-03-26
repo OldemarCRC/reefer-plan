@@ -5,12 +5,11 @@ import Link from 'next/link';
 import styles from './page.module.css';
 
 const statusStyles: Record<string, { bg: string; color: string }> = {
-  IN_PROGRESS: { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
-  PLANNED: { bg: 'var(--color-blue-muted)', color: 'var(--color-blue-light)' },
-  ESTIMATED: { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)' },
-  CONFIRMED: { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
-  COMPLETED: { bg: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' },
-  CANCELLED: { bg: 'var(--color-danger-muted)', color: 'var(--color-danger)' },
+  PLANNED:     { bg: 'var(--color-blue-muted)',    color: 'var(--color-blue-light)'    },
+  IN_PROGRESS: { bg: 'var(--color-success-muted)', color: 'var(--color-success)'       },
+  COMPLETED:   { bg: 'var(--color-bg-tertiary)',   color: 'var(--color-text-tertiary)' },
+  CLOSED:      { bg: 'var(--color-bg-tertiary)',   color: 'var(--color-text-tertiary)' },
+  CANCELLED:   { bg: 'var(--color-danger-muted)',  color: 'var(--color-danger)'        },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -137,9 +136,8 @@ export default function VoyagesClient({ voyages }: VoyagesClientProps) {
           <option value="">All Status</option>
           <option value="IN_PROGRESS">In Progress</option>
           <option value="PLANNED">Planned</option>
-          <option value="ESTIMATED">Estimated</option>
-          <option value="CONFIRMED">Confirmed</option>
           <option value="COMPLETED">Completed</option>
+          <option value="CLOSED">Closed</option>
           <option value="CANCELLED">Cancelled</option>
         </select>
       </div>

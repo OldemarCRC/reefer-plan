@@ -128,6 +128,20 @@ export async function createBookingFromContract(data: unknown) {
       return { success: false, error: 'Voyage not found' };
     }
 
+    // Reject if the POL port call has already been locked (vessel departed)
+    const polPortCode = (contract.originPort as any)?.portCode;
+    if (polPortCode) {
+      const polPc = (voyage.portCalls as any[])?.find(
+        (pc: any) => pc.portCode === polPortCode
+      );
+      if (polPc?.locked) {
+        return {
+          success: false,
+          error: 'Loading operations for this port are closed. The vessel has already departed.',
+        };
+      }
+    }
+
     // Look up service for shortCode
     const service = await ServiceModel.findById(contract.serviceId).lean();
     if (!service || !service.shortCode) {
@@ -405,6 +419,23 @@ export async function updateBookingQuantity(data: unknown) {
     const booking = await BookingModel.findById(validated.bookingId);
     if (!booking) return { success: false, error: 'Booking not found' };
 
+    // Reject edits if the booking's POL has already departed (load port locked)
+    const polPortCode = (booking.pol as any)?.portCode;
+    if (polPortCode && booking.voyageId) {
+      const voyage = await VoyageModel.findById(booking.voyageId)
+        .select('portCalls')
+        .lean();
+      const polPc = (voyage?.portCalls as any[])?.find(
+        (pc: any) => pc.portCode === polPortCode
+      );
+      if (polPc?.locked) {
+        return {
+          success: false,
+          error: 'Loading operations for this port are closed. The vessel has already departed.',
+        };
+      }
+    }
+
     if (isExporter) {
       // Ownership check
       const shipperCode = (session.user as any).shipperCode;
@@ -625,6 +656,82 @@ export async function getBookingsByShipperCode(code: string, shipperId?: string)
   } catch (error) {
     console.error('Error fetching bookings by shipper code:', error);
     return { success: false, data: [], error: 'Failed to fetch bookings' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// UPDATE BOOKING DESTINATION (in-transit divert)
+// Allowed only when voyage is IN_PROGRESS.
+// Updates pod.portCode, pod.portName, consignee.name and appends to changelog.
+// ----------------------------------------------------------------------------
+
+export async function updateBookingDestination(
+  bookingId: string,
+  updates: { podPortCode: string; podPortName: string; consigneeName: string }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
+    const { podPortCode, podPortName, consigneeName } = updates;
+    if (!podPortCode?.trim() || !podPortName?.trim() || !consigneeName?.trim()) {
+      return { success: false, error: 'POD port code, port name and consignee name are required' };
+    }
+
+    await connectDB();
+
+    const booking = await BookingModel.findById(bookingId);
+    if (!booking) return { success: false, error: 'Booking not found' };
+
+    // Only allowed while voyage is in progress
+    const voyage = await VoyageModel.findById(booking.voyageId).select('status').lean();
+    if (!voyage) return { success: false, error: 'Voyage not found' };
+    if ((voyage as any).status !== 'IN_PROGRESS') {
+      return { success: false, error: 'Destination can only be changed while the voyage is in progress' };
+    }
+
+    const changedBy = (session.user as any).name ?? (session.user as any).email ?? 'SYSTEM';
+    const now = new Date();
+    const entries: object[] = [];
+
+    const oldPodCode = (booking.pod as any)?.portCode ?? '';
+    const oldPodName = (booking.pod as any)?.portName ?? '';
+    const oldConsignee = (booking.consignee as any)?.name ?? '';
+
+    if (podPortCode !== oldPodCode || podPortName !== oldPodName) {
+      entries.push({
+        changedAt: now, changedBy,
+        field: 'pod',
+        fromValue: `${oldPodCode} — ${oldPodName}`,
+        toValue:   `${podPortCode} — ${podPortName}`,
+      });
+      (booking.pod as any).portCode = podPortCode;
+      (booking.pod as any).portName = podPortName;
+    }
+
+    if (consigneeName !== oldConsignee) {
+      entries.push({
+        changedAt: now, changedBy,
+        field: 'consignee.name',
+        fromValue: oldConsignee,
+        toValue:   consigneeName,
+      });
+      (booking.consignee as any).name = consigneeName;
+    }
+
+    if (entries.length === 0) return { success: true }; // nothing changed
+
+    if (!(booking as any).changelog) (booking as any).changelog = [];
+    (booking as any).changelog.push(...entries);
+
+    await booking.save();
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating booking destination:', error);
+    return { success: false, error: 'Failed to update booking destination' };
   }
 }
 

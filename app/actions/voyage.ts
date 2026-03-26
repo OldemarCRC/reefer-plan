@@ -694,6 +694,10 @@ export async function updatePortRotation(
         }
         if (change.ata !== undefined) pc.ata = change.ata ? new Date(change.ata) : undefined;
         if (change.atd !== undefined) pc.atd = change.atd ? new Date(change.atd) : undefined;
+        // Auto-lock LOAD ports when ATD is recorded — cargo operations are closed
+        if (pc.atd && (pc.operations ?? []).includes('LOAD')) {
+          pc.locked = true;
+        }
         const etaNew = pc.eta ? new Date(pc.eta).toISOString().slice(0, 10) : '';
         const etdNew = pc.etd ? new Date(pc.etd).toISOString().slice(0, 10) : '';
         changelogEntries.push({
@@ -855,13 +859,73 @@ export async function checkVoyageNumberExists(voyageNumber: unknown) {
 }
 
 // ----------------------------------------------------------------------------
+// SYNC VOYAGE STATUSES — automatic PLANNED → IN_PROGRESS → COMPLETED transitions
+//
+// Runs against all non-CLOSED, non-CANCELLED voyages.
+// Rules (based on port call ETAs):
+//   firstLoadPort.eta <= now  AND  status === 'PLANNED'    → IN_PROGRESS
+//   lastPort.eta      <= now  AND  status === 'IN_PROGRESS' → COMPLETED
+//
+// Silent: never throws, only logs errors. Called fire-and-forget from
+// getVoyages() and getAdminVoyages() so the views always reflect reality.
+// ----------------------------------------------------------------------------
+
+async function syncVoyageStatuses(): Promise<void> {
+  try {
+    await connectDB();
+    const now = new Date();
+
+    const voyages = await VoyageModel.find({
+      status: { $in: ['PLANNED', 'IN_PROGRESS'] },
+    }).lean();
+
+    const updates: Promise<any>[] = [];
+
+    for (const voyage of voyages as any[]) {
+      const portCalls: any[] = (voyage.portCalls ?? []).filter(
+        (pc: any) => pc.status !== 'CANCELLED' && pc.status !== 'SKIPPED'
+      );
+
+      if (portCalls.length === 0) continue;
+
+      // First load port (lowest sequence among ports with LOAD operation)
+      const loadPorts = portCalls.filter((pc: any) => (pc.operations ?? []).includes('LOAD'));
+      const firstLoadPort = loadPorts.sort((a: any, b: any) => a.sequence - b.sequence)[0];
+
+      // Last port overall (highest sequence)
+      const lastPort = [...portCalls].sort((a: any, b: any) => b.sequence - a.sequence)[0];
+
+      if (voyage.status === 'PLANNED' && firstLoadPort?.eta && new Date(firstLoadPort.eta) <= now) {
+        updates.push(
+          VoyageModel.updateOne({ _id: voyage._id }, { $set: { status: 'IN_PROGRESS' } })
+        );
+      } else if (voyage.status === 'IN_PROGRESS' && lastPort?.eta && new Date(lastPort.eta) <= now) {
+        updates.push(
+          VoyageModel.updateOne({ _id: voyage._id }, { $set: { status: 'COMPLETED' } })
+        );
+      }
+    }
+
+    if (updates.length > 0) {
+      await Promise.all(updates);
+      console.log(`[syncVoyageStatuses] Updated ${updates.length} voyage(s)`);
+    }
+  } catch (error) {
+    console.error('[syncVoyageStatuses] Error:', error);
+  }
+}
+
+// ----------------------------------------------------------------------------
 // GET ALL VOYAGES
 // ----------------------------------------------------------------------------
 
 export async function getVoyages() {
+  // Fire-and-forget: auto-advance voyage statuses before returning results
+  syncVoyageStatuses().catch(() => {});
+
   try {
     await connectDB();
-    
+
     const voyages = await VoyageModel.find()
       .populate('vesselId', 'name imoNumber')
       .populate('serviceId', 'serviceCode serviceName')
@@ -892,7 +956,7 @@ export async function getVoyagesForPlanWizard() {
     await connectDB();
 
     const voyages = await VoyageModel.find({
-      status: { $in: ['PLANNED', 'CONFIRMED', 'IN_PROGRESS'] },
+      status: { $in: ['PLANNED', 'IN_PROGRESS'] },
     })
       .populate('vesselId', 'name temperatureZones')
       .sort({ departureDate: -1 })
@@ -1110,6 +1174,60 @@ export async function getVoyagePortSequence(voyageId: unknown) {
 }
 
 // ----------------------------------------------------------------------------
+// CLOSE VOYAGE — COMPLETED → CLOSED
+// Triggered manually by ADMIN or SHIPPING_PLANNER after all cargo has been
+// discharged. Records the ATD of the last port call and locks the voyage.
+// ----------------------------------------------------------------------------
+
+export async function closeVoyage(voyageId: string, lastPortAtd: Date) {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
+    if (!(lastPortAtd instanceof Date) || isNaN(lastPortAtd.getTime())) {
+      return { success: false, error: 'Invalid ATD date' };
+    }
+    if (lastPortAtd > new Date()) {
+      return { success: false, error: 'ATD cannot be in the future' };
+    }
+
+    await connectDB();
+
+    const voyage = await VoyageModel.findById(voyageId).lean();
+    if (!voyage) return { success: false, error: 'Voyage not found' };
+    if ((voyage as any).status !== 'COMPLETED') {
+      return { success: false, error: 'Voyage must be in COMPLETED status to close' };
+    }
+
+    // Find the last non-cancelled/skipped port call by sequence
+    const activePcs: any[] = ((voyage as any).portCalls ?? []).filter(
+      (pc: any) => pc.status !== 'CANCELLED' && pc.status !== 'SKIPPED'
+    );
+    if (activePcs.length === 0) return { success: false, error: 'No active port calls found' };
+
+    const lastPc = activePcs.sort((a: any, b: any) => b.sequence - a.sequence)[0];
+
+    await VoyageModel.updateOne(
+      { _id: voyageId },
+      {
+        $set: {
+          status: 'CLOSED',
+          'portCalls.$[last].atd': lastPortAtd,
+        },
+      },
+      { arrayFilters: [{ 'last.portCode': lastPc.portCode, 'last.sequence': lastPc.sequence }] }
+    );
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error closing voyage:', error);
+    return { success: false, error: 'Failed to close voyage' };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // CANCEL VOYAGE (soft cancel — admin, no guard)
 // Sets status to CANCELLED regardless of plans or bookings.
 // For admin use: preserves full audit trail.
@@ -1149,6 +1267,9 @@ export async function cancelVoyage(voyageId: unknown) {
 // ----------------------------------------------------------------------------
 
 export async function getAdminVoyages() {
+  // Fire-and-forget: auto-advance voyage statuses before returning results
+  syncVoyageStatuses().catch(() => {});
+
   try {
     const session = await auth();
     if (!session?.user) return { success: false, data: [], error: 'Unauthorized' };
@@ -1199,18 +1320,16 @@ export async function getAdminVoyages() {
 
 export async function getFleetStatus(): Promise<{
   inTransit: number;
-  confirmed: number;
   planned: number;
 }> {
   try {
     await connectDB();
-    const [inTransit, confirmed, planned] = await Promise.all([
+    const [inTransit, planned] = await Promise.all([
       VoyageModel.countDocuments({ status: 'IN_PROGRESS' }),
-      VoyageModel.countDocuments({ status: 'CONFIRMED' }),
       VoyageModel.countDocuments({ status: 'PLANNED' }),
     ]);
-    return { inTransit, confirmed, planned };
+    return { inTransit, planned };
   } catch {
-    return { inTransit: 0, confirmed: 0, planned: 0 };
+    return { inTransit: 0, planned: 0 };
   }
 }

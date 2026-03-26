@@ -179,7 +179,7 @@ export async function getShipperDashboard(shipperCode: string, shipperId?: strin
     const voyages = voyageIds.length > 0
       ? await VoyageModel.find({
           _id: { $in: voyageIds },
-          status: { $in: ['PLANNED', 'ESTIMATED', 'CONFIRMED', 'IN_PROGRESS'] },
+          status: { $in: ['PLANNED', 'IN_PROGRESS'] },
         })
           .sort({ departureDate: 1 })
           .limit(5)
@@ -349,7 +349,7 @@ export async function getUpcomingVoyagesForService(serviceId: string) {
 
     const voyages = await VoyageModel.find({
       serviceId,
-      status: { $in: ['PLANNED', 'ESTIMATED', 'CONFIRMED'] },
+      status: { $in: ['PLANNED'] },
       $or: [{ departureDate: { $gte: now } }, { departureDate: null }],
     })
       .sort({ departureDate: 1 })

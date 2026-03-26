@@ -193,7 +193,7 @@ export async function deleteService(serviceId: unknown) {
     // Guard: cannot deactivate a service that still has active voyages
     const voyageCount = await VoyageModel.countDocuments({
       serviceId: id,
-      status: { $in: ['PLANNED', 'ESTIMATED', 'CONFIRMED', 'IN_PROGRESS'] },
+      status: { $in: ['PLANNED', 'IN_PROGRESS'] },
     });
     if (voyageCount > 0) {
       return {

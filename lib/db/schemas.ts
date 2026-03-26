@@ -128,7 +128,7 @@ const VoyageSchema = new Schema({
   status: {
     type: String,
     required: true,
-    enum: ['PLANNED', 'ESTIMATED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED'],
+    enum: ['PLANNED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED'],
     default: 'PLANNED',
   },
   stowagePlanId: { type: Schema.Types.ObjectId, ref: 'StowagePlan' },
@@ -292,6 +292,13 @@ const BookingSchema = new Schema({
   approvedBy: { type: String },
   rejectionReason: { type: String },
   notes: { type: String },
+  changelog: [{
+    changedAt:  { type: Date,   required: true },
+    changedBy:  { type: String, required: true },
+    field:      { type: String, required: true },
+    fromValue:  { type: String, required: true },
+    toValue:    { type: String, required: true },
+  }],
 }, {
   timestamps: true,
 });

@@ -174,7 +174,7 @@ function getZoneStats(assignments: VoyageTempAssignment[]) {
 }
 
 // Priority order for auto-selecting the "active" voyage when none is in the URL
-const VOYAGE_STATUS_PRIORITY = ['IN_PROGRESS', 'CONFIRMED', 'PLANNED', 'ESTIMATED'];
+const VOYAGE_STATUS_PRIORITY = ['IN_PROGRESS', 'PLANNED'];
 
 export default async function VesselDetailPage({
   params,

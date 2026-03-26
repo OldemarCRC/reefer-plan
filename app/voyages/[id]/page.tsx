@@ -2,17 +2,17 @@ import AppShell from '@/components/layout/AppShell';
 import { getVoyageById } from '@/app/actions/voyage';
 import { getStowagePlansByVoyage } from '@/app/actions/stowage-plan';
 import { getBookingsByVoyage } from '@/app/actions/booking';
+import { auth } from '@/auth';
 import Link from 'next/link';
 import styles from './page.module.css';
-import { PortCallsEditor, DeletePlanButton } from './VoyageDetailClient';
+import { PortCallsEditor, DeletePlanButton, CloseVoyageButton, ChangeDestinationButton } from './VoyageDetailClient';
 
 const statusStyles: Record<string, { bg: string; color: string }> = {
-  IN_PROGRESS: { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
-  PLANNED: { bg: 'var(--color-blue-muted)', color: 'var(--color-blue-light)' },
-  ESTIMATED: { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)' },
-  CONFIRMED: { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
-  COMPLETED: { bg: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' },
-  CANCELLED: { bg: 'var(--color-danger-muted)', color: 'var(--color-danger)' },
+  PLANNED:     { bg: 'var(--color-blue-muted)',     color: 'var(--color-blue-light)'    },
+  IN_PROGRESS: { bg: 'var(--color-success-muted)',  color: 'var(--color-success)'       },
+  COMPLETED:   { bg: 'var(--color-bg-tertiary)',    color: 'var(--color-text-tertiary)' },
+  CLOSED:      { bg: 'var(--color-bg-tertiary)',    color: 'var(--color-text-tertiary)' },
+  CANCELLED:   { bg: 'var(--color-danger-muted)',   color: 'var(--color-danger)'        },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -40,7 +40,10 @@ export default async function VoyageDetailPage({
 }) {
   const { id } = await params;
 
-  const voyageResult = await getVoyageById(id);
+  const [session, voyageResult] = await Promise.all([
+    auth(),
+    getVoyageById(id),
+  ]);
 
   if (!voyageResult.success) {
     return (
@@ -68,6 +71,16 @@ export default async function VoyageDetailPage({
   const plans = plansResult.success ? plansResult.data : [];
   const bookings = bookingsResult.success ? bookingsResult.data : [];
 
+  const role = (session?.user as any)?.role as string | undefined;
+  const canEdit = role === 'ADMIN' || role === 'SHIPPING_PLANNER';
+  const isClosed = voyage.status === 'CLOSED' || voyage.status === 'CANCELLED';
+
+  // Last active port call — used by CloseVoyageButton
+  const activePcs = portCalls.filter((pc: any) => pc.status !== 'CANCELLED' && pc.status !== 'SKIPPED');
+  const lastPort = activePcs.length > 0
+    ? [...activePcs].sort((a: any, b: any) => b.sequence - a.sequence)[0]
+    : null;
+
   const vesselName = voyage.vesselId?.name || voyage.vesselName || '—';
   const vesselImo = (voyage.vesselId as any)?.imoNumber ?? null;
   const serviceCode = voyage.serviceId?.serviceCode || 'N/A';
@@ -76,6 +89,12 @@ export default async function VoyageDetailPage({
     portName: p.portName as string,
     country: (p.country ?? '') as string,
   }));
+
+  // Discharge ports for the Change Destination modal — derived from voyage's
+  // own port calls so custom ports added post-creation are included
+  const dischargePorts = portCalls
+    .filter((pc: any) => pc.status !== 'CANCELLED' && pc.status !== 'SKIPPED' && (pc.operations ?? []).includes('DISCHARGE'))
+    .map((pc: any) => ({ portCode: pc.portCode as string, portName: pc.portName as string }));
 
   return (
     <AppShell>
@@ -117,9 +136,18 @@ export default async function VoyageDetailPage({
                 Open Stowage Plan
               </Link>
             )}
-            <Link href={`/stowage-plans/new?voyageId=${id}`} className={styles.btnSecondary}>
-              + New Plan
-            </Link>
+            {!isClosed && (
+              <Link href={`/stowage-plans/new?voyageId=${id}`} className={styles.btnSecondary}>
+                + New Plan
+              </Link>
+            )}
+            {voyage.status === 'COMPLETED' && canEdit && lastPort && (
+              <CloseVoyageButton
+                voyageId={id}
+                voyageNumber={voyage.voyageNumber}
+                lastPortName={lastPort.portName}
+              />
+            )}
           </div>
         </div>
 
@@ -131,6 +159,10 @@ export default async function VoyageDetailPage({
           </div>
           {portCalls.length === 0 ? (
             <p className={styles.cellMuted}>No port calls defined for this voyage.</p>
+          ) : isClosed ? (
+            <p className={styles.cellMuted}>
+              This voyage is {voyage.status?.toLowerCase()} — port calls are read-only.
+            </p>
           ) : (
             <PortCallsEditor
               voyageId={id}
@@ -168,22 +200,37 @@ export default async function VoyageDetailPage({
                     <th>Booking #</th>
                     <th>Client</th>
                     <th>Cargo</th>
+                    <th>POD</th>
                     <th>Requested</th>
                     <th>Confirmed</th>
                     <th>Status</th>
+                    {voyage.status === 'IN_PROGRESS' && canEdit && <th />}
                   </tr>
                 </thead>
                 <tbody>
                   {bookings.map((b: any) => (
                     <tr key={b._id}>
                       <td className={styles.cellMono}>{b.bookingNumber}</td>
-                      <td>{b.clientName || '—'}</td>
+                      <td>{b.client?.name || b.clientName || '—'}</td>
                       <td>{b.cargoType ? b.cargoType.replace(/_/g, ' ') : '—'}</td>
+                      <td className={styles.cellMono}>{b.pod?.portCode ?? '—'}</td>
                       <td className={styles.cellRight}>{b.requestedQuantity ?? '—'} plt</td>
                       <td className={styles.cellRight}>{b.confirmedQuantity ?? '—'} plt</td>
                       <td>
                         <StatusBadge status={b.status || 'PENDING'} />
                       </td>
+                      {voyage.status === 'IN_PROGRESS' && canEdit && (
+                        <td>
+                          <ChangeDestinationButton
+                            bookingId={b._id}
+                            bookingNumber={b.bookingNumber}
+                            currentPodCode={b.pod?.portCode ?? ''}
+                            currentPodName={b.pod?.portName ?? ''}
+                            currentConsigneeName={b.consignee?.name ?? ''}
+                            dischargePorts={dischargePorts}
+                          />
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -196,9 +243,11 @@ export default async function VoyageDetailPage({
         <div className={styles.card}>
           <div className={styles.cardHeader}>
             <h2 className={styles.cardTitle}>Stowage Plans</h2>
-            <Link href={`/stowage-plans/new?voyageId=${id}`} className={styles.btnSecondary}>
-              + New Plan
-            </Link>
+            {!isClosed && (
+              <Link href={`/stowage-plans/new?voyageId=${id}`} className={styles.btnSecondary}>
+                + New Plan
+              </Link>
+            )}
           </div>
           {plans.length === 0 ? (
             <p className={styles.cellMuted}>No stowage plans for this voyage.</p>
