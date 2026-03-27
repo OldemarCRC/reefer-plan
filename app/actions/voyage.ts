@@ -11,10 +11,9 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { VoyageModel, VesselModel, StowagePlanModel, BookingModel } from '@/lib/db/schemas';
+import { VoyageModel, VesselModel, StowagePlanModel, BookingModel, ServiceModel } from '@/lib/db/schemas';
 import type { Voyage, VoyagePortCall } from '@/types/models';
 import { auth } from '@/auth';
-import { buildServiceFilter } from '@/lib/utils/accessFilter';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -930,7 +929,14 @@ export async function getVoyages() {
     const session = await auth();
     const serviceFilter = (session?.user as any)?.serviceFilter ?? [];
 
-    const voyages = await VoyageModel.find(buildServiceFilter(serviceFilter))
+    let voyageQuery: Record<string, unknown> = {};
+    if (serviceFilter.length > 0) {
+      const services = await ServiceModel.find({ serviceCode: { $in: serviceFilter } }).select('_id').lean();
+      const serviceIds = (services as any[]).map((s: any) => s._id);
+      voyageQuery = { serviceId: { $in: serviceIds } };
+    }
+
+    const voyages = await VoyageModel.find(voyageQuery)
       .populate('vesselId', 'name imoNumber')
       .populate('serviceId', 'serviceCode serviceName')
       .sort({ weekNumber: 1, departureDate: 1 })
@@ -962,9 +968,16 @@ export async function getVoyagesForPlanWizard() {
     const session = await auth();
     const serviceFilter = (session?.user as any)?.serviceFilter ?? [];
 
+    let serviceQuery: Record<string, unknown> = {};
+    if (serviceFilter.length > 0) {
+      const services = await ServiceModel.find({ serviceCode: { $in: serviceFilter } }).select('_id').lean();
+      const serviceIds = (services as any[]).map((s: any) => s._id);
+      serviceQuery = { serviceId: { $in: serviceIds } };
+    }
+
     const voyages = await VoyageModel.find({
       status: { $in: ['PLANNED', 'IN_PROGRESS'] },
-      ...buildServiceFilter(serviceFilter),
+      ...serviceQuery,
     })
       .populate('vesselId', 'name temperatureZones')
       .sort({ departureDate: -1 })

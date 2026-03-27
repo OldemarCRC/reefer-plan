@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { StowagePlanModel, VesselModel, VoyageModel, BookingModel, ContractModel } from '@/lib/db/schemas';
+import { StowagePlanModel, VesselModel, VoyageModel, BookingModel, ContractModel, ServiceModel } from '@/lib/db/schemas';
 import type { StowagePlan, StowagePlanStatus } from '@/types/models';
 import { sendPlanNotification } from '@/lib/email';
 import { generatePlanPdf } from '@/lib/generate-plan-pdf';
@@ -568,7 +568,19 @@ export async function getStowagePlans() {
   try {
     await connectDB();
 
-    const plans = await StowagePlanModel.find({})
+    const session = await auth();
+    const serviceFilter = (session?.user as any)?.serviceFilter ?? [];
+
+    let planQuery: Record<string, unknown> = {};
+    if (serviceFilter.length > 0) {
+      const services = await ServiceModel.find({ serviceCode: { $in: serviceFilter } }).select('_id').lean();
+      const serviceIds = (services as any[]).map((s: any) => s._id);
+      const voyages = await VoyageModel.find({ serviceId: { $in: serviceIds } }).select('_id').lean();
+      const voyageIds = (voyages as any[]).map((v: any) => v._id);
+      planQuery = { voyageId: { $in: voyageIds } };
+    }
+
+    const plans = await StowagePlanModel.find(planQuery)
       .populate('voyageId')
       .populate('vesselId')
       .sort({ createdAt: -1 })

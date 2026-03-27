@@ -625,13 +625,9 @@ export async function getBookingsByShipperCode(code: string, shipperId?: string)
 
     await connectDB();
 
-    const session = await auth();
-    const serviceFilter = (session?.user as any)?.serviceFilter ?? [];
-
-    const shipperQuery = shipperId
+    const query = shipperId
       ? { $or: [{ shipperId }, { 'shipper.code': code }] }
       : { 'shipper.code': code };
-    const query = { ...shipperQuery, ...buildServiceFilter(serviceFilter) };
 
     const bookings = await BookingModel.find(query)
       .sort({ createdAt: -1 })
