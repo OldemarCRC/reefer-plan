@@ -583,8 +583,14 @@ export async function getStowagePlans() {
     const plans = await StowagePlanModel.find(planQuery)
       .populate('voyageId')
       .populate('vesselId')
-      .sort({ createdAt: -1 })
       .lean();
+
+    (plans as any[]).sort((a: any, b: any) => {
+      const da = new Date(a.voyageId?.departureDate ?? 0).getTime();
+      const db = new Date(b.voyageId?.departureDate ?? 0).getTime();
+      if (da !== db) return da - db;
+      return (a.planNumber ?? '').localeCompare(b.planNumber ?? '');
+    });
 
     return {
       success: true,
@@ -1911,8 +1917,14 @@ export async function getAdminPlans() {
     const plans = await StowagePlanModel.find()
       .populate('vesselId', 'name')
       .populate('voyageId', 'voyageNumber departureDate weekNumber')
-      .sort({ createdAt: -1 })
       .lean();
+
+    (plans as any[]).sort((a: any, b: any) => {
+      const da = new Date((a.voyageId as any)?.departureDate ?? 0).getTime();
+      const db = new Date((b.voyageId as any)?.departureDate ?? 0).getTime();
+      if (da !== db) return da - db;
+      return (a.planNumber ?? '').localeCompare(b.planNumber ?? '');
+    });
 
     const data = plans.map((p: any) => ({
       _id: p._id.toString(),

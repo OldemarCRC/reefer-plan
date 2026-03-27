@@ -980,7 +980,7 @@ export async function getVoyagesForPlanWizard() {
       ...serviceQuery,
     })
       .populate('vesselId', 'name temperatureZones')
-      .sort({ departureDate: -1 })
+      .sort({ weekNumber: 1, departureDate: 1 })
       .lean();
 
     return {

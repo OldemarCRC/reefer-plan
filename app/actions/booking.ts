@@ -490,8 +490,15 @@ export async function getAdminBookings() {
     await connectDB();
 
     const bookings = await BookingModel.find({})
-      .sort({ createdAt: -1 })
+      .populate('voyageId', 'departureDate weekNumber')
       .lean();
+
+    (bookings as any[]).sort((a: any, b: any) => {
+      const da = new Date(a.voyageId?.departureDate ?? 0).getTime();
+      const db = new Date(b.voyageId?.departureDate ?? 0).getTime();
+      if (da !== db) return da - db;
+      return (a.bookingNumber ?? '').localeCompare(b.bookingNumber ?? '');
+    });
 
     return { success: true, data: JSON.parse(JSON.stringify(bookings)) };
   } catch (error) {
@@ -513,8 +520,14 @@ export async function getBookings() {
 
     const bookings = await BookingModel.find(buildServiceFilter(serviceFilter))
       .populate('voyageId')
-      .sort({ createdAt: -1 })
       .lean();
+
+    (bookings as any[]).sort((a: any, b: any) => {
+      const da = new Date(a.voyageId?.departureDate ?? 0).getTime();
+      const db = new Date(b.voyageId?.departureDate ?? 0).getTime();
+      if (da !== db) return da - db;
+      return (a.bookingNumber ?? '').localeCompare(b.bookingNumber ?? '');
+    });
 
     return {
       success: true,
