@@ -2172,7 +2172,7 @@ function CreateUserModal({ onClose, onCreated, shippers, offices }: {
         canSendEmailsToCaptains: canSend,
         shipperId: role === 'EXPORTER' ? shipperId || undefined : undefined,
         shipperCode: role === 'EXPORTER' ? selectedShipper?.code || undefined : undefined,
-        officeIds: role !== 'EXPORTER' ? selectedOfficeIds : [],
+        officeIds: selectedOfficeIds,
       });
       if (result.success) {
         onCreated(result.data as AdminUser);
@@ -2270,7 +2270,7 @@ function CreateUserModal({ onClose, onCreated, shippers, offices }: {
               </select>
             </div>
           )}
-          {role !== 'EXPORTER' && offices.length > 0 && (
+          {offices.length > 0 && (
             <div className={styles.formGroupFull}>
               <label className={styles.formLabel}>Offices (leave empty for global access)</label>
               <div className={styles.officeServiceList}>
@@ -2343,7 +2343,7 @@ function EditUserModal({ user, onClose, onUpdated, shippers, offices }: {
         canSendEmailsToCaptains: canSend,
         shipperId: role === 'EXPORTER' ? shipperId || null : null,
         shipperCode: role === 'EXPORTER' ? selectedShipper?.code ?? '' : '',
-        officeIds: role !== 'EXPORTER' ? selectedOfficeIds : [],
+        officeIds: selectedOfficeIds,
       });
       if (result.success) {
         onUpdated({ ...user, ...result.data } as AdminUser);
@@ -2428,7 +2428,7 @@ function EditUserModal({ user, onClose, onUpdated, shippers, offices }: {
               </select>
             </div>
           )}
-          {role !== 'EXPORTER' && offices.length > 0 && (
+          {offices.length > 0 && (
             <div className={styles.formGroupFull}>
               <label className={styles.formLabel}>Offices (leave empty for global access)</label>
               <div className={styles.officeServiceList}>
