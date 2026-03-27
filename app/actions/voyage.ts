@@ -14,6 +14,7 @@ import connectDB from '@/lib/db/connect';
 import { VoyageModel, VesselModel, StowagePlanModel, BookingModel } from '@/lib/db/schemas';
 import type { Voyage, VoyagePortCall } from '@/types/models';
 import { auth } from '@/auth';
+import { buildServiceFilter } from '@/lib/utils/accessFilter';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -926,7 +927,10 @@ export async function getVoyages() {
   try {
     await connectDB();
 
-    const voyages = await VoyageModel.find()
+    const session = await auth();
+    const serviceFilter = (session?.user as any)?.serviceFilter ?? [];
+
+    const voyages = await VoyageModel.find(buildServiceFilter(serviceFilter))
       .populate('vesselId', 'name imoNumber')
       .populate('serviceId', 'serviceCode serviceName')
       .sort({ weekNumber: 1, departureDate: 1 })
@@ -955,8 +959,12 @@ export async function getVoyagesForPlanWizard() {
   try {
     await connectDB();
 
+    const session = await auth();
+    const serviceFilter = (session?.user as any)?.serviceFilter ?? [];
+
     const voyages = await VoyageModel.find({
       status: { $in: ['PLANNED', 'IN_PROGRESS'] },
+      ...buildServiceFilter(serviceFilter),
     })
       .populate('vesselId', 'name temperatureZones')
       .sort({ departureDate: -1 })

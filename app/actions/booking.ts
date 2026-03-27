@@ -11,6 +11,7 @@ import connectDB from '@/lib/db/connect';
 import { BookingModel, ContractModel, VoyageModel, ServiceModel } from '@/lib/db/schemas';
 import type { BookingStatus } from '@/types/models';
 import { auth } from '@/auth';
+import { buildServiceFilter } from '@/lib/utils/accessFilter';
 
 // ----------------------------------------------------------------------------
 // VALIDATION SCHEMAS
@@ -507,7 +508,10 @@ export async function getBookings() {
   try {
     await connectDB();
 
-    const bookings = await BookingModel.find({})
+    const session = await auth();
+    const serviceFilter = (session?.user as any)?.serviceFilter ?? [];
+
+    const bookings = await BookingModel.find(buildServiceFilter(serviceFilter))
       .populate('voyageId')
       .sort({ createdAt: -1 })
       .lean();
@@ -621,9 +625,13 @@ export async function getBookingsByShipperCode(code: string, shipperId?: string)
 
     await connectDB();
 
-    const query = shipperId
+    const session = await auth();
+    const serviceFilter = (session?.user as any)?.serviceFilter ?? [];
+
+    const shipperQuery = shipperId
       ? { $or: [{ shipperId }, { 'shipper.code': code }] }
       : { 'shipper.code': code };
+    const query = { ...shipperQuery, ...buildServiceFilter(serviceFilter) };
 
     const bookings = await BookingModel.find(query)
       .sort({ createdAt: -1 })

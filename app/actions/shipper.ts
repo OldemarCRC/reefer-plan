@@ -9,6 +9,8 @@ import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
 import { BookingModel, VoyageModel, ServiceModel, ShipperModel } from '@/lib/db/schemas';
 import { toTitleCase, toUpperCode, toLower } from '@/lib/utils/normalize';
+import { auth } from '@/auth';
+import { buildServiceFilter } from '@/lib/utils/accessFilter';
 
 // ============================================================================
 // SHIPPER CRUD
@@ -152,9 +154,13 @@ export async function getShipperDashboard(shipperCode: string, shipperId?: strin
   try {
     await connectDB();
 
-    const query = shipperId
+    const session = await auth();
+    const serviceFilter = (session?.user as any)?.serviceFilter ?? [];
+
+    const shipperQuery = shipperId
       ? { $or: [{ shipperId }, { 'shipper.code': shipperCode }] }
       : { 'shipper.code': shipperCode };
+    const query = { ...shipperQuery, ...buildServiceFilter(serviceFilter) };
 
     const bookings = await BookingModel.find(query)
       .sort({ createdAt: -1 })
