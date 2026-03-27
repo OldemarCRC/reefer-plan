@@ -1,6 +1,7 @@
 import AppShell from '@/components/layout/AppShell';
 import { getVoyages } from '@/app/actions/voyage';
 import { getPortWeatherForecast } from '@/app/actions/weather';
+import { getPortCoordsByUnlocodes } from '@/app/actions/port';
 import VoyagesClient from './VoyagesClient';
 import type { DisplayVoyage } from './VoyagesClient';
 import styles from './page.module.css';
@@ -21,22 +22,27 @@ export default async function VoyagesPage() {
 
   // Collect unique (city/portName, country, etaDate) combos for forecast lookup
   // Prefer pc.city if available (from Port collection), fall back to pc.portName
-  const portKeys = new Map<string, { city: string; country: string; eta: string | null }>();
+  const portKeys = new Map<string, { city: string; country: string; eta: string | null; portCode: string }>();
   for (const v of voyages) {
     for (const pc of v.portCalls || []) {
       const etaDate = pc.eta ? new Date(pc.eta).toISOString().slice(0, 10) : null;
       const cityName = (pc as any).city || pc.portName;
       const key = `${cityName},${pc.country || ''},${etaDate || ''}`.toLowerCase();
       if (!portKeys.has(key)) {
-        portKeys.set(key, { city: cityName, country: pc.country || '', eta: pc.eta || null });
+        portKeys.set(key, { city: cityName, country: pc.country || '', eta: pc.eta || null, portCode: pc.portCode || '' });
       }
     }
   }
 
+  // Batch-lookup coordinates so coord-based weather works for ports like Radicatel
+  const allPortCodes = [...new Set([...portKeys.values()].map(p => p.portCode).filter(Boolean))];
+  const coordsByCode = await getPortCoordsByUnlocodes(allPortCodes);
+
   // Fetch forecast for all unique port+date combos in parallel
   const weatherEntries = await Promise.all(
-    Array.from(portKeys.entries()).map(async ([key, { city, country, eta }]) => {
-      const result = await getPortWeatherForecast(city, country, eta);
+    Array.from(portKeys.entries()).map(async ([key, { city, country, eta, portCode }]) => {
+      const coords = coordsByCode[portCode];
+      const result = await getPortWeatherForecast(city, country, eta, coords?.lat, coords?.lon);
       return [key, result] as const;
     })
   );

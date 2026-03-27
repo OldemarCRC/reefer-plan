@@ -11,7 +11,7 @@
 import { z } from 'zod';
 import { auth } from '@/auth';
 import connectDB from '@/lib/db/connect';
-import { ServiceModel, VoyageModel } from '@/lib/db/schemas';
+import { ServiceModel, VoyageModel, PortModel } from '@/lib/db/schemas';
 import type { Service } from '@/types/models';
 
 // ----------------------------------------------------------------------------
@@ -271,9 +271,11 @@ function countryCodeToFlag(countryCode: string): string {
 export interface ServicePortInfo {
   portCode: string;
   portName: string;  // display label
-  city: string;      // city for OpenWeatherMap lookup (from port.city ?? port.portName)
+  city: string;      // city for OpenWeatherMap name-lookup fallback
   country: string;   // ISO 2-letter code
   flag: string;      // flag emoji
+  lat: number | null;
+  lon: number | null;
 }
 
 export async function getServicePortsForWeather(serviceFilter: string[] = []): Promise<ServicePortInfo[]> {
@@ -285,7 +287,7 @@ export async function getServicePortsForWeather(serviceFilter: string[] = []): P
     const services = await ServiceModel.find(query).lean();
 
     const seen = new Set<string>();
-    const ports: ServicePortInfo[] = [];
+    const ports: Array<Omit<ServicePortInfo, 'lat' | 'lon'>> = [];
 
     for (const service of services) {
       for (const port of (service as any).portRotation ?? []) {
@@ -301,7 +303,22 @@ export async function getServicePortsForWeather(serviceFilter: string[] = []): P
       }
     }
 
-    return ports;
+    // Batch-lookup coordinates from operational ports collection
+    const portCodes = ports.map(p => p.portCode);
+    const portRecords = await PortModel.find({ unlocode: { $in: portCodes } })
+      .select('unlocode latitude longitude')
+      .lean();
+    const coordMap = new Map<string, { lat: number; lon: number }>();
+    for (const pr of portRecords as any[]) {
+      if (pr.latitude != null && pr.longitude != null) {
+        coordMap.set(pr.unlocode, { lat: pr.latitude, lon: pr.longitude });
+      }
+    }
+
+    return ports.map(p => {
+      const coords = coordMap.get(p.portCode);
+      return { ...p, lat: coords?.lat ?? null, lon: coords?.lon ?? null };
+    });
   } catch (error) {
     console.error('Error fetching service ports:', error);
     return [];

@@ -45,7 +45,7 @@ export default async function RootLayout({
       code: p.portCode,
       label: p.portName,
       country: p.country,
-      temp: await getPortWeather(p.city, p.country),
+      temp: await getPortWeather(p.city, p.country, p.lat, p.lon),
     }))
   );
 

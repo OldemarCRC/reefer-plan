@@ -260,3 +260,29 @@ export async function importAllPortsFromUnece() {
     return { success: false, error: 'Failed to import ports from UNECE' };
   }
 }
+
+// ----------------------------------------------------------------------------
+// GET PORT COORDINATES BY UNLOCODE LIST (for weather lookup in server pages)
+// Returns a map of unlocode → { lat, lon } for all matching ports.
+// ----------------------------------------------------------------------------
+
+export async function getPortCoordsByUnlocodes(
+  unlocodes: string[],
+): Promise<Record<string, { lat: number; lon: number }>> {
+  if (unlocodes.length === 0) return {};
+  try {
+    await connectDB();
+    const ports = await PortModel.find({ unlocode: { $in: unlocodes } })
+      .select('unlocode latitude longitude')
+      .lean();
+    const result: Record<string, { lat: number; lon: number }> = {};
+    for (const p of ports as any[]) {
+      if (p.latitude != null && p.longitude != null) {
+        result[p.unlocode] = { lat: p.latitude, lon: p.longitude };
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}

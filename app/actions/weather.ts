@@ -1,14 +1,20 @@
 'use server';
 
-// In-memory cache: key = "city,country" or "forecast:city,country,YYYY-MM-DD"
+// In-memory cache: key = "coord:lat,lon" or "city:city,country" or "forecast:..."
 const cache = new Map<string, { temp: number; ts: number }>();
 const TTL = 30 * 60 * 1000; // 30 min
 
 export async function getPortWeather(
   city: string,
-  country: string
+  country: string,
+  lat?: number | null,
+  lon?: number | null,
 ): Promise<number | null> {
-  const key = `${city},${country}`.toLowerCase();
+  const useCoords = lat != null && lon != null && (lat !== 0 || lon !== 0);
+  const key = useCoords
+    ? `coord:${lat},${lon}`
+    : `city:${city},${country}`.toLowerCase();
+
   const now = Date.now();
   const hit = cache.get(key);
   if (hit && now - hit.ts < TTL) return hit.temp;
@@ -17,10 +23,10 @@ export async function getPortWeather(
   if (!apiKey) return null;
 
   try {
-    const res = await fetch(
-      `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)},${country}&appid=${apiKey}&units=metric`,
-      { next: { revalidate: 1800 } }
-    );
+    const url = useCoords
+      ? `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`
+      : `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)},${country}&appid=${apiKey}&units=metric`;
+    const res = await fetch(url, { next: { revalidate: 1800 } });
     if (!res.ok) return null;
     const data = await res.json();
     const temp = Math.round(data.main.temp);
@@ -43,10 +49,12 @@ export async function getPortWeather(
 export async function getPortWeatherForecast(
   city: string,
   country: string,
-  isoDate: string | null
+  isoDate: string | null,
+  lat?: number | null,
+  lon?: number | null,
 ): Promise<{ temp: number; isForecast: boolean } | null> {
   if (!isoDate) {
-    const temp = await getPortWeather(city, country);
+    const temp = await getPortWeather(city, country, lat, lon);
     return temp !== null ? { temp, isForecast: false } : null;
   }
 
@@ -57,7 +65,7 @@ export async function getPortWeatherForecast(
 
   // Fall back to current weather if date is past or beyond forecast range
   if (diffMs < 0 || diffMs > fiveDaysMs) {
-    const temp = await getPortWeather(city, country);
+    const temp = await getPortWeather(city, country, lat, lon);
     return temp !== null ? { temp, isForecast: false } : null;
   }
 
