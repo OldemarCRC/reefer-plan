@@ -127,6 +127,10 @@
   transition: background var(--transition-fast);
 }
 
+.table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .table tbody tr:hover {
   background: var(--color-bg-hover);
 }
