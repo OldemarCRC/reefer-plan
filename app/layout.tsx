@@ -2,6 +2,9 @@ import type { Metadata } from 'next';
 import { Space_Grotesk, Inter } from 'next/font/google';
 import Providers from '@/components/layout/Providers';
 import { auth } from '@/auth';
+import { getFleetStatus } from '@/app/actions/voyage';
+import { getServicePortsForWeather } from '@/app/actions/service';
+import { getPortWeather } from '@/app/actions/weather';
 import './globals.css';
 import 'flag-icons/css/flag-icons.min.css';
 
@@ -30,6 +33,21 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
+  const serviceFilter = (session?.user as any)?.serviceFilter ?? [];
+
+  const [fleetStatus, sidebarPorts] = await Promise.all([
+    getFleetStatus(serviceFilter),
+    session ? getServicePortsForWeather(serviceFilter) : Promise.resolve([]),
+  ]);
+
+  const portTemps = await Promise.all(
+    sidebarPorts.map(async (p) => ({
+      code: p.portCode,
+      label: p.portName,
+      country: p.country,
+      temp: await getPortWeather(p.city, p.country),
+    }))
+  );
 
   return (
     // suppressHydrationWarning: the inline script below adds .sidebar-collapsed to <html>
@@ -45,7 +63,7 @@ export default async function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{var m=window.innerWidth<=767;if(!m&&localStorage.getItem('reefer-sidebar-collapsed')==='true'){document.documentElement.classList.add('sidebar-collapsed');}}catch(e){}})();` }} />
       </head>
       <body>
-        <Providers session={session}>
+        <Providers session={session} fleetStatus={fleetStatus} portTemps={portTemps}>
           {children}
         </Providers>
       </body>

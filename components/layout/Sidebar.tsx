@@ -1,15 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import styles from './Sidebar.module.css';
-import { getPortWeather } from '@/app/actions/weather';
-import { getFleetStatus } from '@/app/actions/voyage';
 import { FlagIcon } from '@/lib/utils/flagIcon';
-// getServicePortsForWeather is kept for future use when user auth is available
-// import { getServicePortsForWeather } from '@/app/actions/service';
+import { useSidebarData } from './SidebarContext';
 
 // --- SVG Icons (inline, no dependencies) ---
 
@@ -71,19 +67,6 @@ const icons = {
   ),
 };
 
-// --- Static port list for sidebar weather widget ---
-// Curated to the 6 key service ports. Dynamic DB loading caused overflow (14 ports).
-// Replace with getServicePortsForWeather() once user auth filters by office/service.
-
-const SIDEBAR_PORTS = [
-  { code: 'CLVAP', label: 'Valparaíso', country: 'CL', city: 'Valparaíso' },
-  { code: 'ECGYE', label: 'Guayaquil',  country: 'EC', city: 'Guayaquil'  },
-  { code: 'USILG', label: 'Wilmington', country: 'US', city: 'Wilmington' },
-  { code: 'COSMR', label: 'Santa Marta',country: 'CO', city: 'Santa Marta'},
-  { code: 'NLVLI', label: 'Flushing',   country: 'NL', city: 'Flushing'   },
-  { code: 'GBPME', label: 'Portsmouth', country: 'GB', city: 'Portsmouth' },
-];
-
 // --- Navigation items ---
 
 interface NavItem {
@@ -128,39 +111,13 @@ interface SidebarProps {
   mobileOpen?: boolean;
 }
 
-interface PortTemp {
-  code: string;
-  label: string;
-  country: string;
-  temp: number | null;
-}
-
-interface FleetStatus {
-  inTransit: number;
-  planned: number;
-}
-
 export default function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const role = (session?.user as any)?.role as string | undefined;
   const visibleNavItems = getVisibleItems(role);
 
-  const [portTemps, setPortTemps] = useState<PortTemp[]>([]);
-  const [fleet, setFleet] = useState<FleetStatus | null>(null);
-
-  useEffect(() => {
-    // Fetch weather for each static port in parallel
-    Promise.all(
-      SIDEBAR_PORTS.map(async (p) => {
-        const temp = await getPortWeather(p.city, p.country);
-        return { code: p.code, label: p.label, country: p.country, temp };
-      })
-    ).then(setPortTemps);
-
-    // Fetch fleet status
-    getFleetStatus().then(setFleet);
-  }, []);
+  const { fleetStatus: fleet, portTemps } = useSidebarData();
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
@@ -264,7 +221,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen }: SidebarProp
           {/* Full content — hidden when collapsed */}
           <div className={styles.widgetLabel}>Port Temps</div>
           {portTemps.length === 0 ? (
-            <div className={styles.tempLoading}>Loading…</div>
+            <div className={styles.tempLoading}>No ports configured</div>
           ) : (
             portTemps.map((p) => (
               <div key={p.code} className={styles.tempRow}>

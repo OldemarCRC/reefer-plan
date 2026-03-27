@@ -270,15 +270,19 @@ function countryCodeToFlag(countryCode: string): string {
 
 export interface ServicePortInfo {
   portCode: string;
-  portName: string;  // used as city for weather lookup
+  portName: string;  // display label
+  city: string;      // city for OpenWeatherMap lookup (from port.city ?? port.portName)
   country: string;   // ISO 2-letter code
   flag: string;      // flag emoji
 }
 
-export async function getServicePortsForWeather(): Promise<ServicePortInfo[]> {
+export async function getServicePortsForWeather(serviceFilter: string[] = []): Promise<ServicePortInfo[]> {
   try {
     await connectDB();
-    const services = await ServiceModel.find({ active: true }).lean();
+    const query = serviceFilter.length > 0
+      ? { active: true, serviceCode: { $in: serviceFilter } }
+      : { active: true };
+    const services = await ServiceModel.find(query).lean();
 
     const seen = new Set<string>();
     const ports: ServicePortInfo[] = [];
@@ -290,6 +294,7 @@ export async function getServicePortsForWeather(): Promise<ServicePortInfo[]> {
         ports.push({
           portCode: port.portCode,
           portName: port.portName,
+          city: port.city ?? port.portName,
           country: port.country,
           flag: countryCodeToFlag(port.country),
         });

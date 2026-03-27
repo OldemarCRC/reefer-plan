@@ -1339,15 +1339,21 @@ export async function getAdminVoyages() {
 // Returns vessel counts grouped by operational status
 // ----------------------------------------------------------------------------
 
-export async function getFleetStatus(): Promise<{
+export async function getFleetStatus(serviceFilter: string[] = []): Promise<{
   inTransit: number;
   planned: number;
 }> {
   try {
     await connectDB();
+    let filter: Record<string, unknown> = {};
+    if (serviceFilter.length > 0) {
+      const services = await ServiceModel.find({ serviceCode: { $in: serviceFilter } }).select('_id').lean();
+      const serviceIds = (services as any[]).map((s: any) => s._id);
+      filter = { serviceId: { $in: serviceIds } };
+    }
     const [inTransit, planned] = await Promise.all([
-      VoyageModel.countDocuments({ status: 'IN_PROGRESS' }),
-      VoyageModel.countDocuments({ status: 'PLANNED' }),
+      VoyageModel.countDocuments({ ...filter, status: 'IN_PROGRESS' }),
+      VoyageModel.countDocuments({ ...filter, status: 'PLANNED' }),
     ]);
     return { inTransit, planned };
   } catch {
