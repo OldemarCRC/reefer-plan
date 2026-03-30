@@ -8,7 +8,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { BookingModel, ContractModel, VoyageModel, ServiceModel, OfficeModel, UserModel, ShipperModel } from '@/lib/db/schemas';
+import { BookingModel, ContractModel, VoyageModel, ServiceModel, OfficeModel, UserModel } from '@/lib/db/schemas';
 import {
   sendBookingReceivedToShipper,
   sendBookingReceivedToPlanners,
@@ -89,24 +89,6 @@ async function generateBookingNumber(
 }
 
 // ----------------------------------------------------------------------------
-// SHIPPER EMAIL RESOLUTION
-// Looks up ShipperModel by ID first; falls back to a provided email only if
-// the contract's client is a SHIPPER (i.e. the client IS the shipper).
-// Returns null if no address can be found — callers must handle gracefully.
-// ----------------------------------------------------------------------------
-
-async function resolveShipperEmail(
-  shipperId?: string,
-  fallbackEmail?: string
-): Promise<string | null> {
-  if (shipperId) {
-    const shipper = await ShipperModel.findById(shipperId).select('email').lean() as any;
-    if (shipper?.email) return shipper.email;
-  }
-  return fallbackEmail ?? null;
-}
-
-// ----------------------------------------------------------------------------
 // CREATE BOOKING FROM CONTRACT
 // Primary creation path — looks up contract to auto-fill fields
 // ----------------------------------------------------------------------------
@@ -114,6 +96,7 @@ async function resolveShipperEmail(
 export async function createBookingFromContract(data: unknown) {
   try {
     const validated = CreateBookingFromContractSchema.parse(data);
+    const session = await auth();
     await connectDB();
 
     // Look up contract
@@ -287,17 +270,16 @@ export async function createBookingFromContract(data: unknown) {
       shipperName,
     };
 
-    const shipperEmailForCreate = await resolveShipperEmail(
-      resolvedShipperId ?? validated.shipperId,
-      (contract.client as any).type === 'SHIPPER' ? contract.client.email : undefined
-    );
-    if (shipperEmailForCreate) {
+    // Recipient is the authenticated user who submitted the booking.
+    // Fall back to the contract client email if no session is present.
+    const creatorEmail = session?.user?.email ?? booking.client?.email ?? null;
+    if (creatorEmail) {
       sendBookingReceivedToShipper(
-        { email: shipperEmailForCreate },
+        { email: creatorEmail },
         emailData
       ).catch(err => console.error('[email] sendBookingReceivedToShipper failed:', err.message));
     } else {
-      console.warn('[email] no shipper email found for booking', bookingNumber);
+      console.warn('[email] no recipient email found for booking', bookingNumber);
     }
 
     // Find planners assigned to offices that serve this booking's service
@@ -382,14 +364,12 @@ export async function approveBooking(data: unknown) {
     booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
     await booking.save();
 
-    // Fire-and-forget status change email to shipper
-    const shipperEmailForApprove = await resolveShipperEmail(
-      booking.shipperId?.toString(),
-      (booking.client as any)?.type === 'SHIPPER' ? booking.client?.email : undefined
-    );
-    if (shipperEmailForApprove) {
+    // Notify the booking creator. BookingSchema has no createdBy field, so fall
+    // back to booking.client.email (the contract's primary contact).
+    const recipientEmailForApprove: string | null = booking.client?.email ?? null;
+    if (recipientEmailForApprove) {
       sendBookingStatusChanged(
-        { email: shipperEmailForApprove },
+        { email: recipientEmailForApprove },
         {
           bookingId: booking._id.toString(),
           bookingNumber: booking.bookingNumber,
@@ -405,7 +385,7 @@ export async function approveBooking(data: unknown) {
         }
       ).catch(err => console.error('[email] sendBookingStatusChanged failed:', err.message));
     } else {
-      console.warn('[email] no shipper email found for booking', booking.bookingNumber);
+      console.warn('[email] no recipient email found for booking', booking.bookingNumber);
     }
 
     return {
@@ -451,14 +431,12 @@ export async function rejectBooking(data: unknown) {
     booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
     await booking.save();
 
-    // Fire-and-forget rejection email to shipper
-    const shipperEmailForReject = await resolveShipperEmail(
-      booking.shipperId?.toString(),
-      (booking.client as any)?.type === 'SHIPPER' ? booking.client?.email : undefined
-    );
-    if (shipperEmailForReject) {
+    // Notify the booking creator. BookingSchema has no createdBy field, so fall
+    // back to booking.client.email (the contract's primary contact).
+    const recipientEmailForReject: string | null = booking.client?.email ?? null;
+    if (recipientEmailForReject) {
       sendBookingStatusChanged(
-        { email: shipperEmailForReject },
+        { email: recipientEmailForReject },
         {
           bookingId: booking._id.toString(),
           bookingNumber: booking.bookingNumber,
@@ -473,7 +451,7 @@ export async function rejectBooking(data: unknown) {
         }
       ).catch(err => console.error('[email] sendBookingStatusChanged failed:', err.message));
     } else {
-      console.warn('[email] no shipper email found for booking', booking.bookingNumber);
+      console.warn('[email] no recipient email found for booking', booking.bookingNumber);
     }
 
     return {
