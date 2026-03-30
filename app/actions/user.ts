@@ -10,7 +10,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import connectDB from '@/lib/db/connect';
 import { UserModel } from '@/lib/db/schemas';
-import { sendUserConfirmationEmail } from '@/lib/email';
+import { sendUserConfirmationEmail, sendPasswordChangedNotification } from '@/lib/email';
 import { auth } from '@/auth';
 import { toTitleCase, toUpperCode } from '@/lib/utils/normalize';
 
@@ -311,6 +311,10 @@ export async function changePassword(userId: unknown, currentPassword: unknown, 
 
     const passwordHash = await bcrypt.hash(next, 12);
     await UserModel.findByIdAndUpdate(uid, { passwordHash });
+
+    // Fire-and-forget password change notification
+    sendPasswordChangedNotification({ name: user.name, email: user.email })
+      .catch(err => console.error('[email] sendPasswordChangedNotification failed:', err.message));
 
     return { success: true };
   } catch (error) {

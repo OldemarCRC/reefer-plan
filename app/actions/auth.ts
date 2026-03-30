@@ -4,6 +4,7 @@ import { signIn, signOut, auth } from '@/auth';
 import { AuthError } from 'next-auth';
 import connectDB from '@/lib/db/connect';
 import { UserModel } from '@/lib/db/schemas';
+import { sendFailedLoginWarning } from '@/lib/email';
 
 // ---------------------------------------------------------------------------
 // In-memory rate limiter — 5 failed attempts per 15-minute window per email.
@@ -20,13 +21,15 @@ function isRateLimited(email: string): boolean {
   return entry.count >= RATE_LIMIT_MAX;
 }
 
-function recordFailedAttempt(email: string): void {
+function recordFailedAttempt(email: string): number {
   const now = Date.now();
   const entry = loginAttempts.get(email);
   if (!entry || now > entry.resetAt) {
     loginAttempts.set(email, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return 1;
   } else {
     entry.count++;
+    return entry.count;
   }
 }
 
@@ -64,7 +67,19 @@ export async function loginAction(
       switch (error.type) {
         case 'CredentialsSignin': {
           const email = (formData.get('email') as string | null)?.toLowerCase() ?? '';
-          if (email) recordFailedAttempt(email);
+          if (email) {
+            const attempts = recordFailedAttempt(email);
+            // On exactly the 5th attempt, warn the account owner if the email exists
+            if (attempts === RATE_LIMIT_MAX) {
+              connectDB().then(() =>
+                UserModel.findOne({ email }).select('name email').lean()
+              ).then(user => {
+                if (user) {
+                  return sendFailedLoginWarning({ name: (user as any).name, email: (user as any).email });
+                }
+              }).catch(err => console.error('[email] sendFailedLoginWarning failed:', err.message));
+            }
+          }
           return { error: 'Invalid email or password.' };
         }
         default:

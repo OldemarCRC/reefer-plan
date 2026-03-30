@@ -242,3 +242,277 @@ export function vesselCaptainEmail(vesselName: string): string {
     .replace(/^_|_$/g, '');
   return `${localPart}+${slug}@${domain}`;
 }
+
+// ============================================================================
+// BOOKING LIFECYCLE EMAILS
+// ============================================================================
+
+export interface BookingEmailData {
+  bookingId: string;
+  bookingNumber: string;
+  voyageNumber: string;
+  serviceCode: string;
+  polPortName: string;
+  podPortName: string;
+  cargoType: string;
+  requestedQuantity: number;
+  shipperName: string;
+}
+
+export interface BookingStatusEmailData {
+  bookingId: string;
+  bookingNumber: string;
+  voyageNumber: string;
+  serviceCode: string;
+  polPortName: string;
+  podPortName: string;
+  cargoType: string;
+  requestedQuantity: number;
+  confirmedQuantity?: number;
+  standbyQuantity?: number;
+  newStatus: 'CONFIRMED' | 'PARTIAL' | 'REJECTED' | 'STANDBY';
+  rejectionReason?: string;
+}
+
+function formatCargoType(raw: string): string {
+  return raw.split('_').map((w: string) => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
+}
+
+function bookingDetailTable(rows: [string, string][]): string {
+  const rowHtml = rows.map(([label, value]) => `
+      <tr>
+        <td style="padding: 7px 0; color: #94a3b8; font-size: 13px; width: 160px; vertical-align: top;">${label}</td>
+        <td style="padding: 7px 0; color: #f1f5f9; font-size: 13px; font-weight: 500;">${value}</td>
+      </tr>`).join('');
+  return `<table style="width: 100%; border-collapse: collapse; margin: 20px 0;
+    border-top: 1px solid #1e3a5f; border-bottom: 1px solid #1e3a5f;">
+    <tbody>${rowHtml}
+    </tbody>
+  </table>`;
+}
+
+// 2A — New booking request — to shipper/client
+export async function sendBookingReceivedToShipper(
+  to: EmailRecipient,
+  data: BookingEmailData
+): Promise<void> {
+  const from = `"Reefer Stowage Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
+  const baseUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3001';
+
+  const html = buildEmailHtml({
+    title: `Booking Request Received — ${data.bookingNumber}`,
+    heading: 'Your booking request has been received',
+    body: `
+      <p>Thank you${to.name ? `, ${to.name}` : ''}. We have received your booking request and it is currently under review.</p>
+      ${bookingDetailTable([
+        ['Booking Number', data.bookingNumber],
+        ['Voyage', data.voyageNumber],
+        ['Service', data.serviceCode],
+        ['Route', `${data.polPortName} → ${data.podPortName}`],
+        ['Cargo Type', formatCargoType(data.cargoType)],
+        ['Quantity Requested', `${data.requestedQuantity} pallets`],
+      ])}
+      <p style="margin: 4px 0 0;">
+        <span style="display: inline-block; background: #1e3a5f; color: #93c5fd; font-size: 12px;
+                     font-weight: 600; padding: 4px 10px; border-radius: 999px; letter-spacing: 0.05em;">
+          STATUS: PENDING
+        </span>
+      </p>
+    `,
+    ctaText: 'View Your Booking',
+    ctaUrl: `${baseUrl}/shipper/bookings/${data.bookingId}`,
+    footerNote: 'You will receive another email when your request is reviewed.',
+  });
+
+  const toAddress = to.name ? `"${to.name}" <${to.email}>` : to.email;
+  await transporter.sendMail({
+    from,
+    to: toAddress,
+    subject: `Booking Request Received — ${data.bookingNumber}`,
+    html,
+    text: `Your booking request ${data.bookingNumber} has been received and is pending review.\nVoyage: ${data.voyageNumber} | Route: ${data.polPortName} → ${data.podPortName}`,
+  });
+}
+
+// 2A — New booking request — to planners
+export async function sendBookingReceivedToPlanners(
+  planners: EmailRecipient[],
+  data: BookingEmailData
+): Promise<void> {
+  if (planners.length === 0) return;
+  const from = `"Reefer Stowage Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
+  const baseUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3001';
+
+  const html = buildEmailHtml({
+    title: `New Booking Request — ${data.bookingNumber} — Action Required`,
+    heading: 'A new booking request requires your review',
+    body: `
+      <p>A new booking request has been submitted and is awaiting your confirmation.</p>
+      ${bookingDetailTable([
+        ['Booking Number', data.bookingNumber],
+        ['Voyage', data.voyageNumber],
+        ['Service', data.serviceCode],
+        ['Route', `${data.polPortName} → ${data.podPortName}`],
+        ['Cargo Type', formatCargoType(data.cargoType)],
+        ['Quantity Requested', `${data.requestedQuantity} pallets`],
+        ['Submitted By', data.shipperName],
+      ])}
+    `,
+    ctaText: 'Review Booking',
+    ctaUrl: `${baseUrl}/bookings`,
+  });
+
+  await Promise.all(planners.map(planner => {
+    const toAddress = planner.name ? `"${planner.name}" <${planner.email}>` : planner.email;
+    return transporter.sendMail({
+      from,
+      to: toAddress,
+      subject: `New Booking Request — ${data.bookingNumber} — Action Required`,
+      html,
+      text: `New booking ${data.bookingNumber} requires review.\nShipper: ${data.shipperName} | Voyage: ${data.voyageNumber} | Route: ${data.polPortName} → ${data.podPortName}`,
+    });
+  }));
+}
+
+// 2B — Booking status changed — to shipper/client
+export async function sendBookingStatusChanged(
+  to: EmailRecipient,
+  data: BookingStatusEmailData
+): Promise<void> {
+  const from = `"Reefer Stowage Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
+  const baseUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3001';
+
+  const subjectMap: Record<string, string> = {
+    CONFIRMED: `Booking Confirmed — ${data.bookingNumber}`,
+    PARTIAL:   `Booking Partially Confirmed — ${data.bookingNumber}`,
+    REJECTED:  `Booking Not Accepted — ${data.bookingNumber}`,
+    STANDBY:   `Booking on Standby — ${data.bookingNumber}`,
+  };
+  const headingMap: Record<string, string> = {
+    CONFIRMED: 'Your booking has been confirmed',
+    PARTIAL:   'Your booking has been partially confirmed',
+    REJECTED:  'Your booking could not be accepted',
+    STANDBY:   'Your booking is on standby',
+  };
+  const badgeStyle: Record<string, { bg: string; fg: string }> = {
+    CONFIRMED: { bg: '#14532d', fg: '#86efac' },
+    PARTIAL:   { bg: '#78350f', fg: '#fde68a' },
+    REJECTED:  { bg: '#7f1d1d', fg: '#fca5a5' },
+    STANDBY:   { bg: '#1e3a5f', fg: '#93c5fd' },
+  };
+
+  const badge = badgeStyle[data.newStatus] ?? { bg: '#1e3a5f', fg: '#93c5fd' };
+
+  let statusMessage = '';
+  if (data.newStatus === 'CONFIRMED') {
+    statusMessage = `<p>Your full quantity of <strong style="color: #f1f5f9;">${data.requestedQuantity} pallets</strong> has been confirmed.</p>`;
+  } else if (data.newStatus === 'PARTIAL') {
+    const conf = data.confirmedQuantity ?? 0;
+    const stby = data.standbyQuantity ?? (data.requestedQuantity - conf);
+    statusMessage = `<p><strong style="color: #f1f5f9;">${conf}</strong> of your requested <strong style="color: #f1f5f9;">${data.requestedQuantity} pallets</strong> have been confirmed. <strong style="color: #f1f5f9;">${stby} pallets</strong> remain on standby.</p>`;
+  } else if (data.newStatus === 'REJECTED') {
+    statusMessage = `<p>Unfortunately your booking could not be accepted.</p>`;
+    if (data.rejectionReason) {
+      statusMessage += `<p style="background: #1a0f0f; border-left: 3px solid #ef4444; padding: 10px 14px;
+        border-radius: 4px; color: #fca5a5; font-size: 13px; margin: 12px 0 0;">${data.rejectionReason}</p>`;
+    }
+  } else {
+    statusMessage = `<p>Your booking is on standby. You will be notified if space becomes available.</p>`;
+  }
+
+  const html = buildEmailHtml({
+    title: subjectMap[data.newStatus] ?? data.bookingNumber,
+    heading: headingMap[data.newStatus] ?? 'Booking status updated',
+    body: `
+      ${statusMessage}
+      <p style="margin: 16px 0 8px;">
+        <span style="display: inline-block; background: ${badge.bg}; color: ${badge.fg}; font-size: 12px;
+                     font-weight: 600; padding: 4px 10px; border-radius: 999px; letter-spacing: 0.05em;">
+          STATUS: ${data.newStatus}
+        </span>
+      </p>
+      ${bookingDetailTable([
+        ['Booking Number', data.bookingNumber],
+        ['Voyage', data.voyageNumber],
+        ['Route', `${data.polPortName} → ${data.podPortName}`],
+        ['Cargo Type', formatCargoType(data.cargoType)],
+      ])}
+    `,
+    ctaText: 'View Booking Details',
+    ctaUrl: `${baseUrl}/shipper/bookings/${data.bookingId}`,
+  });
+
+  const toAddress = to.name ? `"${to.name}" <${to.email}>` : to.email;
+  await transporter.sendMail({
+    from,
+    to: toAddress,
+    subject: subjectMap[data.newStatus] ?? `Booking ${data.bookingNumber} — status update`,
+    html,
+    text: `Your booking ${data.bookingNumber} status: ${data.newStatus}.\nVoyage: ${data.voyageNumber}`,
+  });
+}
+
+// ============================================================================
+// SECURITY NOTIFICATION EMAILS
+// ============================================================================
+
+function formatUtcDateTime(d: Date): { date: string; time: string } {
+  const date = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC' });
+  return { date, time };
+}
+
+// 3A — Password change notification
+export async function sendPasswordChangedNotification(to: EmailRecipient): Promise<void> {
+  const from = `"Reefer Stowage Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
+  const { date, time } = formatUtcDateTime(new Date());
+
+  const html = buildEmailHtml({
+    title: 'Your password has been changed — Reefer Stowage Planner',
+    heading: 'Password changed successfully',
+    body: `
+      <p>Your password was changed on <strong style="color: #f1f5f9;">${date}</strong> at <strong style="color: #f1f5f9;">${time} UTC</strong>.</p>
+      <p style="background: #0c2340; border-left: 3px solid #f59e0b; padding: 10px 14px;
+                border-radius: 4px; color: #fde68a; font-size: 13px; margin: 16px 0 0;">
+        If you did not make this change, contact your administrator immediately.
+      </p>
+    `,
+    footerNote: 'If this was you, no action is needed.',
+  });
+
+  const toAddress = to.name ? `"${to.name}" <${to.email}>` : to.email;
+  await transporter.sendMail({
+    from,
+    to: toAddress,
+    subject: 'Your password has been changed — Reefer Stowage Planner',
+    html,
+    text: `Your password was changed on ${date} at ${time} UTC. If you did not make this change, contact your administrator immediately.`,
+  });
+}
+
+// 3B — Failed login warning (5th attempt)
+export async function sendFailedLoginWarning(to: EmailRecipient): Promise<void> {
+  const from = `"Reefer Stowage Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
+  const { date, time } = formatUtcDateTime(new Date());
+
+  const html = buildEmailHtml({
+    title: 'Multiple failed login attempts — Reefer Stowage Planner',
+    heading: 'Unusual login activity detected',
+    body: `
+      <p>We detected <strong style="color: #f1f5f9;">5 failed login attempts</strong> on your account on <strong style="color: #f1f5f9;">${date}</strong> at <strong style="color: #f1f5f9;">${time} UTC</strong>.</p>
+      <p style="background: #0c2340; border-left: 3px solid #ef4444; padding: 10px 14px;
+                border-radius: 4px; color: #fca5a5; font-size: 13px; margin: 16px 0 0;">
+        Your account has been temporarily rate-limited. If this was not you, consider contacting your administrator to review access.
+      </p>
+    `,
+  });
+
+  const toAddress = to.name ? `"${to.name}" <${to.email}>` : to.email;
+  await transporter.sendMail({
+    from,
+    to: toAddress,
+    subject: 'Multiple failed login attempts — Reefer Stowage Planner',
+    html,
+    text: `We detected 5 failed login attempts on your account on ${date} at ${time} UTC. Your account has been temporarily rate-limited.`,
+  });
+}

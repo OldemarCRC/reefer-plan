@@ -8,7 +8,12 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { BookingModel, ContractModel, VoyageModel, ServiceModel } from '@/lib/db/schemas';
+import { BookingModel, ContractModel, VoyageModel, ServiceModel, OfficeModel, UserModel } from '@/lib/db/schemas';
+import {
+  sendBookingReceivedToShipper,
+  sendBookingReceivedToPlanners,
+  sendBookingStatusChanged,
+} from '@/lib/email';
 import type { BookingStatus } from '@/types/models';
 import { auth } from '@/auth';
 import { buildServiceFilter } from '@/lib/utils/accessFilter';
@@ -251,6 +256,49 @@ export async function createBookingFromContract(data: unknown) {
       requestedDate: new Date(),
     });
 
+    // Fire-and-forget booking created emails
+    const emailData = {
+      bookingId: booking._id.toString(),
+      bookingNumber,
+      voyageNumber: voyage.voyageNumber,
+      serviceCode: contract.serviceCode,
+      polPortName: (contract.originPort as any)?.portName ?? (contract.originPort as any)?.portCode ?? '',
+      podPortName: (contract.destinationPort as any)?.portName ?? (contract.destinationPort as any)?.portCode ?? '',
+      cargoType: validated.cargoType,
+      requestedQuantity: validated.requestedQuantity,
+      shipperName,
+    };
+
+    if (contract.client.email) {
+      sendBookingReceivedToShipper(
+        { name: contract.client.name, email: contract.client.email },
+        emailData
+      ).catch(err => console.error('[email] sendBookingReceivedToShipper failed:', err.message));
+    }
+
+    // Find planners assigned to offices that serve this booking's service
+    Promise.all([
+      OfficeModel.find({ services: contract.serviceCode, active: true }).select('_id').lean(),
+    ]).then(async ([offices]) => {
+      const officeIds = (offices as any[]).map((o: any) => o._id);
+      let planners: any[] = [];
+      if (officeIds.length > 0) {
+        planners = await UserModel.find({
+          role: 'SHIPPING_PLANNER',
+          offices: { $in: officeIds },
+          emailConfirmed: true,
+        }).select('name email').lean();
+      }
+      if (planners.length === 0) {
+        planners = await UserModel.find({
+          role: 'SHIPPING_PLANNER',
+          emailConfirmed: true,
+        }).select('name email').lean();
+      }
+      const recipients = (planners as any[]).map((p: any) => ({ name: p.name, email: p.email }));
+      return sendBookingReceivedToPlanners(recipients, emailData);
+    }).catch(err => console.error('[email] sendBookingReceivedToPlanners failed:', err.message));
+
     return {
       success: true,
       data: JSON.parse(JSON.stringify(booking)),
@@ -310,6 +358,26 @@ export async function approveBooking(data: unknown) {
     booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
     await booking.save();
 
+    // Fire-and-forget status change email to shipper/client
+    if (booking.client?.email) {
+      sendBookingStatusChanged(
+        { name: booking.client.name, email: booking.client.email },
+        {
+          bookingId: booking._id.toString(),
+          bookingNumber: booking.bookingNumber,
+          voyageNumber: booking.voyageNumber ?? '',
+          serviceCode: booking.serviceCode ?? '',
+          polPortName: (booking.pol as any)?.portName ?? (booking.pol as any)?.portCode ?? '',
+          podPortName: (booking.pod as any)?.portName ?? (booking.pod as any)?.portCode ?? '',
+          cargoType: booking.cargoType,
+          requestedQuantity: requested,
+          confirmedQuantity: confirmed,
+          standbyQuantity: standby,
+          newStatus: status,
+        }
+      ).catch(err => console.error('[email] sendBookingStatusChanged failed:', err.message));
+    }
+
     return {
       success: true,
       data: JSON.parse(JSON.stringify(booking)),
@@ -352,6 +420,25 @@ export async function rejectBooking(data: unknown) {
     booking.confirmedDate = new Date();
     booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
     await booking.save();
+
+    // Fire-and-forget rejection email to shipper/client
+    if (booking.client?.email) {
+      sendBookingStatusChanged(
+        { name: booking.client.name, email: booking.client.email },
+        {
+          bookingId: booking._id.toString(),
+          bookingNumber: booking.bookingNumber,
+          voyageNumber: booking.voyageNumber ?? '',
+          serviceCode: booking.serviceCode ?? '',
+          polPortName: (booking.pol as any)?.portName ?? (booking.pol as any)?.portCode ?? '',
+          podPortName: (booking.pod as any)?.portName ?? (booking.pod as any)?.portCode ?? '',
+          cargoType: booking.cargoType,
+          requestedQuantity: booking.requestedQuantity,
+          newStatus: 'REJECTED',
+          rejectionReason: validated.rejectionReason,
+        }
+      ).catch(err => console.error('[email] sendBookingStatusChanged failed:', err.message));
+    }
 
     return {
       success: true,
