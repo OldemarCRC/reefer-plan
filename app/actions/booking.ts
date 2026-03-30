@@ -388,15 +388,10 @@ export async function approveBooking(data: unknown) {
     booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
     await booking.save();
 
-    // Resolve notification recipient: booking.client.email is optional and often
-    // empty. Fall back to the EXPORTER user account matched by shipper code.
-    let recipientEmailForApprove: string | null = booking.client?.email ?? null;
-    if (!recipientEmailForApprove && booking.shipper?.code) {
-      const shipperUser = await UserModel.findOne({
-        shipperCode: booking.shipper.code,
-      }).select('email').lean() as any;
-      recipientEmailForApprove = shipperUser?.email ?? null;
-    }
+    const shipperUserForApprove = await UserModel.findOne({
+      shipperId: booking.shipperId,
+    }).select('email').lean() as any;
+    const recipientEmailForApprove: string | null = shipperUserForApprove?.email ?? null;
     console.log('[email] attempting to send booking status email to:', recipientEmailForApprove);
     if (recipientEmailForApprove) {
       sendBookingStatusChanged(
@@ -416,7 +411,7 @@ export async function approveBooking(data: unknown) {
         }
       ).catch(err => console.error('[email] sendBookingStatusChanged failed:', err.message));
     } else {
-      console.warn('[email] no recipient email found for booking', booking.bookingNumber);
+      console.warn('[email] no shipper user found for booking', booking.bookingNumber, '— shipperId:', booking.shipperId);
     }
 
     return {
@@ -462,15 +457,10 @@ export async function rejectBooking(data: unknown) {
     booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
     await booking.save();
 
-    // Resolve notification recipient: booking.client.email is optional and often
-    // empty. Fall back to the EXPORTER user account matched by shipper code.
-    let recipientEmailForReject: string | null = booking.client?.email ?? null;
-    if (!recipientEmailForReject && booking.shipper?.code) {
-      const shipperUser = await UserModel.findOne({
-        shipperCode: booking.shipper.code,
-      }).select('email').lean() as any;
-      recipientEmailForReject = shipperUser?.email ?? null;
-    }
+    const shipperUserForReject = await UserModel.findOne({
+      shipperId: booking.shipperId,
+    }).select('email').lean() as any;
+    const recipientEmailForReject: string | null = shipperUserForReject?.email ?? null;
     console.log('[email] attempting to send booking status email to:', recipientEmailForReject);
     if (recipientEmailForReject) {
       sendBookingStatusChanged(
@@ -489,7 +479,7 @@ export async function rejectBooking(data: unknown) {
         }
       ).catch(err => console.error('[email] sendBookingStatusChanged failed:', err.message));
     } else {
-      console.warn('[email] no recipient email found for booking', booking.bookingNumber);
+      console.warn('[email] no shipper user found for booking', booking.bookingNumber, '— shipperId:', booking.shipperId);
     }
 
     return {
