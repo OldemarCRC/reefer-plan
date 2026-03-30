@@ -39,11 +39,7 @@ Thumbs.db
 # Vercel
 .vercel
 
-# Scripts de inicialización de datos
-scripts/seed-*.ts
-
 # Datos específicos de barcos o bases de datos locales
-lib/db/data/
 /docs
 
 # Documentación local (no para repositorio)
