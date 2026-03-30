@@ -14,6 +14,10 @@ import {
   sendBookingCreatedOnBehalf,
   sendBookingReceivedToPlanners,
   sendBookingStatusChanged,
+  sendBookingCancelledToShipper,
+  sendBookingCancelledToPlanners,
+  sendBookingModifiedToShipper,
+  sendBookingModifiedToPlanners,
 } from '@/lib/email';
 import type { BookingStatus } from '@/types/models';
 import { auth } from '@/auth';
@@ -87,6 +91,35 @@ async function generateBookingNumber(
   const count = await BookingModel.countDocuments({ voyageId });
   const seq = String(count + 1).padStart(3, '0');
   return `${officeCode}${serviceShortCode}${voyageNumber}${seq}`;
+}
+
+// ----------------------------------------------------------------------------
+// PLANNER RECIPIENT LOOKUP
+// Returns all SHIPPING_PLANNER users assigned to offices that serve the given
+// serviceCode. Falls back to every confirmed SHIPPING_PLANNER if none found.
+// ----------------------------------------------------------------------------
+
+async function lookupPlannerRecipients(
+  serviceCode: string
+): Promise<{ name: string; email: string }[]> {
+  const offices = await OfficeModel.find({ services: serviceCode, active: true })
+    .select('_id').lean();
+  const officeIds = (offices as any[]).map((o: any) => o._id);
+  let planners: any[] = [];
+  if (officeIds.length > 0) {
+    planners = await UserModel.find({
+      role: 'SHIPPING_PLANNER',
+      offices: { $in: officeIds },
+      emailConfirmed: true,
+    }).select('name email').lean();
+  }
+  if (planners.length === 0) {
+    planners = await UserModel.find({
+      role: 'SHIPPING_PLANNER',
+      emailConfirmed: true,
+    }).select('name email').lean();
+  }
+  return (planners as any[]).map((p: any) => ({ name: p.name, email: p.email }));
 }
 
 // ----------------------------------------------------------------------------
@@ -284,27 +317,9 @@ export async function createBookingFromContract(data: unknown) {
       }
 
       // Notify planners — shipper-initiated bookings require planner review.
-      Promise.all([
-        OfficeModel.find({ services: contract.serviceCode, active: true }).select('_id').lean(),
-      ]).then(async ([offices]) => {
-        const officeIds = (offices as any[]).map((o: any) => o._id);
-        let planners: any[] = [];
-        if (officeIds.length > 0) {
-          planners = await UserModel.find({
-            role: 'SHIPPING_PLANNER',
-            offices: { $in: officeIds },
-            emailConfirmed: true,
-          }).select('name email').lean();
-        }
-        if (planners.length === 0) {
-          planners = await UserModel.find({
-            role: 'SHIPPING_PLANNER',
-            emailConfirmed: true,
-          }).select('name email').lean();
-        }
-        const recipients = (planners as any[]).map((p: any) => ({ name: p.name, email: p.email }));
-        return sendBookingReceivedToPlanners(recipients, emailData);
-      }).catch(err => console.error('[email] sendBookingReceivedToPlanners failed:', err.message));
+      lookupPlannerRecipients(contract.serviceCode)
+        .then(recipients => sendBookingReceivedToPlanners(recipients, emailData))
+        .catch(err => console.error('[email] sendBookingReceivedToPlanners failed:', err.message));
 
     } else {
       // Planner or Admin created the booking on behalf of the shipper.
@@ -518,6 +533,30 @@ export async function cancelBooking(data: unknown) {
     booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
     await booking.save();
 
+    // Notify the other party
+    if (role === 'EXPORTER') {
+      const plannerRecipients = await lookupPlannerRecipients(booking.serviceCode ?? '');
+      sendBookingCancelledToPlanners(plannerRecipients, {
+        bookingNumber: booking.bookingNumber,
+        voyageNumber: booking.voyageNumber ?? '',
+        shipperName: booking.shipper?.name ?? '',
+        cancelledBy: (session.user as any).email ?? '',
+      }).catch(err => console.error('[email] cancelBooking planner notify failed:', err.message));
+    } else {
+      const shipperUserForCancel = await UserModel.findOne({
+        shipperId: booking.shipperId,
+      }).select('email').lean() as any;
+      if (shipperUserForCancel?.email) {
+        sendBookingCancelledToShipper(shipperUserForCancel.email, {
+          bookingNumber: booking.bookingNumber,
+          voyageNumber: booking.voyageNumber ?? '',
+          cancelledBy: session.user.name ?? (session.user as any).email ?? 'system',
+        }).catch(err => console.error('[email] cancelBooking shipper notify failed:', err.message));
+      } else {
+        console.warn('[email] no shipper user found for cancelled booking', booking.bookingNumber);
+      }
+    }
+
     return { success: true, data: JSON.parse(JSON.stringify(booking)) };
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -594,6 +633,33 @@ export async function updateBookingQuantity(data: unknown) {
       }
     }
     await booking.save();
+
+    // Notify the other party
+    if (isExporter) {
+      const plannerRecipients = await lookupPlannerRecipients(booking.serviceCode ?? '');
+      sendBookingModifiedToPlanners(plannerRecipients, {
+        bookingNumber: booking.bookingNumber,
+        voyageNumber: booking.voyageNumber ?? '',
+        shipperName: booking.shipper?.name ?? '',
+        newQuantity: validated.requestedQuantity,
+        modifiedBy: (session.user as any).email ?? '',
+      }).catch(err => console.error('[email] updateBookingQuantity planner notify failed:', err.message));
+    } else {
+      const shipperUserForModify = await UserModel.findOne({
+        shipperId: booking.shipperId,
+      }).select('email').lean() as any;
+      if (shipperUserForModify?.email) {
+        sendBookingModifiedToShipper(shipperUserForModify.email, {
+          bookingId: booking._id.toString(),
+          bookingNumber: booking.bookingNumber,
+          voyageNumber: booking.voyageNumber ?? '',
+          newQuantity: validated.requestedQuantity,
+          modifiedBy: session.user.name ?? (session.user as any).email ?? 'system',
+        }).catch(err => console.error('[email] updateBookingQuantity shipper notify failed:', err.message));
+      } else {
+        console.warn('[email] no shipper user found for modified booking', booking.bookingNumber);
+      }
+    }
 
     return { success: true, data: JSON.parse(JSON.stringify(booking)) };
   } catch (error) {

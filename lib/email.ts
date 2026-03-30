@@ -560,3 +560,171 @@ export async function sendFailedLoginWarning(to: EmailRecipient): Promise<void> 
     text: `We detected 5 failed login attempts on your account on ${date} at ${time} UTC. Your account has been temporarily rate-limited.`,
   });
 }
+
+// ============================================================================
+// BOOKING CANCELLATION EMAILS
+// ============================================================================
+
+export interface BookingCancelledShipperData {
+  bookingNumber: string;
+  voyageNumber: string;
+  cancelledBy: string;
+}
+
+export interface BookingCancelledPlannerData {
+  bookingNumber: string;
+  voyageNumber: string;
+  shipperName: string;
+  cancelledBy: string;
+}
+
+export async function sendBookingCancelledToShipper(
+  toEmail: string,
+  data: BookingCancelledShipperData
+): Promise<void> {
+  const from = `"Reefer Stowage Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
+  const { date, time } = formatUtcDateTime(new Date());
+
+  const html = buildEmailHtml({
+    title: `Booking Cancelled — ${data.bookingNumber}`,
+    heading: 'Your booking has been cancelled',
+    body: `
+      ${bookingDetailTable([
+        ['Booking Number', data.bookingNumber],
+        ['Voyage', data.voyageNumber],
+      ])}
+      <p>This booking was cancelled by <strong style="color: #f1f5f9;">${data.cancelledBy}</strong> on ${date} at ${time} UTC.</p>
+    `,
+  });
+
+  await transporter.sendMail({
+    from,
+    to: toEmail,
+    subject: `Booking Cancelled — ${data.bookingNumber}`,
+    html,
+    text: `Booking ${data.bookingNumber} (voyage ${data.voyageNumber}) was cancelled by ${data.cancelledBy} on ${date} at ${time} UTC.`,
+  });
+}
+
+export async function sendBookingCancelledToPlanners(
+  planners: EmailRecipient[],
+  data: BookingCancelledPlannerData
+): Promise<void> {
+  if (planners.length === 0) return;
+  const from = `"Reefer Stowage Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
+  const baseUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3001';
+  const { date, time } = formatUtcDateTime(new Date());
+
+  const html = buildEmailHtml({
+    title: `Booking Cancelled by Shipper — ${data.bookingNumber}`,
+    heading: 'A booking has been cancelled',
+    body: `
+      ${bookingDetailTable([
+        ['Booking Number', data.bookingNumber],
+        ['Voyage', data.voyageNumber],
+        ['Shipper', data.shipperName],
+      ])}
+      <p>Cancelled by <strong style="color: #f1f5f9;">${data.cancelledBy}</strong> on ${date} at ${time} UTC.</p>
+    `,
+    ctaText: 'View Bookings',
+    ctaUrl: `${baseUrl}/bookings`,
+  });
+
+  await Promise.all(planners.map(planner => {
+    const toAddress = planner.name ? `"${planner.name}" <${planner.email}>` : planner.email;
+    return transporter.sendMail({
+      from,
+      to: toAddress,
+      subject: `Booking Cancelled by Shipper — ${data.bookingNumber}`,
+      html,
+      text: `Booking ${data.bookingNumber} (voyage ${data.voyageNumber}) was cancelled by ${data.cancelledBy}.`,
+    });
+  }));
+}
+
+// ============================================================================
+// BOOKING MODIFICATION EMAILS
+// ============================================================================
+
+export interface BookingModifiedShipperData {
+  bookingId: string;
+  bookingNumber: string;
+  voyageNumber: string;
+  newQuantity: number;
+  modifiedBy: string;
+}
+
+export interface BookingModifiedPlannerData {
+  bookingNumber: string;
+  voyageNumber: string;
+  shipperName: string;
+  newQuantity: number;
+  modifiedBy: string;
+}
+
+export async function sendBookingModifiedToShipper(
+  toEmail: string,
+  data: BookingModifiedShipperData
+): Promise<void> {
+  const from = `"Reefer Stowage Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
+  const baseUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3001';
+
+  const html = buildEmailHtml({
+    title: `Booking Updated — ${data.bookingNumber}`,
+    heading: 'Your booking has been updated',
+    body: `
+      ${bookingDetailTable([
+        ['Booking Number', data.bookingNumber],
+        ['Voyage', data.voyageNumber],
+        ['New Quantity', `${data.newQuantity} pallets`],
+      ])}
+      <p>The requested quantity has been updated to <strong style="color: #f1f5f9;">${data.newQuantity} pallets</strong> by <strong style="color: #f1f5f9;">${data.modifiedBy}</strong>.</p>
+    `,
+    ctaText: 'View Booking',
+    ctaUrl: `${baseUrl}/shipper/bookings/${data.bookingId}`,
+  });
+
+  await transporter.sendMail({
+    from,
+    to: toEmail,
+    subject: `Booking Updated — ${data.bookingNumber}`,
+    html,
+    text: `Booking ${data.bookingNumber} (voyage ${data.voyageNumber}) quantity updated to ${data.newQuantity} pallets by ${data.modifiedBy}.`,
+  });
+}
+
+export async function sendBookingModifiedToPlanners(
+  planners: EmailRecipient[],
+  data: BookingModifiedPlannerData
+): Promise<void> {
+  if (planners.length === 0) return;
+  const from = `"Reefer Stowage Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
+  const baseUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3001';
+
+  const html = buildEmailHtml({
+    title: `Booking Modified by Shipper — ${data.bookingNumber}`,
+    heading: 'A booking has been modified',
+    body: `
+      ${bookingDetailTable([
+        ['Booking Number', data.bookingNumber],
+        ['Voyage', data.voyageNumber],
+        ['Shipper', data.shipperName],
+        ['New Quantity', `${data.newQuantity} pallets`],
+      ])}
+      <p>Modified by <strong style="color: #f1f5f9;">${data.modifiedBy}</strong>.</p>
+    `,
+    ctaText: 'View Bookings',
+    ctaUrl: `${baseUrl}/bookings`,
+  });
+
+  await Promise.all(planners.map(planner => {
+    const toAddress = planner.name ? `"${planner.name}" <${planner.email}>` : planner.email;
+    return transporter.sendMail({
+      from,
+      to: toAddress,
+      subject: `Booking Modified by Shipper — ${data.bookingNumber}`,
+      html,
+      text: `Booking ${data.bookingNumber} (voyage ${data.voyageNumber}) quantity updated to ${data.newQuantity} pallets by ${data.modifiedBy}.`,
+    });
+  }));
+}
