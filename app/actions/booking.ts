@@ -11,6 +11,7 @@ import connectDB from '@/lib/db/connect';
 import { BookingModel, ContractModel, VoyageModel, ServiceModel, OfficeModel, UserModel } from '@/lib/db/schemas';
 import {
   sendBookingReceivedToShipper,
+  sendBookingCreatedOnBehalf,
   sendBookingReceivedToPlanners,
   sendBookingStatusChanged,
 } from '@/lib/email';
@@ -270,40 +271,63 @@ export async function createBookingFromContract(data: unknown) {
       shipperName,
     };
 
-    // Recipient is the authenticated user who submitted the booking.
-    // Fall back to the contract client email if no session is present.
-    const creatorEmail = session?.user?.email ?? booking.client?.email ?? null;
-    if (creatorEmail) {
-      sendBookingReceivedToShipper(
-        { email: creatorEmail },
-        emailData
-      ).catch(err => console.error('[email] sendBookingReceivedToShipper failed:', err.message));
-    } else {
-      console.warn('[email] no recipient email found for booking', bookingNumber);
-    }
+    const creatorRole = (session?.user as any)?.role;
 
-    // Find planners assigned to offices that serve this booking's service
-    Promise.all([
-      OfficeModel.find({ services: contract.serviceCode, active: true }).select('_id').lean(),
-    ]).then(async ([offices]) => {
-      const officeIds = (offices as any[]).map((o: any) => o._id);
-      let planners: any[] = [];
-      if (officeIds.length > 0) {
-        planners = await UserModel.find({
-          role: 'SHIPPING_PLANNER',
-          offices: { $in: officeIds },
-          emailConfirmed: true,
-        }).select('name email').lean();
+    if (creatorRole === 'EXPORTER') {
+      // Shipper submitted their own booking — confirm receipt to them directly.
+      const creatorEmail = session!.user!.email;
+      if (creatorEmail) {
+        sendBookingReceivedToShipper(
+          { name: session!.user!.name ?? undefined, email: creatorEmail },
+          emailData
+        ).catch(err => console.error('[email] sendBookingReceivedToShipper failed:', err.message));
       }
-      if (planners.length === 0) {
-        planners = await UserModel.find({
-          role: 'SHIPPING_PLANNER',
-          emailConfirmed: true,
-        }).select('name email').lean();
+
+      // Notify planners — shipper-initiated bookings require planner review.
+      Promise.all([
+        OfficeModel.find({ services: contract.serviceCode, active: true }).select('_id').lean(),
+      ]).then(async ([offices]) => {
+        const officeIds = (offices as any[]).map((o: any) => o._id);
+        let planners: any[] = [];
+        if (officeIds.length > 0) {
+          planners = await UserModel.find({
+            role: 'SHIPPING_PLANNER',
+            offices: { $in: officeIds },
+            emailConfirmed: true,
+          }).select('name email').lean();
+        }
+        if (planners.length === 0) {
+          planners = await UserModel.find({
+            role: 'SHIPPING_PLANNER',
+            emailConfirmed: true,
+          }).select('name email').lean();
+        }
+        const recipients = (planners as any[]).map((p: any) => ({ name: p.name, email: p.email }));
+        return sendBookingReceivedToPlanners(recipients, emailData);
+      }).catch(err => console.error('[email] sendBookingReceivedToPlanners failed:', err.message));
+
+    } else {
+      // Planner or Admin created the booking on behalf of the shipper.
+      // Do NOT notify planners (they created it — they already know).
+      // Find the shipper's user account and send a "created on your behalf" email.
+      if (booking.shipperId) {
+        UserModel.findOne({ shipperId: booking.shipperId }).select('name email').lean()
+          .then(shipperUser => {
+            if (shipperUser) {
+              const plannerName = session?.user?.name ?? session?.user?.email ?? 'A shipping planner';
+              return sendBookingCreatedOnBehalf(
+                { name: (shipperUser as any).name, email: (shipperUser as any).email },
+                emailData,
+                plannerName
+              );
+            }
+            console.warn('[email] no shipper user account found for booking', bookingNumber, '— shipperId:', booking.shipperId);
+          })
+          .catch(err => console.error('[email] sendBookingCreatedOnBehalf failed:', err.message));
+      } else {
+        console.warn('[email] booking', bookingNumber, 'has no shipperId — skipping shipper notification');
       }
-      const recipients = (planners as any[]).map((p: any) => ({ name: p.name, email: p.email }));
-      return sendBookingReceivedToPlanners(recipients, emailData);
-    }).catch(err => console.error('[email] sendBookingReceivedToPlanners failed:', err.message));
+    }
 
     return {
       success: true,
@@ -364,9 +388,16 @@ export async function approveBooking(data: unknown) {
     booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
     await booking.save();
 
-    // Notify the booking creator. BookingSchema has no createdBy field, so fall
-    // back to booking.client.email (the contract's primary contact).
-    const recipientEmailForApprove: string | null = booking.client?.email ?? null;
+    // Resolve notification recipient: booking.client.email is optional and often
+    // empty. Fall back to the EXPORTER user account matched by shipper code.
+    let recipientEmailForApprove: string | null = booking.client?.email ?? null;
+    if (!recipientEmailForApprove && booking.shipper?.code) {
+      const shipperUser = await UserModel.findOne({
+        shipperCode: booking.shipper.code,
+      }).select('email').lean() as any;
+      recipientEmailForApprove = shipperUser?.email ?? null;
+    }
+    console.log('[email] attempting to send booking status email to:', recipientEmailForApprove);
     if (recipientEmailForApprove) {
       sendBookingStatusChanged(
         { email: recipientEmailForApprove },
@@ -431,9 +462,16 @@ export async function rejectBooking(data: unknown) {
     booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
     await booking.save();
 
-    // Notify the booking creator. BookingSchema has no createdBy field, so fall
-    // back to booking.client.email (the contract's primary contact).
-    const recipientEmailForReject: string | null = booking.client?.email ?? null;
+    // Resolve notification recipient: booking.client.email is optional and often
+    // empty. Fall back to the EXPORTER user account matched by shipper code.
+    let recipientEmailForReject: string | null = booking.client?.email ?? null;
+    if (!recipientEmailForReject && booking.shipper?.code) {
+      const shipperUser = await UserModel.findOne({
+        shipperCode: booking.shipper.code,
+      }).select('email').lean() as any;
+      recipientEmailForReject = shipperUser?.email ?? null;
+    }
+    console.log('[email] attempting to send booking status email to:', recipientEmailForReject);
     if (recipientEmailForReject) {
       sendBookingStatusChanged(
         { email: recipientEmailForReject },

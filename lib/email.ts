@@ -334,6 +334,50 @@ export async function sendBookingReceivedToShipper(
   });
 }
 
+// 2A (planner path) — Booking created on behalf of shipper by a planner/admin
+export async function sendBookingCreatedOnBehalf(
+  to: EmailRecipient,
+  data: BookingEmailData,
+  plannerName: string
+): Promise<void> {
+  const from = `"Reefer Stowage Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
+  const baseUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3001';
+
+  const html = buildEmailHtml({
+    title: `A booking has been created on your behalf — ${data.bookingNumber}`,
+    heading: 'A booking was created for your company',
+    body: `
+      <p>A booking has been submitted by <strong style="color: #f1f5f9;">${plannerName}</strong> on behalf of your company.</p>
+      ${bookingDetailTable([
+        ['Booking Number', data.bookingNumber],
+        ['Voyage', data.voyageNumber],
+        ['Service', data.serviceCode],
+        ['Route', `${data.polPortName} → ${data.podPortName}`],
+        ['Cargo Type', formatCargoType(data.cargoType)],
+        ['Quantity Requested', `${data.requestedQuantity} pallets`],
+      ])}
+      <p style="margin: 4px 0 0;">
+        <span style="display: inline-block; background: #1e3a5f; color: #93c5fd; font-size: 12px;
+                     font-weight: 600; padding: 4px 10px; border-radius: 999px; letter-spacing: 0.05em;">
+          STATUS: PENDING
+        </span>
+      </p>
+    `,
+    ctaText: 'View Booking',
+    ctaUrl: `${baseUrl}/shipper/bookings/${data.bookingId}`,
+    footerNote: 'You will receive another email when your booking is reviewed.',
+  });
+
+  const toAddress = to.name ? `"${to.name}" <${to.email}>` : to.email;
+  await transporter.sendMail({
+    from,
+    to: toAddress,
+    subject: `A booking has been created on your behalf — ${data.bookingNumber}`,
+    html,
+    text: `A booking (${data.bookingNumber}) has been submitted by ${plannerName} on behalf of your company.\nVoyage: ${data.voyageNumber} | Route: ${data.polPortName} → ${data.podPortName}`,
+  });
+}
+
 // 2A — New booking request — to planners
 export async function sendBookingReceivedToPlanners(
   planners: EmailRecipient[],
