@@ -5,16 +5,22 @@ import { getVoyages } from '@/app/actions/voyage';
 import BookingsClient from './BookingsClient';
 import type { DisplayBooking, ContractOption, VoyageOption } from './BookingsClient';
 import type { CargoType } from '@/types/models';
+import { auth } from '@/auth';
 
 export default async function BookingsPage() {
-  const [bookingsResult, contractsResult, voyagesResult] = await Promise.all([
+  const [session, bookingsResult, contractsResult, voyagesResult] = await Promise.all([
+    auth(),
     getBookings(),
     getActiveContracts(),
     getVoyages(),
   ]);
 
   const bookings = bookingsResult.success ? bookingsResult.data : [];
-  const rawContracts = contractsResult.success ? contractsResult.data : [];
+  const allContracts = contractsResult.success ? contractsResult.data : [];
+  const serviceFilter: string[] = (session?.user as any)?.serviceFilter ?? [];
+  const rawContracts = serviceFilter.length === 0
+    ? allContracts
+    : allContracts.filter((c: any) => serviceFilter.includes(c.serviceCode));
   const rawVoyages = voyagesResult.success ? voyagesResult.data : [];
 
   const displayBookings: DisplayBooking[] = bookings.map((b: any) => ({
