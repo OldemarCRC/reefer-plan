@@ -261,6 +261,7 @@ export async function createBookingFromContract(data: unknown) {
       contractId: validated.contractId,
       voyageId: validated.voyageId,
       voyageNumber: voyage.voyageNumber,
+      vesselName: (voyage as any).vesselName ?? '',
       officeCode: contract.officeCode,
       serviceCode: contract.serviceCode,
       client: {
@@ -296,6 +297,7 @@ export async function createBookingFromContract(data: unknown) {
       bookingId: booking._id.toString(),
       bookingNumber,
       voyageNumber: voyage.voyageNumber,
+      vesselName: (voyage as any).vesselName ?? '',
       serviceCode: contract.serviceCode,
       polPortName: (contract.originPort as any)?.portName ?? (contract.originPort as any)?.portCode ?? '',
       podPortName: (contract.destinationPort as any)?.portName ?? (contract.destinationPort as any)?.portCode ?? '',
@@ -415,6 +417,7 @@ export async function approveBooking(data: unknown) {
           bookingId: booking._id.toString(),
           bookingNumber: booking.bookingNumber,
           voyageNumber: booking.voyageNumber ?? '',
+          vesselName: booking.vesselName ?? '',
           serviceCode: booking.serviceCode ?? '',
           polPortName: (booking.pol as any)?.portName ?? (booking.pol as any)?.portCode ?? '',
           podPortName: (booking.pod as any)?.portName ?? (booking.pod as any)?.portCode ?? '',
@@ -484,6 +487,7 @@ export async function rejectBooking(data: unknown) {
           bookingId: booking._id.toString(),
           bookingNumber: booking.bookingNumber,
           voyageNumber: booking.voyageNumber ?? '',
+          vesselName: booking.vesselName ?? '',
           serviceCode: booking.serviceCode ?? '',
           polPortName: (booking.pol as any)?.portName ?? (booking.pol as any)?.portCode ?? '',
           podPortName: (booking.pod as any)?.portName ?? (booking.pod as any)?.portCode ?? '',
@@ -539,6 +543,7 @@ export async function cancelBooking(data: unknown) {
       sendBookingCancelledToPlanners(plannerRecipients, {
         bookingNumber: booking.bookingNumber,
         voyageNumber: booking.voyageNumber ?? '',
+        vesselName: booking.vesselName ?? '',
         shipperName: booking.shipper?.name ?? '',
         cancelledBy: (session.user as any).email ?? '',
       }).catch(err => console.error('[email] cancelBooking planner notify failed:', err.message));
@@ -550,6 +555,7 @@ export async function cancelBooking(data: unknown) {
         sendBookingCancelledToShipper(shipperUserForCancel.email, {
           bookingNumber: booking.bookingNumber,
           voyageNumber: booking.voyageNumber ?? '',
+          vesselName: booking.vesselName ?? '',
           cancelledBy: session.user.name ?? (session.user as any).email ?? 'system',
         }).catch(err => console.error('[email] cancelBooking shipper notify failed:', err.message));
       } else {
@@ -640,6 +646,7 @@ export async function updateBookingQuantity(data: unknown) {
       sendBookingModifiedToPlanners(plannerRecipients, {
         bookingNumber: booking.bookingNumber,
         voyageNumber: booking.voyageNumber ?? '',
+        vesselName: booking.vesselName ?? '',
         shipperName: booking.shipper?.name ?? '',
         newQuantity: validated.requestedQuantity,
         modifiedBy: (session.user as any).email ?? '',
@@ -653,6 +660,7 @@ export async function updateBookingQuantity(data: unknown) {
           bookingId: booking._id.toString(),
           bookingNumber: booking.bookingNumber,
           voyageNumber: booking.voyageNumber ?? '',
+          vesselName: booking.vesselName ?? '',
           newQuantity: validated.requestedQuantity,
           modifiedBy: session.user.name ?? (session.user as any).email ?? 'system',
         }).catch(err => console.error('[email] updateBookingQuantity shipper notify failed:', err.message));

@@ -237,6 +237,7 @@ const BookingSchema = new Schema({
   contractId: { type: Schema.Types.ObjectId, ref: 'Contract', required: true },
   voyageId: { type: Schema.Types.ObjectId, ref: 'Voyage', required: true },
   voyageNumber: { type: String, required: true },
+  vesselName: { type: String },
   officeCode: { type: String, required: true },
   serviceCode: { type: String, required: true },
   client: {
