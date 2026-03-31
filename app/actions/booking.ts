@@ -159,7 +159,7 @@ export async function createBookingFromContract(data: unknown) {
     if (existingBooking) {
       return {
         success: false,
-        error: `A booking already exists for shipper "${validated.shipperCode}" on this contract and voyage. To change quantities, edit the existing booking.`,
+        error: `A booking already exists for shipper "${existingBooking.shipper.name || validated.shipperCode}" on this contract and voyage. To change quantities, edit the existing booking.`,
       };
     }
 
