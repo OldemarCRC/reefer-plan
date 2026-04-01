@@ -95,6 +95,7 @@ export default function StowagePlanDetailPage() {
     sqm: number;
     designStowageFactor: number;
     historicalStowageFactor?: number;
+    isFull?: boolean;
   }>>({});
 
   // Vessel layout built from DB temperatureZones — drives VesselProfile SVG
@@ -115,13 +116,14 @@ export default function StowagePlanDetailPage() {
         // Extract stowage factor data from the populated vessel (vesselId is populate()'d)
         const temperatureZones: any[] = p.vesselId?.temperatureZones ?? [];
         if (temperatureZones.length > 0) {
-          const factors: Record<string, { sqm: number; designStowageFactor: number; historicalStowageFactor?: number }> = {};
+          const factors: Record<string, { sqm: number; designStowageFactor: number; historicalStowageFactor?: number; isFull?: boolean }> = {};
           for (const zone of temperatureZones) {
             for (const section of zone.coolingSections ?? []) {
               factors[section.sectionId] = {
                 sqm: section.sqm ?? 0,
                 designStowageFactor: section.designStowageFactor ?? 1.32,
                 historicalStowageFactor: section.historicalStowageFactor ?? undefined,
+                isFull: section.isFull ?? false,
               };
             }
           }
@@ -406,6 +408,8 @@ export default function StowagePlanDetailPage() {
           : undefined;
 
         const factors = sectionFactors[compId];
+        // Unique POL codes from all bookings assigned to this compartment
+        const polPortCodes = [...new Set(entries.map((e: any) => e.booking.pol).filter(Boolean))];
         result.push({
           compartmentId: compId,
           zoneId: zone.zoneId,
@@ -415,13 +419,15 @@ export default function StowagePlanDetailPage() {
           cargoType,
           palletsLoaded,
           palletsCapacity: capacity,
-          shipments: entries.map(e => e.booking.bookingNumber),
+          shipments: entries.map((e: any) => e.booking.bookingNumber),
           sqm: factors?.sqm,
           designStowageFactor: factors?.designStowageFactor,
           historicalStowageFactor: factors?.historicalStowageFactor,
           confidence: (entries.length > 0 && entries[0].booking.isConfirmed) ? 'CONFIRMED' : 'ESTIMATED',
           podColor,
           cargoShortLabel,
+          polPortCodes,
+          isFull: factors?.isFull,
         });
       }
     }

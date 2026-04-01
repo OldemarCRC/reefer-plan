@@ -17,7 +17,7 @@ import {
 // ============================================================================
 
 const SVG_W = 960;
-const SVG_H = 420;
+const SVG_H = 500;
 const MARGIN = { top: 60, right: 30, bottom: 50, left: 30 };
 
 // Hull shape
@@ -34,8 +34,14 @@ const CARGO_AREA_W = 820;     // Total width for cargo holds (~85% of SVG_W)
 const SUPERSTRUCTURE_X = HULL_X_STERN - 110; // Bridge/superstructure
 
 // Height budget for all levels in a hold (px)
-const HOLD_HEIGHT_BUDGET = 218;
-const MIN_LEVEL_H = 22;  // minimum height per level for readability
+const HOLD_HEIGHT_BUDGET = 340;
+const MIN_LEVEL_H = 60;  // minimum height per level for readability
+
+// Cell data-overlay layout constants
+const CELL_HEADER_H = 16;    // top strip: capacity / loaded / available
+const CELL_FOOTER_H = 15;    // bottom strip: factors / POL / temp
+const CELL_FULL_THRESHOLD = 56;    // show header + footer when cell h >= this
+const CELL_COMPACT_THRESHOLD = 34; // show header only when cell h >= this
 
 // Temperature zone double-line indicators
 const ZONE_LINE_THICKNESS = 3;
@@ -380,7 +386,19 @@ export default function VesselProfile({
             const isEstimated = comp.assignment?.confidence === 'ESTIMATED';
             // POD color takes precedence over temperature-based zone color
             const effectiveColor = comp.assignment?.podColor || comp.assignment?.zoneColor || '#1E3A5F';
-            // Capacity switches based on factor toggle
+
+            // Header Box 1: capacity using historical factor if available, else design factor
+            const preferredCap = (() => {
+              if (!comp.assignment) return 0;
+              const { sqm, historicalStowageFactor, designStowageFactor, palletsCapacity } = comp.assignment;
+              if (sqm && historicalStowageFactor) return Math.floor(sqm / historicalStowageFactor);
+              if (sqm && designStowageFactor) return Math.floor(sqm / designStowageFactor);
+              return palletsCapacity;
+            })();
+            const loaded = comp.assignment?.palletsLoaded ?? 0;
+            const available = preferredCap - loaded;
+
+            // Fill bar capacity respects the factor-mode toggle (existing behaviour)
             const displayCapacity = (() => {
               if (!comp.assignment) return 0;
               if (factorMode === 'historical' && comp.assignment.historicalStowageFactor && comp.assignment.sqm) {
@@ -388,9 +406,29 @@ export default function VesselProfile({
               }
               return comp.assignment.palletsCapacity;
             })();
-            const fillPct = displayCapacity > 0
-              ? comp.assignment!.palletsLoaded / displayCapacity
-              : 0;
+            const fillPct = displayCapacity > 0 ? loaded / displayCapacity : 0;
+
+            // Cell layout zones
+            const showHeader = comp.h >= CELL_COMPACT_THRESHOLD;
+            const showFooter = comp.h >= CELL_FULL_THRESHOLD;
+            const centerY = comp.y + (showHeader ? CELL_HEADER_H : 0);
+            const centerH = Math.max(1, comp.h - (showHeader ? CELL_HEADER_H : 0) - (showFooter ? CELL_FOOTER_H : 0));
+            const footerY = comp.y + comp.h - CELL_FOOTER_H;
+
+            // Footer values
+            const dFactor = (comp.assignment?.designStowageFactor ?? 1.32).toFixed(2);
+            const hFactor = comp.assignment?.historicalStowageFactor != null
+              ? comp.assignment.historicalStowageFactor.toFixed(2) : '—';
+            const actualFactor = (comp.assignment?.isFull && comp.assignment.sqm && loaded > 0)
+              ? (comp.assignment.sqm / loaded).toFixed(2) : '—';
+            const polCodes = comp.assignment?.polPortCodes ?? [];
+            const polLabel = polCodes.length === 0 ? '—'
+              : polCodes.length <= 2 ? polCodes.join(' ')
+              : polCodes[0] + '+' + (polCodes.length - 1);
+            const setTemp = comp.assignment?.setTemperature;
+            const tempLabel = setTemp != null
+              ? (setTemp === 0 ? '0°' : `${setTemp > 0 ? '+' : ''}${setTemp}°`)
+              : '—°';
 
             return (
               <g
@@ -403,7 +441,7 @@ export default function VesselProfile({
                 }}
                 style={{ cursor: 'pointer' }}
               >
-                {/* Background */}
+                {/* Background — full cell */}
                 <rect
                   x={comp.x}
                   y={comp.y}
@@ -439,13 +477,13 @@ export default function VesselProfile({
                   />
                 )}
 
-                {/* Cargo fill bar (from bottom) */}
+                {/* Cargo fill bar — bottom of CENTER area only */}
                 {fillPct > 0 && (
                   <rect
                     x={comp.x + 1}
-                    y={comp.y + comp.h * (1 - fillPct)}
+                    y={centerY + centerH * (1 - fillPct)}
                     width={comp.w - 2}
-                    height={comp.h * fillPct - 1}
+                    height={centerH * fillPct - 1}
                     rx={1}
                     fill={effectiveColor}
                     opacity={isSelected ? 0.7 : isHovered ? 0.6 : 0.35}
@@ -456,30 +494,55 @@ export default function VesselProfile({
                 {fillPct > 0 && isEstimated && (
                   <rect
                     x={comp.x + 1}
-                    y={comp.y + comp.h * (1 - fillPct)}
+                    y={centerY + centerH * (1 - fillPct)}
                     width={comp.w - 2}
-                    height={comp.h * fillPct - 1}
+                    height={centerH * fillPct - 1}
                     rx={1}
                     fill="url(#hatch-estimated)"
                     opacity={0.6}
                   />
                 )}
 
-                {/* Compartment label (+ cargo short label when present) */}
-                <text
-                  x={comp.x + comp.w / 2}
-                  y={comp.y + comp.h / 2 + (comp.assignment?.cargoShortLabel ? -4 : 1)}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  className={styles.compLabel}
-                  opacity={isHovered || isSelected || inZone ? 1 : 0.6}
-                >
-                  {comp.level}
-                </text>
+                {/* HEADER STRIP — capacity / loaded / available */}
+                {showHeader && comp.assignment && (
+                  <>
+                    <rect x={comp.x} y={comp.y} width={comp.w} height={CELL_HEADER_H}
+                      fill="#070f1c" opacity={0.78} rx={2} />
+                    <line x1={comp.x + comp.w / 3} y1={comp.y + 2}
+                      x2={comp.x + comp.w / 3} y2={comp.y + CELL_HEADER_H - 2}
+                      stroke="#1E3A5F" strokeWidth={0.5} />
+                    <line x1={comp.x + comp.w * 2 / 3} y1={comp.y + 2}
+                      x2={comp.x + comp.w * 2 / 3} y2={comp.y + CELL_HEADER_H - 2}
+                      stroke="#1E3A5F" strokeWidth={0.5} />
+                    {/* Box 1 — capacity (prefer historical factor) */}
+                    <text x={comp.x + comp.w / 6} y={comp.y + CELL_HEADER_H / 2}
+                      textAnchor="middle" dominantBaseline="middle"
+                      style={{ fontSize: '8px', fill: '#64748b', fontFamily: 'monospace' }}>
+                      {preferredCap}
+                    </text>
+                    {/* Box 2 — pallets loaded */}
+                    <text x={comp.x + comp.w / 2} y={comp.y + CELL_HEADER_H / 2}
+                      textAnchor="middle" dominantBaseline="middle"
+                      style={{ fontSize: '8px', fontFamily: 'monospace',
+                        fill: loaded > 0 ? '#e2e8f0' : '#475569',
+                        fontWeight: loaded > 0 ? 'bold' : 'normal' }}>
+                      {loaded}
+                    </text>
+                    {/* Box 3 — available (green / grey / red) */}
+                    <text x={comp.x + comp.w * 5 / 6} y={comp.y + CELL_HEADER_H / 2}
+                      textAnchor="middle" dominantBaseline="middle"
+                      style={{ fontSize: '8px', fontFamily: 'monospace',
+                        fill: available < 0 ? '#ef4444' : available === 0 ? '#94a3b8' : '#22c55e' }}>
+                      {available}
+                    </text>
+                  </>
+                )}
+
+                {/* CENTER — cargo short label */}
                 {comp.assignment?.cargoShortLabel && (
                   <text
                     x={comp.x + comp.w / 2}
-                    y={comp.y + comp.h / 2 + 7}
+                    y={centerY + centerH / 2}
                     textAnchor="middle"
                     dominantBaseline="middle"
                     className={styles.cargoShortLabel}
@@ -489,15 +552,59 @@ export default function VesselProfile({
                   </text>
                 )}
 
-                {/* Pallet count (when hovered or selected) */}
+                {/* FOOTER STRIP — design factor / historical / actual / POL / temp */}
+                {showFooter && comp.assignment && (
+                  <>
+                    <rect x={comp.x} y={footerY} width={comp.w} height={CELL_FOOTER_H}
+                      fill="#070f1c" opacity={0.78} />
+                    {[1, 2, 3, 4].map(i => (
+                      <line key={`fd${i}`}
+                        x1={comp.x + comp.w * i / 5} y1={footerY + 2}
+                        x2={comp.x + comp.w * i / 5} y2={footerY + CELL_FOOTER_H - 2}
+                        stroke="#1E3A5F" strokeWidth={0.5} />
+                    ))}
+                    {/* Design factor */}
+                    <text x={comp.x + comp.w / 10} y={footerY + CELL_FOOTER_H / 2}
+                      textAnchor="middle" dominantBaseline="middle"
+                      style={{ fontSize: '7px', fill: '#475569' }}>
+                      {dFactor}
+                    </text>
+                    {/* Historical factor */}
+                    <text x={comp.x + comp.w * 3 / 10} y={footerY + CELL_FOOTER_H / 2}
+                      textAnchor="middle" dominantBaseline="middle"
+                      style={{ fontSize: '7px', fill: hFactor !== '—' ? '#94a3b8' : '#334155' }}>
+                      {hFactor}
+                    </text>
+                    {/* Actual factor (shown in amber when isFull) */}
+                    <text x={comp.x + comp.w / 2} y={footerY + CELL_FOOTER_H / 2}
+                      textAnchor="middle" dominantBaseline="middle"
+                      style={{ fontSize: '7px', fill: actualFactor !== '—' ? '#fbbf24' : '#334155' }}>
+                      {actualFactor}
+                    </text>
+                    {/* POL codes */}
+                    <text x={comp.x + comp.w * 7 / 10} y={footerY + CELL_FOOTER_H / 2}
+                      textAnchor="middle" dominantBaseline="middle"
+                      style={{ fontSize: '7px', fill: polCodes.length > 0 ? '#60a5fa' : '#334155' }}>
+                      {polLabel}
+                    </text>
+                    {/* Temperature */}
+                    <text x={comp.x + comp.w * 9 / 10} y={footerY + CELL_FOOTER_H / 2}
+                      textAnchor="middle" dominantBaseline="middle"
+                      style={{ fontSize: '7px', fill: '#d8b4fe' }}>
+                      {tempLabel}
+                    </text>
+                  </>
+                )}
+
+                {/* Pallet count (when hovered or selected) — center area */}
                 {(isHovered || isSelected) && comp.assignment && (
                   <text
                     x={comp.x + comp.w / 2}
-                    y={comp.y + comp.h / 2 + 13}
+                    y={centerY + centerH / 2 + (comp.assignment.cargoShortLabel ? 9 : 0)}
                     textAnchor="middle"
                     className={styles.compCount}
                   >
-                    {comp.assignment.palletsLoaded}/{displayCapacity}
+                    {loaded}/{displayCapacity}
                   </text>
                 )}
               </g>

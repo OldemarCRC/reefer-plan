@@ -23,6 +23,9 @@ export interface VoyageTempAssignment {
   // POD-based coloring (overrides zoneColor when present)
   podColor?: string;        // hex color assigned to this compartment's dominant POD
   cargoShortLabel?: string; // e.g. "BAN", "GRAP", "AVOC" — shown inside the compartment cell
+  // Cell overlay data (computed by parent plan page)
+  polPortCodes?: string[];  // unique POL codes for cargo assigned to this section
+  isFull?: boolean;         // from vessel.coolingSections[].isFull — used for actual factor calc
 }
 
 export const voyageTempAssignments: VoyageTempAssignment[] = [
