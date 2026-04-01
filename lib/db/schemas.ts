@@ -411,8 +411,9 @@ const CoolingSectionDetailSchema = new Schema({
   sectionId: { type: String, required: true },       // "1A", "2UPD", "1FC"
   sqm: { type: Number, required: true },             // floor area in sqm (from vessel spec sheet)
   designStowageFactor: { type: Number, required: true, default: 1.32 }, // from spec sheet
-  historicalStowageFactor: { type: Number },         // rolling average across completed voyages
+  historicalStowageFactor: { type: Number, min: 0.5, max: 3.0 }, // rolling average across completed voyages
   historicalVoyageCount: { type: Number, default: 0 }, // # voyages in historical average
+  isFull: { type: Boolean, default: false },           // true when section is fully loaded in current stowage plan
   // maxPallets is CALCULATED (not stored): Math.floor(sqm * chosenFactor)
 }, { _id: false });
 

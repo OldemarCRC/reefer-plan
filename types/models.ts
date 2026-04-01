@@ -407,6 +407,7 @@ export interface CoolingSectionDetail {
   designStowageFactor: number;    // from vessel spec sheet (e.g. 1.32)
   historicalStowageFactor?: number; // rolling average across completed voyages
   historicalVoyageCount?: number; // # voyages in historical average
+  isFull?: boolean;               // true when section is fully loaded in current stowage plan
   // maxPallets is CALCULATED: Math.floor(sqm * chosenFactor)
 }
 
