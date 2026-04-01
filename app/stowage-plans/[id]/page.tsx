@@ -11,7 +11,7 @@ import VesselProfile from '@/components/vessel/VesselProfile';
 import { getStowagePlanById, deleteStowagePlan, saveCargoAssignments, updatePlanStatus, copyStowagePlan, replanAfterTemperatureOverride } from '@/app/actions/stowage-plan';
 import MarkSentModal from '@/components/stowage/MarkSentModal';
 import { getConfirmedBookingsForVoyage } from '@/app/actions/booking';
-import ConfigureZonesModal, { type ZoneConfig } from '@/components/vessel/ConfigureZonesModal';
+
 import CoolingSectionTopDown, { type SectionBookingSlot } from '@/components/stowage/CoolingSectionTopDown';
 import type { VoyageTempAssignment, VesselLayout } from '@/lib/vessel-profile-data';
 import { LEVEL_DISPLAY_ORDER } from '@/lib/vessel-profile-data';
@@ -48,7 +48,7 @@ export default function StowagePlanDetailPage() {
   const [assignQuantity, setAssignQuantity] = useState<number>(0);
   const [showConflictWarning, setShowConflictWarning] = useState(false);
   const [confirmedConflicts, setConfirmedConflicts] = useState<Set<string>>(new Set());
-  const [showZoneModal, setShowZoneModal] = useState(false);
+
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSaving, startSaveTransition] = useTransition();
   const [isCopying, startCopyTransition] = useTransition();
@@ -753,23 +753,15 @@ export default function StowagePlanDetailPage() {
       <div className={styles.container}>
         {/* Header */}
         <div className={styles.header}>
-        <div className={styles.titleRow}>
-          <div>
-            <div className={styles.breadcrumb}>
-              <Link href="/stowage-plans">Stowage Plans</Link>
-              <span>/</span>
-              <span>{plan.planNumber}</span>
-            </div>
-            <h1>{plan.planNumber}</h1>
-            <div className={styles.meta}>
-              <span>{plan.voyageNumber}</span>
-              <span>•</span>
-              <span>{plan.vesselName}</span>
-              <span>•</span>
-              <span className={`${styles.statusBadge} ${styles[plan.status.toLowerCase()]}`}>
-                {plan.status}
-              </span>
-            </div>
+        <div className={styles.compactHeader}>
+          <div className={styles.compactHeaderLeft}>
+            <Link href="/stowage-plans" className={styles.backLink}>←</Link>
+            <span className={styles.compactPlanNum}>{plan.planNumber}</span>
+            <span className={`${styles.statusBadge} ${styles[plan.status.toLowerCase()]}`}>
+              {plan.status.replace(/_/g, ' ')}
+            </span>
+            <span className={styles.compactSep}>·</span>
+            <span className={styles.compactVoyage}>{plan.voyageNumber}</span>
           </div>
           <div className={styles.headerActions}>
             {saveMsg && (
@@ -804,9 +796,6 @@ export default function StowagePlanDetailPage() {
               </>
             ) : canEdit ? (
               <>
-                <button className={styles.btnSecondary} onClick={() => setShowZoneModal(true)}>
-                  Configure Zones
-                </button>
                 <button className={styles.btnSecondary} onClick={handleSavePlan} disabled={isSaving}>
                   {isSaving ? 'Saving...' : 'Save Draft'}
                 </button>
@@ -925,67 +914,8 @@ export default function StowagePlanDetailPage() {
         )}
       </div>
 
-      {/* Cargo Assignment Bar */}
+      {/* Booking Roster */}
       <div className={styles.cargoBar}>
-        <div className={styles.cargoBarTop}>
-          <select
-            className={styles.cargoSelect}
-            value={selectedBookingId}
-            onChange={e => setSelectedBookingId(e.target.value)}
-            disabled={isLocked}
-          >
-            <option value="">Select booking...</option>
-            {bookings.map(b => (
-              <option key={b.bookingId} value={b.bookingId}>
-                {b.bookingNumber} — {b.consignee} — {b.cargoType.replace('_', ' ')} — {remainingQty(b)} pal remaining
-              </option>
-            ))}
-          </select>
-
-          {selectedBooking && (
-            <div className={styles.cargoDetail}>
-              <span
-                className={styles.cargoDot}
-                style={{ backgroundColor: podColorMap[selectedBooking.pod] ?? '#64748b' }}
-              />
-              <span className={styles.cargoType}>
-                {selectedBooking.cargoType.replace('_', ' ')}
-              </span>
-              <span className={styles.cargoDetailSep}>·</span>
-              <span>{assignedQty(selectedBooking)}/{selectedBooking.totalQuantity} pallets assigned</span>
-              <div className={styles.progressBar}>
-                <div
-                  className={styles.progressFill}
-                  style={{ width: `${selectedBooking.totalQuantity > 0 ? Math.min(100, (assignedQty(selectedBooking) / selectedBooking.totalQuantity) * 100) : 0}%` }}
-                />
-              </div>
-              <span className={styles.cargoDetailSep}>·</span>
-              <span>{selectedBooking.pol} → {selectedBooking.pod}</span>
-              <span className={styles.cargoDetailSep}>·</span>
-              <span>{selectedBooking.consignee}</span>
-            </div>
-          )}
-
-          {!isLocked && canEdit && selectedBooking && (
-            <div className={styles.cargoBarActions}>
-              <button
-                className={styles.btnAssign}
-                onClick={() => {
-                  setAssigningBooking(selectedBooking);
-                  setSelectedCompartment('');
-                  setAssignQuantity(remainingQty(selectedBooking) || 1);
-                }}
-                disabled={remainingQty(selectedBooking) <= 0}
-              >
-                Assign to Compartment
-              </button>
-              <button className={styles.btnAuto} onClick={handleAutoStow}>
-                Auto-Stow
-              </button>
-            </div>
-          )}
-        </div>
-
         {/* Booking Roster — all bookings progress at a glance */}
         {bookings.length > 0 && (
           <div className={styles.bookingRoster}>
@@ -1083,6 +1013,70 @@ export default function StowagePlanDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Cell Booking Panel — contextual eligible-bookings when a section cell is clicked */}
+      {selectedSectionId && canEdit && !isLocked && (() => {
+        const zone = tempZoneConfig.find(z => z.compartments.includes(selectedSectionId));
+        const zoneTemp = zone?.temp;
+        const sectionCap = compartmentCapacities[selectedSectionId] ?? 0;
+        const sectionUsed = usedInCompartment[selectedSectionId] ?? 0;
+        const sectionFree = Math.max(0, sectionCap - sectionUsed);
+        const eligibleBookings = bookings.filter(b => {
+          if (remainingQty(b) <= 0) return false;
+          if (zoneTemp != null) {
+            const req = cargoTempRequirements[b.cargoType];
+            if (req && (zoneTemp < req.min || zoneTemp > req.max)) return false;
+          }
+          return true;
+        });
+        return (
+          <div className={styles.cellPanel}>
+            <div className={styles.cellPanelHeader}>
+              <span className={styles.cellPanelSection}>{selectedSectionId}</span>
+              {zone && (
+                <span className={styles.cellPanelTemp}>
+                  {zone.temp > 0 ? '+' : ''}{zone.temp}°C · {sectionFree} free of {sectionCap}
+                </span>
+              )}
+              <span className={styles.cellPanelTitle}>Eligible Bookings</span>
+              <button className={styles.cellPanelClose} onClick={() => setSelectedSectionId(null)}>✕</button>
+            </div>
+            {eligibleBookings.length === 0 ? (
+              <p className={styles.cellPanelEmpty}>No eligible bookings for this temperature zone.</p>
+            ) : (
+              <div className={styles.cellPanelList}>
+                {eligibleBookings.map(b => {
+                  const remaining = remainingQty(b);
+                  return (
+                    <div
+                      key={b.bookingId}
+                      className={`${styles.cellPanelRow} ${b.bookingId === selectedBookingId ? styles.cellPanelRowActive : ''}`}
+                    >
+                      <span className={styles.cellPanelDot} style={{ background: podColorMap[b.pod] ?? '#64748b' }} />
+                      <span className={styles.cellPanelBookingNum}>{b.bookingNumber}</span>
+                      <span className={styles.cellPanelCargo}>{b.cargoType.replace(/_/g, ' ')}</span>
+                      <span className={styles.cellPanelShipper}>{b.shipperName || b.consignee}</span>
+                      <span className={styles.cellPanelRoute}>{b.pol} → {b.pod}</span>
+                      <span className={styles.cellPanelPallets}>{remaining} pal left</span>
+                      <button
+                        className={styles.cellPanelAssign}
+                        onClick={() => {
+                          setSelectedBookingId(b.bookingId);
+                          setAssigningBooking(b);
+                          setSelectedCompartment(selectedSectionId);
+                          setAssignQuantity(Math.min(remaining, sectionFree) || 1);
+                        }}
+                      >
+                        Assign
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Top-down cooling section view — rendered when a section is selected */}
       {selectedSectionId && selectedSectionInfo && (
@@ -1625,60 +1619,6 @@ export default function StowagePlanDetailPage() {
           </div>
         </div>
       )}
-      {/* Configure Zones Modal */}
-      {showZoneModal && (() => {
-        // Build cargo summary per zone from current booking assignments
-        const cargoByZone: Record<string, { cargoType: string; palletsLoaded: number }> = {};
-        for (const zone of tempZoneConfig) {
-          let totalPalletsInZone = 0;
-          let dominantCargo = '';
-          for (const b of bookings) {
-            for (const a of b.assignments) {
-              if (zone.compartments.includes(a.compartmentId)) {
-                totalPalletsInZone += a.quantity;
-                if (!dominantCargo) dominantCargo = b.cargoType;
-              }
-            }
-          }
-          cargoByZone[zone.sectionId] = { cargoType: dominantCargo, palletsLoaded: totalPalletsInZone };
-        }
-
-        const zoneConfigs: ZoneConfig[] = tempZoneConfig.map((zone) => ({
-          zoneId: zone.sectionId,
-          zoneName: zone.sectionId.replace(/(\d+)(UPD)?([A-Z]+)/, (_, hold, upd, levels) =>
-            `Hold ${hold}${upd ? ' UPD|' : ' '}${levels.split('').join('|')}`
-          ),
-          coolingSectionIds: zone.compartments,
-          currentTemp: zone.temp,
-          assignedCargoType: cargoByZone[zone.sectionId]?.cargoType || undefined,
-          palletsLoaded: cargoByZone[zone.sectionId]?.palletsLoaded ?? 0,
-        }));
-
-        return (
-          <ConfigureZonesModal
-            planId={planId}
-            zones={zoneConfigs}
-            isOpen={showZoneModal}
-            onClose={() => setShowZoneModal(false)}
-            onSuccess={(updatedSections) => {
-              // Update tempZoneConfig directly from the server response
-              if (Array.isArray(updatedSections) && updatedSections.length > 0) {
-                setTempZoneConfig(
-                  updatedSections.map((cs: any) => ({
-                    sectionId: cs.zoneId,
-                    zoneId: `ZONE_${cs.zoneId}`,
-                    temp: cs.assignedTemperature ?? 13,
-                    compartments: cs.coolingSectionIds ?? [],
-                  }))
-                );
-              }
-              setShowReplanBanner(true);
-              setShowZoneModal(false);
-            }}
-          />
-        );
-      })()}
-
       {/* Mark as Sent Modal */}
       {showSentModal && (
         <MarkSentModal

@@ -1396,3 +1396,209 @@
   border-color: #22c55e;
   color: #22c55e;
 }
+
+/* ── Compact Header ───────────────────────────────────────────────────────── */
+
+.compactHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 48px;
+  padding-bottom: 1rem;
+}
+
+.compactHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.backLink {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.backLink:hover {
+  color: var(--text-primary);
+}
+
+.compactPlanNum {
+  font-family: 'Space Grotesk', monospace;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.compactSep {
+  color: var(--border-color);
+  font-size: 0.875rem;
+}
+
+.compactVoyage {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* ── Cell Booking Panel ───────────────────────────────────────────────────── */
+
+.cellPanel {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.cellPanelHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--surface-base);
+}
+
+.cellPanelSection {
+  font-family: 'Space Grotesk', monospace;
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: var(--accent-primary);
+}
+
+.cellPanelTemp {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.cellPanelTitle {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-left: auto;
+}
+
+.cellPanelClose {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.125rem 0.25rem;
+  line-height: 1;
+}
+
+.cellPanelClose:hover {
+  color: var(--text-primary);
+}
+
+.cellPanelEmpty {
+  padding: 0.75rem 1rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 0;
+}
+
+.cellPanelList {
+  display: flex;
+  flex-direction: column;
+}
+
+.cellPanelRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 0.8rem;
+  transition: background 0.1s;
+}
+
+.cellPanelRow:last-child {
+  border-bottom: none;
+}
+
+.cellPanelRow:hover {
+  background: var(--surface-hover);
+}
+
+.cellPanelRowActive {
+  background: rgba(14, 165, 233, 0.05);
+}
+
+.cellPanelDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cellPanelBookingNum {
+  font-family: 'Space Grotesk', monospace;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  min-width: 130px;
+}
+
+.cellPanelCargo {
+  color: var(--text-secondary);
+  min-width: 100px;
+  text-transform: capitalize;
+}
+
+.cellPanelShipper {
+  color: var(--text-secondary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.cellPanelRoute {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.cellPanelPallets {
+  font-family: 'Space Grotesk', monospace;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  min-width: 70px;
+  text-align: right;
+}
+
+.cellPanelAssign {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--accent-primary);
+  border-radius: 4px;
+  background: rgba(14, 165, 233, 0.08);
+  color: var(--accent-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.cellPanelAssign:hover {
+  background: var(--accent-primary);
+  color: white;
+}
