@@ -75,6 +75,7 @@ export const LEVEL_DISPLAY_ORDER = ['UPD', 'FC', 'A', 'B', 'C', 'D', 'E'];
 export interface VesselHoldLevel {
   sectionId: string;  // "1A", "2UPD", "1FC", "2E", etc.
   sqm: number;
+  zoneId?: string;    // cooling zone this section belongs to (from temperatureZones)
 }
 
 export interface VesselHold {
@@ -94,7 +95,7 @@ export function buildVesselLayout(temperatureZones: any[]): VesselLayout {
     for (const section of zone.coolingSections) {
       const holdNum = parseInt(section.sectionId[0], 10);
       if (!holdMap.has(holdNum)) holdMap.set(holdNum, []);
-      holdMap.get(holdNum)!.push({ sectionId: section.sectionId, sqm: section.sqm });
+      holdMap.get(holdNum)!.push({ sectionId: section.sectionId, sqm: section.sqm, zoneId: zone.zoneId });
     }
   }
 

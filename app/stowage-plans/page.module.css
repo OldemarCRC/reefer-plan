@@ -345,6 +345,239 @@
   font-weight: var(--weight-bold);
 }
 
+/* ── Auto-Generate Wizard Modal ─────────────────────────────────────────── */
+
+.autoGenOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--space-8) var(--space-4) var(--space-4);
+  overflow-y: auto;
+}
+
+.autoGenModal {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  width: min(98vw, 1060px);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+}
+
+.autoGenModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.autoGenSteps {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.stepActive {
+  font-weight: var(--weight-semibold);
+  color: var(--color-cyan-light);
+}
+
+.stepDone {
+  color: var(--color-success);
+  font-weight: var(--weight-medium);
+}
+
+.stepInactive {
+  color: var(--color-text-muted);
+}
+
+.stepArrow {
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+}
+
+.autoGenClose {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.autoGenClose:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.autoGenError {
+  margin: var(--space-3) var(--space-5) 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.autoGenStep {
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  overflow: hidden;
+}
+
+.autoGenHint {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* Voyage list (Step 1) */
+.voyageList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.voyageRow {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr auto auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  font-size: var(--text-sm);
+}
+
+.voyageRow:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.voyageRowSelected {
+  background: var(--color-blue-muted);
+}
+
+.voyageRadio {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--color-blue);
+}
+
+.voyageNumber {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.vesselName {
+  color: var(--color-text-secondary);
+}
+
+.voyageStatus {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.voyageDate {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* SVG wrapper (Step 2) */
+.autoGenSvgWrap {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-bg-primary);
+}
+
+/* Zone summary table (Step 2) */
+.autoGenZoneTable {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  font-size: var(--text-xs);
+}
+
+.autoGenZoneHeader {
+  display: grid;
+  grid-template-columns: 1fr 2fr auto;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+}
+
+.autoGenZoneRow {
+  display: grid;
+  grid-template-columns: 1fr 2fr auto;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  align-items: center;
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+
+.autoGenZoneId {
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+}
+
+.autoGenZoneSections {
+  color: var(--color-text-muted);
+}
+
+.autoGenZoneTemp {
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  text-align: right;
+  min-width: 60px;
+}
+
+.autoGenZoneTempSet {
+  color: var(--color-cyan-light);
+  font-weight: var(--weight-semibold);
+}
+
+/* Footer action row */
+.autoGenActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  padding-top: var(--space-3);
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+
+.autoGenTempCount {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-right: auto;
+}
+
 /* --- Footer --- */
 
 .planFooter {

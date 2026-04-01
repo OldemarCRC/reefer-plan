@@ -103,6 +103,7 @@ interface CompartmentRect {
   y: number;
   w: number;
   h: number;
+  zoneId?: string;           // from VesselHoldLevel (used for editable temp mode)
   assignment?: VoyageTempAssignment;
 }
 
@@ -155,6 +156,7 @@ function buildCompartmentRects(
         y,
         w,
         h,
+        zoneId: section.zoneId,
         assignment: assignMap.get(section.sectionId),
       });
 
@@ -177,6 +179,10 @@ interface VesselProfileProps {
   vesselLayout?: VesselLayout;
   conflictCompartmentIds?: string[];
   highlightedCompartmentIds?: string[];
+  /** When provided, makes the temperature slot in each cell footer an editable number input */
+  editableZoneTemps?: Record<string, number>;
+  /** Called when user changes a zone temperature; all cells in the same zone sync automatically */
+  onZoneTempChange?: (zoneId: string, temp: number) => void;
 }
 
 export default function VesselProfile({
@@ -187,6 +193,8 @@ export default function VesselProfile({
   vesselLayout,
   conflictCompartmentIds,
   highlightedCompartmentIds,
+  editableZoneTemps,
+  onZoneTempChange,
 }: VesselProfileProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -429,6 +437,8 @@ export default function VesselProfile({
             const tempLabel = setTemp != null
               ? (setTemp === 0 ? '0°' : `${setTemp > 0 ? '+' : ''}${setTemp}°`)
               : '—°';
+            // Zone ID for this cell: from layout (empty-vessel mode) or assignment
+            const cellZoneId = comp.zoneId ?? comp.assignment?.zoneId;
 
             return (
               <g
@@ -553,7 +563,8 @@ export default function VesselProfile({
                 )}
 
                 {/* FOOTER STRIP — design factor / historical / actual / POL / temp */}
-                {showFooter && comp.assignment && (
+                {/* Also shows in editable-temp mode even when no cargo assignment */}
+                {showFooter && (comp.assignment || editableZoneTemps) && (
                   <>
                     <rect x={comp.x} y={footerY} width={comp.w} height={CELL_FOOTER_H}
                       fill="#070f1c" opacity={0.78} />
@@ -563,36 +574,73 @@ export default function VesselProfile({
                         x2={comp.x + comp.w * i / 5} y2={footerY + CELL_FOOTER_H - 2}
                         stroke="#1E3A5F" strokeWidth={0.5} />
                     ))}
-                    {/* Design factor */}
-                    <text x={comp.x + comp.w / 10} y={footerY + CELL_FOOTER_H / 2}
-                      textAnchor="middle" dominantBaseline="middle"
-                      style={{ fontSize: '7px', fill: '#475569' }}>
-                      {dFactor}
-                    </text>
-                    {/* Historical factor */}
-                    <text x={comp.x + comp.w * 3 / 10} y={footerY + CELL_FOOTER_H / 2}
-                      textAnchor="middle" dominantBaseline="middle"
-                      style={{ fontSize: '7px', fill: hFactor !== '—' ? '#94a3b8' : '#334155' }}>
-                      {hFactor}
-                    </text>
-                    {/* Actual factor (shown in amber when isFull) */}
-                    <text x={comp.x + comp.w / 2} y={footerY + CELL_FOOTER_H / 2}
-                      textAnchor="middle" dominantBaseline="middle"
-                      style={{ fontSize: '7px', fill: actualFactor !== '—' ? '#fbbf24' : '#334155' }}>
-                      {actualFactor}
-                    </text>
-                    {/* POL codes */}
-                    <text x={comp.x + comp.w * 7 / 10} y={footerY + CELL_FOOTER_H / 2}
-                      textAnchor="middle" dominantBaseline="middle"
-                      style={{ fontSize: '7px', fill: polCodes.length > 0 ? '#60a5fa' : '#334155' }}>
-                      {polLabel}
-                    </text>
-                    {/* Temperature */}
-                    <text x={comp.x + comp.w * 9 / 10} y={footerY + CELL_FOOTER_H / 2}
-                      textAnchor="middle" dominantBaseline="middle"
-                      style={{ fontSize: '7px', fill: '#d8b4fe' }}>
-                      {tempLabel}
-                    </text>
+                    {/* Design / historical / actual / POL — only when assignment exists */}
+                    {comp.assignment && <>
+                      <text x={comp.x + comp.w / 10} y={footerY + CELL_FOOTER_H / 2}
+                        textAnchor="middle" dominantBaseline="middle"
+                        style={{ fontSize: '7px', fill: '#475569' }}>
+                        {dFactor}
+                      </text>
+                      <text x={comp.x + comp.w * 3 / 10} y={footerY + CELL_FOOTER_H / 2}
+                        textAnchor="middle" dominantBaseline="middle"
+                        style={{ fontSize: '7px', fill: hFactor !== '—' ? '#94a3b8' : '#334155' }}>
+                        {hFactor}
+                      </text>
+                      <text x={comp.x + comp.w / 2} y={footerY + CELL_FOOTER_H / 2}
+                        textAnchor="middle" dominantBaseline="middle"
+                        style={{ fontSize: '7px', fill: actualFactor !== '—' ? '#fbbf24' : '#334155' }}>
+                        {actualFactor}
+                      </text>
+                      <text x={comp.x + comp.w * 7 / 10} y={footerY + CELL_FOOTER_H / 2}
+                        textAnchor="middle" dominantBaseline="middle"
+                        style={{ fontSize: '7px', fill: polCodes.length > 0 ? '#60a5fa' : '#334155' }}>
+                        {polLabel}
+                      </text>
+                    </>}
+                    {/* Temperature — editable input OR static label */}
+                    {editableZoneTemps && cellZoneId ? (
+                      <foreignObject
+                        x={comp.x + comp.w * 4 / 5 + 1}
+                        y={footerY + 1}
+                        width={Math.max(1, comp.w / 5 - 2)}
+                        height={CELL_FOOTER_H - 2}
+                      >
+                        <input
+                          type="number"
+                          step="1"
+                          value={
+                            editableZoneTemps[cellZoneId] != null && !isNaN(editableZoneTemps[cellZoneId])
+                              ? editableZoneTemps[cellZoneId]
+                              : ''
+                          }
+                          onChange={(e) => {
+                            const v = parseFloat(e.target.value);
+                            onZoneTempChange?.(cellZoneId, isNaN(v) ? NaN : v);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            background: 'rgba(30,42,64,0.95)',
+                            border: '1px solid rgba(167,139,250,0.4)',
+                            borderRadius: '2px',
+                            color: '#d8b4fe',
+                            fontSize: '8px',
+                            textAlign: 'center',
+                            padding: '0',
+                            outline: 'none',
+                            boxSizing: 'border-box',
+                            display: 'block',
+                          }}
+                        />
+                      </foreignObject>
+                    ) : (
+                      <text x={comp.x + comp.w * 9 / 10} y={footerY + CELL_FOOTER_H / 2}
+                        textAnchor="middle" dominantBaseline="middle"
+                        style={{ fontSize: '7px', fill: '#d8b4fe' }}>
+                        {tempLabel}
+                      </text>
+                    )}
                   </>
                 )}
 

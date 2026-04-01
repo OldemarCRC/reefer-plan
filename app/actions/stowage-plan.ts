@@ -1951,3 +1951,244 @@ export async function getAdminPlans() {
     return { success: false, data: [], error: 'Failed to fetch plans' };
   }
 }
+
+// ----------------------------------------------------------------------------
+// GET VOYAGES WITHOUT PLANS
+// Returns PLANNED/IN_PROGRESS voyages that have no stowage plan yet (any
+// non-cancelled status counts as "has a plan").  Populates vessel name +
+// temperatureZones so the wizard can render the zone config SVG immediately.
+// ----------------------------------------------------------------------------
+
+export async function getVoyagesWithoutPlans() {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized', data: [] };
+
+    await connectDB();
+
+    // Collect voyageIds that already have a plan (any status except CANCELLED)
+    const existingPlans = await StowagePlanModel.find({
+      status: { $nin: ['CANCELLED'] },
+    }).select('voyageId').lean();
+    const plannedVoyageIds = new Set((existingPlans as any[]).map((p: any) => String(p.voyageId)));
+
+    const serviceFilter = (session.user as any)?.serviceFilter ?? [];
+    let serviceQuery: Record<string, unknown> = {};
+    if (serviceFilter.length > 0) {
+      const services = await ServiceModel.find({ serviceCode: { $in: serviceFilter } }).select('_id').lean();
+      const serviceIds = (services as any[]).map((s: any) => s._id);
+      serviceQuery = { serviceId: { $in: serviceIds } };
+    }
+
+    const voyages = await VoyageModel.find({
+      status: { $in: ['PLANNED', 'IN_PROGRESS'] },
+      ...serviceQuery,
+    })
+      .populate('vesselId', 'name temperatureZones')
+      .sort({ departureDate: 1 })
+      .lean();
+
+    const without = (voyages as any[]).filter((v: any) => !plannedVoyageIds.has(String(v._id)));
+
+    return { success: true, data: JSON.parse(JSON.stringify(without)) };
+  } catch (error) {
+    console.error('Error fetching voyages without plans:', error);
+    return { success: false, error: 'Failed to fetch voyages', data: [] };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// AUTO-GENERATE SINGLE PLAN
+// Generates (or replaces) a draft stowage plan for ONE voyage with explicit
+// zone temperatures supplied by the planner.  Returns the new plan's _id so
+// the UI can navigate directly to the plan detail page.
+// ----------------------------------------------------------------------------
+
+export async function autoGenerateSinglePlan(
+  voyageId: string,
+  zoneTemperatures: Record<string, number>,
+): Promise<{ success: boolean; planId?: string; error?: string }> {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
+    await connectDB();
+
+    const voyage = await VoyageModel.findById(voyageId).lean() as any;
+    if (!voyage) return { success: false, error: 'Voyage not found' };
+
+    const LOCKED_STATUSES = [
+      'EMAIL_SENT', 'CAPTAIN_APPROVED', 'CAPTAIN_REJECTED',
+      'IN_REVISION', 'READY_FOR_EXECUTION', 'IN_EXECUTION', 'COMPLETED',
+    ];
+
+    const existingPlan = await StowagePlanModel.findOne({
+      voyageId: voyage._id,
+      status: { $nin: ['CANCELLED'] },
+    }).sort({ createdAt: -1 }).lean() as any;
+
+    if (existingPlan && LOCKED_STATUSES.includes(existingPlan.status)) {
+      return { success: false, error: 'A locked plan already exists for this voyage' };
+    }
+
+    const planAction = existingPlan ? 'UPDATED' : 'CREATED';
+
+    // Real bookings
+    const bookings: any[] = await BookingModel.find({
+      voyageId: voyage._id,
+      status: { $in: ['CONFIRMED', 'PARTIAL', 'PENDING'] },
+    }).lean();
+
+    // Contract estimates
+    const contractEstimates: EngineBooking[] = [];
+    if (voyage.serviceId) {
+      const portCallMap = new Map<string, number>(
+        (voyage.portCalls ?? []).map((pc: any) => [pc.portCode as string, pc.sequence as number]),
+      );
+      const coveredContractIds = new Set(
+        bookings.map((b: any) => b.contractId?.toString()).filter(Boolean),
+      );
+      const activeContracts = await ContractModel.find({
+        serviceId: voyage.serviceId,
+        active: true,
+      }).lean();
+
+      for (const contract of activeContracts as any[]) {
+        if (coveredContractIds.has(contract._id.toString())) continue;
+        const polSeq = portCallMap.get(contract.originPort?.portCode);
+        const podSeq = portCallMap.get(contract.destinationPort?.portCode);
+        if (polSeq === undefined || podSeq === undefined) continue;
+
+        const counterparties: any[] = contract.counterparties ?? [];
+        if (counterparties.length > 0) {
+          for (let i = 0; i < counterparties.length; i++) {
+            const cp = counterparties[i];
+            if (!cp.active || !cp.weeklyEstimate) continue;
+            const cargoType = (cp.cargoTypes ?? [])[0] ?? contract.cargoType ?? 'OTHER_CHILLED';
+            const tempRange = getTempRange(cargoType);
+            contractEstimates.push({
+              bookingId:     `CONTRACT-ESTIMATE-${contract._id}-${i}`,
+              cargoType,
+              tempMin:       tempRange.min,
+              tempMax:       tempRange.max,
+              pallets:       cp.weeklyEstimate,
+              polSequence:   polSeq,
+              podSequence:   podSeq,
+              shipperId:     '',
+              consigneeCode: '',
+              confidence:    'ESTIMATED',
+              frozen:        false,
+            });
+          }
+        } else {
+          if (!contract.weeklyPallets) continue;
+          const cargoType = contract.cargoType ?? 'OTHER_CHILLED';
+          const tempRange = getTempRange(cargoType);
+          contractEstimates.push({
+            bookingId:     `CONTRACT-ESTIMATE-${contract._id}`,
+            cargoType,
+            tempMin:       tempRange.min,
+            tempMax:       tempRange.max,
+            pallets:       contract.weeklyPallets,
+            polSequence:   polSeq,
+            podSequence:   podSeq,
+            shipperId:     '',
+            consigneeCode: '',
+            confidence:    'ESTIMATED',
+            frozen:        false,
+          });
+        }
+      }
+    }
+
+    const realEngineBookings = buildEngineBookings(bookings, voyage);
+    const allEngineBookings = [...realEngineBookings, ...contractEstimates];
+
+    const vessel = await VesselModel.findById(voyage.vesselId).lean() as any;
+    if (!vessel) return { success: false, error: 'Vessel not found' };
+
+    // Strip NaN values from planner temperatures
+    const validZoneTemps: Record<string, number> = {};
+    for (const [k, v] of Object.entries(zoneTemperatures)) {
+      if (!isNaN(v)) validZoneTemps[k] = v;
+    }
+
+    const engineInput: EngineInput = {
+      vessel: {
+        sections: buildEngineSections(vessel),
+        zones:    buildEngineZones(vessel),
+      },
+      bookings:         allEngineBookings,
+      portCalls:        (voyage.portCalls ?? []).map((pc: any) => ({
+        sequence: pc.sequence as number,
+        portCode: pc.portCode as string,
+      })),
+      previousZoneTemps: undefined,
+      plannerOverrides:  Object.keys(validZoneTemps).length > 0 ? validZoneTemps : undefined,
+      phase: bookings.some((b: any) => (b.confirmedQuantity ?? 0) > 0) ? 'CONFIRMED' : 'ESTIMATED',
+    } as any; // EngineInput type is ahead of the action layer — cast to avoid pre-existing TS errors
+
+    const engineOutput = generateStowagePlan(engineInput as any);
+
+    const allBookingMeta = [
+      ...bookings,
+      ...contractEstimates.map(ce => ({
+        _id: { toString: () => ce.bookingId },
+        cargoType: ce.cargoType,
+      })),
+    ];
+
+    const { cargoPositions, coolingSectionStatus, hasHardConflict } =
+      mapEngineOutputToDocument(engineOutput, allBookingMeta);
+
+    const newStatus = hasHardConflict ? 'ESTIMATED' : 'DRAFT';
+    let planId: string;
+
+    if (planAction === 'UPDATED' && existingPlan) {
+      await StowagePlanModel.findByIdAndUpdate(existingPlan._id, {
+        $set: {
+          cargoPositions,
+          coolingSectionStatus,
+          conflicts:           engineOutput.conflicts,
+          stabilityIndicators: engineOutput.stabilityByPort,
+          generationMethod:    'AUTO',
+          status:              newStatus,
+        },
+      });
+      planId = existingPlan._id.toString();
+    } else {
+      const planNumber = await generatePlanNumber(
+        voyage.voyageNumber,
+        vessel.name,
+        voyage.weekNumber ?? undefined,
+        voyage.departureDate ?? undefined,
+      );
+      const newPlan = await StowagePlanModel.create({
+        planNumber,
+        vesselId:    vessel._id,
+        vesselName:  vessel.name,
+        voyageId:    voyage._id,
+        voyageNumber: voyage.voyageNumber,
+        generationMethod: 'AUTO',
+        status:      newStatus,
+        cargoPositions,
+        coolingSectionStatus,
+        conflicts:            engineOutput.conflicts,
+        stabilityIndicators:  engineOutput.stabilityByPort,
+        overstowViolations:   [],
+        temperatureConflicts: [],
+        weightDistributionWarnings: [],
+        createdBy: session.user.name ?? 'AUTO',
+      });
+      planId = (newPlan as any)._id.toString();
+    }
+
+    return { success: true, planId };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('autoGenerateSinglePlan error:', msg);
+    return { success: false, error: `Auto-generation failed: ${msg}` };
+  }
+}
