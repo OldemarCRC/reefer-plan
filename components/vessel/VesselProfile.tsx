@@ -30,7 +30,7 @@ const HULL_BOW_TIP = MARGIN.left;        // Bow point
 // Hold positions
 const HOLD_GAP = 8;           // Gap between holds (bulkheads)
 const CARGO_AREA_X = HULL_X_BOW + 25;  // Start of cargo area
-const CARGO_AREA_W = 680;     // Total width for cargo holds
+const CARGO_AREA_W = 820;     // Total width for cargo holds (~85% of SVG_W)
 const SUPERSTRUCTURE_X = HULL_X_STERN - 110; // Bridge/superstructure
 
 // Height budget for all levels in a hold (px)
@@ -72,17 +72,15 @@ function buildDefaultLayout(): VesselLayout {
 // ============================================================================
 
 function computeHoldPositions(layout: VesselLayout): { x: number; w: number; holdNumber: number }[] {
-  const holdSqms = layout.holds.map(h => h.levels.reduce((s, l) => s + l.sqm, 0));
-  const totalSqm = holdSqms.reduce((s, v) => s + v, 0);
-  const totalGaps = (layout.holds.length - 1) * HOLD_GAP;
-  const availableW = CARGO_AREA_W - totalGaps;
+  const n = layout.holds.length;
+  const totalGaps = (n - 1) * HOLD_GAP;
+  const holdW = (CARGO_AREA_W - totalGaps) / n;  // all holds equal width
 
   const positions: { x: number; w: number; holdNumber: number }[] = [];
   let x = CARGO_AREA_X;
-  for (let i = 0; i < layout.holds.length; i++) {
-    const w = totalSqm > 0 ? (holdSqms[i] / totalSqm) * availableW : availableW / layout.holds.length;
-    positions.push({ x, w, holdNumber: layout.holds[i].holdNumber });
-    x += w + HOLD_GAP;
+  for (let i = 0; i < n; i++) {
+    positions.push({ x, w: holdW, holdNumber: layout.holds[i].holdNumber });
+    x += holdW + HOLD_GAP;
   }
   return positions;
 }
@@ -110,40 +108,44 @@ function buildCompartmentRects(
   const rects: CompartmentRect[] = [];
   const assignMap = new Map(assignments.map((a) => [a.compartmentId, a]));
 
+  // FC/UPD are "special" levels: narrower and shorter than normal levels.
+  // FC: 60% hold width, centered — only in Hold 1 (T4A/T4B)
+  // UPD: 50% hold width, centered — only in Holds 2+ (T1)
+  const SPECIAL_LEVELS = new Set(['FC', 'UPD']);
+  const SPECIAL_HEIGHT_RATIO = 0.6;
+  const FC_WIDTH_RATIO = 0.6;
+  const UPD_WIDTH_RATIO = 0.5;
+
   for (const hold of layout.holds) {
     const pos = holdPositions.find(p => p.holdNumber === hold.holdNumber);
     if (!pos) continue;
 
-    const levels = hold.levels;
-    const totalSqm = levels.reduce((s, l) => s + l.sqm, 0);
+    const levels = hold.levels; // already sorted top-to-bottom by LEVEL_DISPLAY_ORDER
+    const nSpecial = levels.filter(l => SPECIAL_LEVELS.has(l.sectionId.slice(1))).length;
+    const nNormal = levels.length - nSpecial;
     const gaps = (levels.length - 1) * 1;
-    const heightBudget = HOLD_HEIGHT_BUDGET - gaps;
-
-    // Proportional heights with minimum enforcement
-    const rawHeights = levels.map(l => totalSqm > 0 ? (l.sqm / totalSqm) * heightBudget : heightBudget / levels.length);
-    const minAdjusted = rawHeights.map(h => Math.max(MIN_LEVEL_H, h));
-    const totalAdjusted = minAdjusted.reduce((s, h) => s + h, 0);
-    const scaleFactor = totalAdjusted > heightBudget ? heightBudget / totalAdjusted : 1;
-    const finalHeights = minAdjusted.map(h => h * scaleFactor);
+    const budget = HOLD_HEIGHT_BUDGET - gaps;
+    // Solve: normalH * (nNormal + nSpecial * SPECIAL_HEIGHT_RATIO) = budget
+    const normalH = budget / (nNormal + nSpecial * SPECIAL_HEIGHT_RATIO);
+    const specialH = normalH * SPECIAL_HEIGHT_RATIO;
 
     let y = HULL_Y_TOP + 4;
 
-    for (let li = 0; li < levels.length; li++) {
-      const section = levels[li];
-      const h = finalHeights[li];
+    for (const section of levels) {
       const level = section.sectionId.slice(1); // "A", "B", "UPD", "FC", "E", etc.
-
-      // Width narrows for deeper sections (hull taper)
-      const relDepth = levels.length > 1 ? li / (levels.length - 1) : 0;
-      const wFactor = 1.0 - relDepth * 0.18;
-      const w = pos.w * wFactor;
-      const xOff = pos.x + (pos.w - w) / 2;
+      const isFC = level === 'FC';
+      const isUPD = level === 'UPD';
+      const h = (isFC || isUPD) ? specialH : normalH;
+      const w = isFC ? pos.w * FC_WIDTH_RATIO
+              : isUPD ? pos.w * UPD_WIDTH_RATIO
+              : pos.w;
+      const xPos = (isFC || isUPD) ? pos.x + (pos.w - w) / 2 : pos.x;
 
       rects.push({
         id: section.sectionId,
         holdNumber: hold.holdNumber,
         level,
-        x: xOff,
+        x: xPos,
         y,
         w,
         h,
@@ -227,20 +229,6 @@ export default function VesselProfile({
               </button>
             </div>
           )}
-          <div className={styles.legend}>
-            {getUniqueZones(tempAssignments).map((z) => (
-              <div key={z.zoneId} className={styles.legendItem}>
-                <span
-                  className={styles.legendDot}
-                  style={{ background: z.zoneColor }}
-                />
-                <span className={styles.legendLabel}>{z.zoneName}</span>
-                <span className={styles.legendTemp}>
-                  {z.setTemperature !== 0 ? `${z.setTemperature > 0 ? '+' : ''}${z.setTemperature}°C` : '—'}
-                </span>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
@@ -522,7 +510,7 @@ export default function VesselProfile({
             .map((c) => (
               <text
                 key={`ll-${c.level}`}
-                x={c.x - 8}
+                x={CARGO_AREA_X - 8}
                 y={c.y + c.h / 2}
                 textAnchor="end"
                 dominantBaseline="middle"
