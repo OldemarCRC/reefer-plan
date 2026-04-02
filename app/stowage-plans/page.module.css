@@ -578,6 +578,84 @@
   margin-right: auto;
 }
 
+/* Step 2 subtitle */
+.autoGenStep2Subtitle {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+  margin: var(--space-1) 0 0;
+}
+
+/* Bulk action toolbar */
+.autoGenToolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.autoGenBulkInput {
+  width: 64px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(100, 160, 255, 0.4);
+  border-radius: 3px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  text-align: center;
+  padding: 0 4px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.autoGenBulkInput:focus {
+  border-color: rgba(100, 160, 255, 0.9);
+}
+
+.autoGenBulkApply {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(100, 160, 255, 0.12);
+  border: 1px solid rgba(100, 160, 255, 0.3);
+  border-radius: 3px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.autoGenBulkApply:hover:not(:disabled) {
+  background: rgba(100, 160, 255, 0.22);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.autoGenBulkApply:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.autoGenClearAll {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  transition: color var(--transition-fast);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.autoGenClearAll:hover {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* Generate button validation hint */
+.autoGenGenHint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: right;
+  margin: 0;
+}
+
 /* --- Footer --- */
 
 .planFooter {

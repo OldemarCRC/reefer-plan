@@ -36,6 +36,7 @@ export default function AutoGenerateButton() {
   const [selectedVoyageId, setSelectedVoyageId] = useState<string>('');
   const [editableZoneTemps, setEditableZoneTemps] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
+  const [bulkTemp, setBulkTemp] = useState<string>('');
 
   const selectedVoyage = voyages.find(v => v._id === selectedVoyageId) ?? null;
 
@@ -85,7 +86,23 @@ export default function AutoGenerateButton() {
   const handleClose = () => {
     setStep('idle');
     setError(null);
+    setBulkTemp('');
   };
+
+  const handleApplyAll = useCallback(() => {
+    const num = parseFloat(bulkTemp);
+    if (isNaN(num) || num < -25 || num > 15) return;
+    const allZones = zones.reduce((acc: Record<string, number>, tz: any) => {
+      acc[tz.zoneId] = num;
+      return acc;
+    }, {});
+    setEditableZoneTemps(allZones);
+  }, [bulkTemp, zones]);
+
+  const handleClearAll = useCallback(() => {
+    setEditableZoneTemps({});
+    setBulkTemp('');
+  }, []);
 
   const validTempCount = Object.values(editableZoneTemps).filter(v => !isNaN(v)).length;
   const canGenerate = validTempCount > 0;
@@ -183,12 +200,39 @@ export default function AutoGenerateButton() {
             {/* ── STEP 2 — Temperature configuration ────────────────── */}
             {step === 'step2' && selectedVoyage && (
               <div className={styles.autoGenStep}>
-                <p className={styles.autoGenHint}>
-                  <strong>{selectedVoyage.voyageNumber}</strong>
-                  {selectedVoyage.vesselId ? ` · ${selectedVoyage.vesselId.name}` : ''}
-                  {' '}— type a temperature (°C) into the purple input at the bottom of each cell.
-                  All cells in the same cooling zone update together.
-                </p>
+                <div>
+                  <p className={styles.autoGenHint}>
+                    <strong>{selectedVoyage.voyageNumber}</strong>
+                    {selectedVoyage.vesselId ? ` · ${selectedVoyage.vesselId.name}` : ''}
+                  </p>
+                  <p className={styles.autoGenStep2Subtitle}>
+                    Set the target temperature for each cooling zone. Sections in the same zone synchronize automatically.
+                  </p>
+                </div>
+
+                {/* Bulk action toolbar */}
+                <div className={styles.autoGenToolbar}>
+                  <input
+                    type="number"
+                    step="1"
+                    min="-25"
+                    max="15"
+                    value={bulkTemp}
+                    onChange={(e) => setBulkTemp(e.target.value)}
+                    placeholder="°C"
+                    className={styles.autoGenBulkInput}
+                  />
+                  <button
+                    className={styles.autoGenBulkApply}
+                    onClick={handleApplyAll}
+                    disabled={bulkTemp === '' || isNaN(parseFloat(bulkTemp)) || parseFloat(bulkTemp) < -25 || parseFloat(bulkTemp) > 15}
+                  >
+                    Apply to all zones
+                  </button>
+                  <button className={styles.autoGenClearAll} onClick={handleClearAll}>
+                    Clear all
+                  </button>
+                </div>
 
                 {/* Vessel longitudinal profile — empty (no cargo), temp inputs in footer */}
                 <div className={styles.autoGenSvgWrap}>
@@ -241,6 +285,11 @@ export default function AutoGenerateButton() {
                     {isGenerating ? 'Generating…' : 'Generate Plan'}
                   </button>
                 </div>
+                {!canGenerate && (
+                  <p className={styles.autoGenGenHint}>
+                    Enter at least one zone temperature to continue
+                  </p>
+                )}
               </div>
             )}
           </div>

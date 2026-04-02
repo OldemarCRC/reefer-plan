@@ -199,6 +199,21 @@ export default function VesselProfile({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [factorMode, setFactorMode] = useState<'design' | 'historical'>('design');
+  // Editable-temp mode: local in-progress strings, focused zone, flash set
+  const [localTempStrings, setLocalTempStrings] = useState<Record<string, string>>({});
+  const [focusedZoneId, setFocusedZoneId] = useState<string | null>(null);
+  const [flashingZoneIds, setFlashingZoneIds] = useState<Record<string, boolean>>({});
+
+  function triggerFlash(zoneId: string) {
+    setFlashingZoneIds(prev => ({ ...prev, [zoneId]: true }));
+    setTimeout(() => {
+      setFlashingZoneIds(prev => {
+        const next = { ...prev };
+        delete next[zoneId];
+        return next;
+      });
+    }, 200);
+  }
 
   // Show the factor toggle only when at least one compartment has a historical factor
   const hasHistorical = tempAssignments.some(a => a.historicalStowageFactor != null);
@@ -440,6 +455,29 @@ export default function VesselProfile({
             // Zone ID for this cell: from layout (empty-vessel mode) or assignment
             const cellZoneId = comp.zoneId ?? comp.assignment?.zoneId;
 
+            // ── Editable-temp per-cell state ────────────────────────────
+            const isFocusedZone = !!editableZoneTemps && focusedZoneId === cellZoneId;
+            const isFlashing = cellZoneId ? !!flashingZoneIds[cellZoneId] : false;
+            const confirmedTemp = editableZoneTemps && cellZoneId ? editableZoneTemps[cellZoneId] : undefined;
+            // When focused: show in-progress local string; otherwise show confirmed value
+            const currentInputVal = (isFocusedZone && cellZoneId && localTempStrings[cellZoneId] !== undefined)
+              ? localTempStrings[cellZoneId]
+              : (confirmedTemp != null && !isNaN(confirmedTemp) ? String(confirmedTemp) : '');
+            const parsedInputNum = parseFloat(currentInputVal);
+            const isInvalidTemp = currentInputVal !== '' && (isNaN(parsedInputNum) || parsedInputNum < -25 || parsedInputNum > 15);
+            const tempBorderColor = isInvalidTemp
+              ? 'rgba(239,68,68,0.8)'
+              : currentInputVal !== ''
+                ? (isFocusedZone ? 'rgba(34,197,94,0.9)' : 'rgba(34,197,94,0.7)')
+                : (isFocusedZone ? 'rgba(100,160,255,0.9)' : 'rgba(100,160,255,0.4)');
+            // Cell body tint by temperature range
+            const cellBodyTint = (editableZoneTemps && cellZoneId && confirmedTemp != null && !isNaN(confirmedTemp))
+              ? confirmedTemp <= 0 ? 'rgba(147,197,253,0.08)'
+                : confirmedTemp <= 8 ? 'rgba(134,239,172,0.08)'
+                : confirmedTemp <= 15 ? 'rgba(253,224,132,0.08)'
+                : null
+              : null;
+
             return (
               <g
                 key={comp.id}
@@ -449,7 +487,10 @@ export default function VesselProfile({
                   setSelectedId(selectedId === comp.id ? null : comp.id);
                   onCompartmentClick?.(comp.id);
                 }}
-                style={{ cursor: 'pointer' }}
+                style={{
+                  cursor: 'pointer',
+                  filter: (editableZoneTemps && isFocusedZone) ? 'drop-shadow(0 0 4px rgba(59,130,246,0.4))' : undefined,
+                }}
               >
                 {/* Background — full cell */}
                 <rect
@@ -484,6 +525,30 @@ export default function VesselProfile({
                     r={3}
                     fill="#ef4444"
                     opacity={0.9}
+                  />
+                )}
+
+                {/* Temperature zone body tint (editable mode) */}
+                {cellBodyTint && (
+                  <rect
+                    x={comp.x + 1}
+                    y={centerY}
+                    width={comp.w - 2}
+                    height={centerH}
+                    fill={cellBodyTint}
+                    rx={1}
+                  />
+                )}
+
+                {/* Flash overlay for zone sync feedback */}
+                {isFlashing && (
+                  <rect
+                    x={comp.x}
+                    y={comp.y}
+                    width={comp.w}
+                    height={comp.h}
+                    fill="rgba(59,130,246,0.15)"
+                    rx={2}
                   />
                 )}
 
@@ -568,7 +633,8 @@ export default function VesselProfile({
                   <>
                     <rect x={comp.x} y={footerY} width={comp.w} height={CELL_FOOTER_H}
                       fill="#070f1c" opacity={0.78} />
-                    {[1, 2, 3, 4].map(i => (
+                    {/* Dividers: in editable mode without assignment, only 2 separators */}
+                    {(!editableZoneTemps || comp.assignment ? [1, 2, 3, 4] : [1, 2]).map(i => (
                       <line key={`fd${i}`}
                         x1={comp.x + comp.w * i / 5} y1={footerY + 2}
                         x2={comp.x + comp.w * i / 5} y2={footerY + CELL_FOOTER_H - 2}
@@ -599,41 +665,83 @@ export default function VesselProfile({
                     </>}
                     {/* Temperature — editable input OR static label */}
                     {editableZoneTemps && cellZoneId ? (
-                      <foreignObject
-                        x={comp.x + comp.w * 4 / 5 + 1}
-                        y={footerY + 1}
-                        width={Math.max(1, comp.w / 5 - 2)}
-                        height={CELL_FOOTER_H - 2}
-                      >
-                        <input
-                          type="number"
-                          step="1"
-                          value={
-                            editableZoneTemps[cellZoneId] != null && !isNaN(editableZoneTemps[cellZoneId])
-                              ? editableZoneTemps[cellZoneId]
-                              : ''
-                          }
-                          onChange={(e) => {
-                            const v = parseFloat(e.target.value);
-                            onZoneTempChange?.(cellZoneId, isNaN(v) ? NaN : v);
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            background: 'rgba(30,42,64,0.95)',
-                            border: '1px solid rgba(167,139,250,0.4)',
-                            borderRadius: '2px',
-                            color: '#d8b4fe',
-                            fontSize: '8px',
-                            textAlign: 'center',
-                            padding: '0',
-                            outline: 'none',
-                            boxSizing: 'border-box',
-                            display: 'block',
-                          }}
-                        />
-                      </foreignObject>
+                      <>
+                        {/* Zone label above the input — links sibling cells visually */}
+                        <text
+                          x={comp.x + comp.w * 17 / 20}
+                          y={footerY - 3}
+                          textAnchor="middle"
+                          style={{ fontSize: '7px', fill: 'rgba(255,255,255,0.35)', fontFamily: 'monospace', pointerEvents: 'none' }}
+                        >
+                          {cellZoneId}
+                        </text>
+                        {/* Wider, taller foreignObject spanning last 2/5 of cell, extending into body */}
+                        <foreignObject
+                          x={comp.x + comp.w * 3 / 5}
+                          y={footerY - 7}
+                          width={Math.max(1, comp.w * 2 / 5 - 2)}
+                          height={22}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '2px', width: '100%', height: '100%', padding: '0 2px', boxSizing: 'border-box' }}>
+                            <input
+                              type="number"
+                              step="1"
+                              min="-25"
+                              max="15"
+                              value={currentInputVal}
+                              placeholder="°C"
+                              onChange={(e) => {
+                                setLocalTempStrings(prev => ({ ...prev, [cellZoneId]: e.target.value }));
+                              }}
+                              onFocus={(e) => {
+                                // seed local string with confirmed value on first focus
+                                setFocusedZoneId(cellZoneId);
+                                if (localTempStrings[cellZoneId] === undefined) {
+                                  setLocalTempStrings(prev => ({
+                                    ...prev,
+                                    [cellZoneId]: confirmedTemp != null && !isNaN(confirmedTemp) ? String(confirmedTemp) : '',
+                                  }));
+                                }
+                                e.stopPropagation();
+                              }}
+                              onBlur={(e) => {
+                                setFocusedZoneId(null);
+                                const rawVal = e.target.value;
+                                const num = parseFloat(rawVal);
+                                // Clear local string so display falls back to confirmed value
+                                setLocalTempStrings(prev => { const n = { ...prev }; delete n[cellZoneId]; return n; });
+                                if (rawVal === '') {
+                                  onZoneTempChange?.(cellZoneId, NaN);
+                                } else if (!isNaN(num) && num >= -25 && num <= 15) {
+                                  onZoneTempChange?.(cellZoneId, num);
+                                  triggerFlash(cellZoneId);
+                                }
+                                // Invalid: revert (local string already deleted, confirmed value stays)
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              title={isInvalidTemp ? 'Valid range: -25°C to +15°C' : undefined}
+                              style={{
+                                flex: '1',
+                                minWidth: '0',
+                                height: '100%',
+                                background: 'rgba(255,255,255,0.08)',
+                                border: `1px solid ${tempBorderColor}`,
+                                borderRadius: '3px',
+                                color: isInvalidTemp ? 'rgba(252,165,165,0.9)' : 'rgba(255,255,255,0.9)',
+                                fontSize: '11px',
+                                textAlign: 'center',
+                                padding: '0 1px',
+                                outline: 'none',
+                                boxSizing: 'border-box',
+                                display: 'block',
+                              }}
+                            />
+                            <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.35)', flexShrink: 0, lineHeight: 1, userSelect: 'none', pointerEvents: 'none' }}>
+                              °C
+                            </span>
+                          </div>
+                        </foreignObject>
+                      </>
                     ) : (
                       <text x={comp.x + comp.w * 9 / 10} y={footerY + CELL_FOOTER_H / 2}
                         textAnchor="middle" dominantBaseline="middle"
