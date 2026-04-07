@@ -361,11 +361,23 @@ export default function StowagePlanDetailPage() {
   const POD_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
   const podColorMap = useMemo(() => {
-    const pods = [...new Set(bookings.map(b => b.pod).filter(Boolean))];
+    // Build from planCargoPositions so PENDING + contract-estimate positions are included.
+    // Enrich with booking pod code where available; fall back to pos.podPortCode snapshot.
+    const bookingById: Record<string, CargoInPlan> = {};
+    for (const b of bookings) bookingById[b.bookingId] = b;
+
+    const pods = [...new Set(
+      planCargoPositions
+        .map((pos: any) => {
+          const bid = String(pos.bookingId ?? '');
+          return bookingById[bid]?.pod ?? (pos.podPortCode as string | undefined) ?? '';
+        })
+        .filter(Boolean)
+    )];
     const map: Record<string, string> = {};
     pods.forEach((pod, i) => { map[pod] = POD_COLORS[i % POD_COLORS.length]; });
     return map;
-  }, [bookings]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bookings, planCargoPositions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cargo type abbreviation lookup for compartment labels
   const CARGO_ABBREV: Record<string, string> = {
@@ -381,55 +393,71 @@ export default function StowagePlanDetailPage() {
   const vesselProfileData = useMemo(() => {
     const result: VoyageTempAssignment[] = [];
 
-    // Build booking metadata lookup (enriches display with bookingNumber, pod, pol where available).
-    // Bookings state only contains CONFIRMED/PARTIAL — that's fine for metadata; cargo quantities
-    // come from planCargoPositions directly so PENDING + contract-estimate positions also render.
+    // Booking metadata for enriching display (pod, pol, bookingNumber, isConfirmed).
+    // Only CONFIRMED/PARTIAL bookings are in this map — used for labels, not for quantities.
     const bookingById: Record<string, CargoInPlan> = {};
-    for (const b of bookings) {
-      bookingById[b.bookingId] = b;
-    }
+    for (const b of bookings) bookingById[b.bookingId] = b;
 
-    // Build compartment → entries from the plan's saved cargoPositions (source of truth).
-    // Bypasses the CONFIRMED/PARTIAL-only filter imposed by getConfirmedBookingsForVoyage.
-    const byCompartment: Record<string, { booking: CargoInPlan | null; quantity: number; cargoType: string }[]> = {};
+    // Group raw cargoPositions by section ID.
+    // Handles both field formats: pos.coolingSectionId (if ever present) and pos.compartment.id.
+    // This is the source-of-truth grouping — PENDING and contract-estimate positions included.
+    const positionsBySectionId: Record<string, any[]> = {};
     for (const pos of planCargoPositions) {
-      const compId = pos.compartment?.id ?? '';
-      const qty = pos.quantity ?? 0;
-      if (!compId || qty <= 0) continue;
-      const bid = String(pos.bookingId ?? '');
-      if (!byCompartment[compId]) byCompartment[compId] = [];
-      byCompartment[compId].push({
-        booking: bookingById[bid] ?? null,
-        quantity: qty,
-        cargoType: pos.cargoType ?? '',
-      });
+      const sectionId = (pos.coolingSectionId ?? pos.compartment?.id ?? '') as string;
+      if (!sectionId) continue;
+      if (!positionsBySectionId[sectionId]) positionsBySectionId[sectionId] = [];
+      positionsBySectionId[sectionId].push(pos);
     }
 
     for (const zone of tempZoneConfig) {
       const zoneColor = tempToColor(zone.temp);
       for (const compId of zone.compartments) {
-        const entries = byCompartment[compId] || [];
-        const palletsLoaded = entries.reduce((sum, e) => sum + e.quantity, 0);
-        const capacity = compartmentCapacities[compId] || 0;
+        const positions = positionsBySectionId[compId] || [];
+        const palletsLoaded = positions.reduce((sum: number, pos: any) => sum + (pos.quantity ?? 0), 0);
 
-        // Prefer booking's cargoType (live); fall back to position snapshot
-        const cargoType = entries.length > 0 ? (entries[0].booking?.cargoType || entries[0].cargoType) : '';
+        // Capacity: prefer historicalStowageFactor (real voyage average) over designStowageFactor
+        const factors = sectionFactors[compId];
+        const sfactor = factors?.historicalStowageFactor ?? factors?.designStowageFactor ?? 1.32;
+        const capacity = factors?.sqm ? Math.floor(factors.sqm / sfactor) : 0;
 
-        // POD color: dominant POD = booking with most pallets in this compartment
-        const dominantEntry = entries.length > 0
-          ? entries.reduce((a, b) => a.quantity >= b.quantity ? a : b)
+        // Cargo type: live booking type preferred; fall back to position snapshot
+        const firstPos = positions[0];
+        const firstBid = firstPos ? String(firstPos.bookingId ?? '') : '';
+        const cargoType = firstPos
+          ? (bookingById[firstBid]?.cargoType || (firstPos.cargoType as string) || '')
+          : '';
+
+        // POD: dominant position = one with most pallets; get pod from booking or position snapshot
+        const dominantPos = positions.length > 0
+          ? positions.reduce((a: any, b: any) => (a.quantity ?? 0) >= (b.quantity ?? 0) ? a : b)
           : null;
-        const dominantPod = dominantEntry?.booking?.pod ?? '';
-        const podColor = dominantPod ? (podColorMap[dominantPod] ?? '#334155') : undefined;
+        const dominantBid = dominantPos ? String(dominantPos.bookingId ?? '') : '';
+        const dominantPod = bookingById[dominantBid]?.pod ?? (dominantPos?.podPortCode as string | undefined) ?? '';
+        const podColor = dominantPod ? (podColorMap[dominantPod] ?? '#64748b') : undefined;
 
-        // Cargo short label for compartment cell
+        // Cargo short label
         const cargoShortLabel = cargoType
           ? (CARGO_ABBREV[cargoType] ?? cargoType.replace(/_/g, '').slice(0, 4))
           : undefined;
 
-        const factors = sectionFactors[compId];
-        // Unique POL codes from bookings in this compartment (null-safe)
-        const polPortCodes = [...new Set(entries.map((e: any) => e.booking?.pol).filter(Boolean))];
+        // Unique POL codes — from booking where available, position snapshot as fallback
+        const polPortCodes = [...new Set(
+          positions
+            .map((pos: any) => {
+              const bid = String(pos.bookingId ?? '');
+              return bookingById[bid]?.pol ?? (pos.polPortCode as string | undefined) ?? '';
+            })
+            .filter(Boolean)
+        )];
+
+        // isFull: computed from actual loaded vs capacity (not the DB flag)
+        const isFull = capacity > 0 && palletsLoaded >= capacity;
+
+        // Confidence: CONFIRMED if any position in this section belongs to a confirmed booking
+        const isConfirmed = positions.some((pos: any) =>
+          bookingById[String(pos.bookingId ?? '')]?.isConfirmed ?? false
+        );
+
         result.push({
           compartmentId: compId,
           zoneId: zone.zoneId,
@@ -439,21 +467,23 @@ export default function StowagePlanDetailPage() {
           cargoType,
           palletsLoaded,
           palletsCapacity: capacity,
-          shipments: entries.map((e: any) => e.booking?.bookingNumber).filter(Boolean),
+          shipments: positions
+            .map((pos: any) => bookingById[String(pos.bookingId ?? '')]?.bookingNumber ?? '')
+            .filter(Boolean),
           sqm: factors?.sqm,
           designStowageFactor: factors?.designStowageFactor,
           historicalStowageFactor: factors?.historicalStowageFactor,
-          confidence: (entries.length > 0 && entries[0].booking?.isConfirmed) ? 'CONFIRMED' : 'ESTIMATED',
+          confidence: isConfirmed ? 'CONFIRMED' : 'ESTIMATED',
           podColor,
           cargoShortLabel,
           polPortCodes,
-          isFull: factors?.isFull,
+          isFull,
         });
       }
     }
 
     return result;
-  }, [bookings, planCargoPositions, tempZoneConfig, sectionFactors, compartmentCapacities, podColorMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bookings, planCargoPositions, tempZoneConfig, sectionFactors, podColorMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Compartment IDs with temperature conflicts — passed to SVG for red highlighting
   const conflictCompartmentIds = useMemo(
