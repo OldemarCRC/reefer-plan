@@ -89,6 +89,8 @@ export default function StowagePlanDetailPage() {
   const [tempZoneConfig, setTempZoneConfig] = useState(defaultTempZoneConfig);
 
   const [bookings, setBookings] = useState<CargoInPlan[]>([]);
+  // Raw cargoPositions from DB — source of truth for SVG rendering, independent of booking status.
+  const [planCargoPositions, setPlanCargoPositions] = useState<any[]>([]);
 
   // Stowage factor data per compartment — extracted from the populated vessel
   const [sectionFactors, setSectionFactors] = useState<Record<string, {
@@ -105,6 +107,9 @@ export default function StowagePlanDetailPage() {
     getStowagePlanById(planId).then(async (result) => {
       if (result.success && result.data) {
         const p = result.data;
+        // Persist raw cargoPositions immediately so vesselProfileData can render
+        // regardless of booking status (PENDING / contract-estimate positions included).
+        setPlanCargoPositions(p.cargoPositions ?? []);
         setPlan({
           _id: planId,
           planNumber: p.planNumber || `PLAN-${planId.slice(-6)}`,
@@ -376,13 +381,28 @@ export default function StowagePlanDetailPage() {
   const vesselProfileData = useMemo(() => {
     const result: VoyageTempAssignment[] = [];
 
-    // Build assignment lookup
-    const byCompartment: Record<string, { booking: CargoInPlan; quantity: number }[]> = {};
+    // Build booking metadata lookup (enriches display with bookingNumber, pod, pol where available).
+    // Bookings state only contains CONFIRMED/PARTIAL — that's fine for metadata; cargo quantities
+    // come from planCargoPositions directly so PENDING + contract-estimate positions also render.
+    const bookingById: Record<string, CargoInPlan> = {};
     for (const b of bookings) {
-      for (const a of b.assignments) {
-        if (!byCompartment[a.compartmentId]) byCompartment[a.compartmentId] = [];
-        byCompartment[a.compartmentId].push({ booking: b, quantity: a.quantity });
-      }
+      bookingById[b.bookingId] = b;
+    }
+
+    // Build compartment → entries from the plan's saved cargoPositions (source of truth).
+    // Bypasses the CONFIRMED/PARTIAL-only filter imposed by getConfirmedBookingsForVoyage.
+    const byCompartment: Record<string, { booking: CargoInPlan | null; quantity: number; cargoType: string }[]> = {};
+    for (const pos of planCargoPositions) {
+      const compId = pos.compartment?.id ?? '';
+      const qty = pos.quantity ?? 0;
+      if (!compId || qty <= 0) continue;
+      const bid = String(pos.bookingId ?? '');
+      if (!byCompartment[compId]) byCompartment[compId] = [];
+      byCompartment[compId].push({
+        booking: bookingById[bid] ?? null,
+        quantity: qty,
+        cargoType: pos.cargoType ?? '',
+      });
     }
 
     for (const zone of tempZoneConfig) {
@@ -392,14 +412,14 @@ export default function StowagePlanDetailPage() {
         const palletsLoaded = entries.reduce((sum, e) => sum + e.quantity, 0);
         const capacity = compartmentCapacities[compId] || 0;
 
-        // Determine cargo type: use first booking's type if any, otherwise empty
-        const cargoType = entries.length > 0 ? entries[0].booking.cargoType : '';
+        // Prefer booking's cargoType (live); fall back to position snapshot
+        const cargoType = entries.length > 0 ? (entries[0].booking?.cargoType || entries[0].cargoType) : '';
 
         // POD color: dominant POD = booking with most pallets in this compartment
         const dominantEntry = entries.length > 0
           ? entries.reduce((a, b) => a.quantity >= b.quantity ? a : b)
           : null;
-        const dominantPod = dominantEntry?.booking.pod ?? '';
+        const dominantPod = dominantEntry?.booking?.pod ?? '';
         const podColor = dominantPod ? (podColorMap[dominantPod] ?? '#334155') : undefined;
 
         // Cargo short label for compartment cell
@@ -408,8 +428,8 @@ export default function StowagePlanDetailPage() {
           : undefined;
 
         const factors = sectionFactors[compId];
-        // Unique POL codes from all bookings assigned to this compartment
-        const polPortCodes = [...new Set(entries.map((e: any) => e.booking.pol).filter(Boolean))];
+        // Unique POL codes from bookings in this compartment (null-safe)
+        const polPortCodes = [...new Set(entries.map((e: any) => e.booking?.pol).filter(Boolean))];
         result.push({
           compartmentId: compId,
           zoneId: zone.zoneId,
@@ -419,11 +439,11 @@ export default function StowagePlanDetailPage() {
           cargoType,
           palletsLoaded,
           palletsCapacity: capacity,
-          shipments: entries.map((e: any) => e.booking.bookingNumber),
+          shipments: entries.map((e: any) => e.booking?.bookingNumber).filter(Boolean),
           sqm: factors?.sqm,
           designStowageFactor: factors?.designStowageFactor,
           historicalStowageFactor: factors?.historicalStowageFactor,
-          confidence: (entries.length > 0 && entries[0].booking.isConfirmed) ? 'CONFIRMED' : 'ESTIMATED',
+          confidence: (entries.length > 0 && entries[0].booking?.isConfirmed) ? 'CONFIRMED' : 'ESTIMATED',
           podColor,
           cargoShortLabel,
           polPortCodes,
@@ -432,9 +452,8 @@ export default function StowagePlanDetailPage() {
       }
     }
 
-    console.log('[StowagePlan] vesselProfileData length:', result.length, '| bookings:', bookings.length, '| assignments total:', bookings.reduce((n, b) => n + b.assignments.length, 0));
     return result;
-  }, [bookings, tempZoneConfig, sectionFactors, compartmentCapacities, podColorMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bookings, planCargoPositions, tempZoneConfig, sectionFactors, compartmentCapacities, podColorMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Compartment IDs with temperature conflicts — passed to SVG for red highlighting
   const conflictCompartmentIds = useMemo(
