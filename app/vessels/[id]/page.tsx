@@ -232,10 +232,9 @@ export default async function VesselDetailPage({
   // Build vessel layout for data-driven SVG rendering
   const vesselLayout: VesselLayout = buildVesselLayout(temperatureZones);
 
-  // When no plan data is available, show the vessel's own compartment structure
-  // (correct layout, zero cargo, no temperature colors) instead of falling back
-  // to the hardcoded ACON-062026 mock data inside VesselProfile.
-  const profileAssignments = assignments.length > 0 ? assignments : buildEmptyAssignments(temperatureZones);
+  // Vessel detail always shows structure only (no cargo) regardless of any selected plan.
+  // Plan cargo is intentionally NOT shown here — use /stowage-plans/[id] for cargo view.
+  const profileAssignments = buildEmptyAssignments(temperatureZones);
 
   // Compute stats — use profileAssignments for capacity so the vessel's total
   // capacity is always displayed, even when no voyage/plan is selected.

@@ -432,6 +432,7 @@ export default function StowagePlanDetailPage() {
       }
     }
 
+    console.log('[StowagePlan] vesselProfileData length:', result.length, '| bookings:', bookings.length, '| assignments total:', bookings.reduce((n, b) => n + b.assignments.length, 0));
     return result;
   }, [bookings, tempZoneConfig, sectionFactors, compartmentCapacities, podColorMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
