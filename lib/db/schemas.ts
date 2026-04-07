@@ -536,6 +536,8 @@ const CargoPositionSchema = new Schema({
   bookingNumber: { type: String },      // denormalized booking number snapshot
   cargoUnitId: { type: String },
   cargoType: { type: String },          // e.g. 'BANANAS', 'TABLE_GRAPES' — used for temp-conflict checks
+  polPortCode: { type: String },         // port of loading code — snapshot for SVG POL display
+  podPortCode: { type: String },         // port of discharge code — drives POD color on SVG
   quantity: { type: Number, default: 0 }, // pallets in this position
   snapshotTotalQuantity: { type: Number }, // booking's total quantity at plan-save time
   compartment: {

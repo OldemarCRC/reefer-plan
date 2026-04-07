@@ -361,23 +361,15 @@ export default function StowagePlanDetailPage() {
   const POD_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
   const podColorMap = useMemo(() => {
-    // Build from planCargoPositions so PENDING + contract-estimate positions are included.
-    // Enrich with booking pod code where available; fall back to pos.podPortCode snapshot.
-    const bookingById: Record<string, CargoInPlan> = {};
-    for (const b of bookings) bookingById[b.bookingId] = b;
-
+    // Read podPortCode directly from raw cargoPositions — populated by the engine for all
+    // positions including contract-estimate entries. No booking-status filter needed.
     const pods = [...new Set(
-      planCargoPositions
-        .map((pos: any) => {
-          const bid = String(pos.bookingId ?? '');
-          return bookingById[bid]?.pod ?? (pos.podPortCode as string | undefined) ?? '';
-        })
-        .filter(Boolean)
+      planCargoPositions.map((pos: any) => (pos.podPortCode as string | undefined) ?? '').filter(Boolean)
     )];
     const map: Record<string, string> = {};
     pods.forEach((pod, i) => { map[pod] = POD_COLORS[i % POD_COLORS.length]; });
     return map;
-  }, [bookings, planCargoPositions]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [planCargoPositions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cargo type abbreviation lookup for compartment labels
   const CARGO_ABBREV: Record<string, string> = {
@@ -427,12 +419,12 @@ export default function StowagePlanDetailPage() {
           ? (bookingById[firstBid]?.cargoType || (firstPos.cargoType as string) || '')
           : '';
 
-        // POD: dominant position = one with most pallets; get pod from booking or position snapshot
+        // POD: dominant position = one with most pallets; prefer podPortCode on position snapshot
         const dominantPos = positions.length > 0
           ? positions.reduce((a: any, b: any) => (a.quantity ?? 0) >= (b.quantity ?? 0) ? a : b)
           : null;
         const dominantBid = dominantPos ? String(dominantPos.bookingId ?? '') : '';
-        const dominantPod = bookingById[dominantBid]?.pod ?? (dominantPos?.podPortCode as string | undefined) ?? '';
+        const dominantPod = (dominantPos?.podPortCode as string | undefined) ?? bookingById[dominantBid]?.pod ?? '';
         const podColor = dominantPod ? (podColorMap[dominantPod] ?? '#64748b') : undefined;
 
         // Cargo short label
@@ -440,12 +432,12 @@ export default function StowagePlanDetailPage() {
           ? (CARGO_ABBREV[cargoType] ?? cargoType.replace(/_/g, '').slice(0, 4))
           : undefined;
 
-        // Unique POL codes — from booking where available, position snapshot as fallback
+        // Unique POL codes — prefer polPortCode on position snapshot; booking pol as fallback
         const polPortCodes = [...new Set(
           positions
             .map((pos: any) => {
               const bid = String(pos.bookingId ?? '');
-              return bookingById[bid]?.pol ?? (pos.polPortCode as string | undefined) ?? '';
+              return (pos.polPortCode as string | undefined) ?? bookingById[bid]?.pol ?? '';
             })
             .filter(Boolean)
         )];
