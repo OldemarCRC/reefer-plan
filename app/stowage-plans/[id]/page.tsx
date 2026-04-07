@@ -75,18 +75,7 @@ export default function StowagePlanDetailPage() {
     status: 'DRAFT',
   });
 
-  const defaultTempZoneConfig = [
-    { sectionId: '1AB',    zoneId: 'ZONE_1AB',    temp: 13, compartments: ['1A', '1B'] },
-    { sectionId: '1CD',    zoneId: 'ZONE_1CD',    temp: 13, compartments: ['1C', '1D'] },
-    { sectionId: '2UPDAB', zoneId: 'ZONE_2UPDAB', temp: 13, compartments: ['2UPD', '2A', '2B'] },
-    { sectionId: '2CD',    zoneId: 'ZONE_2CD',    temp: 13, compartments: ['2C', '2D'] },
-    { sectionId: '3UPDAB', zoneId: 'ZONE_3UPDAB', temp: 13, compartments: ['3UPD', '3A', '3B'] },
-    { sectionId: '3CD',    zoneId: 'ZONE_3CD',    temp: 13, compartments: ['3C', '3D'] },
-    { sectionId: '4UPDAB', zoneId: 'ZONE_4UPDAB', temp: 13, compartments: ['4UPD', '4A', '4B'] },
-    { sectionId: '4CD',    zoneId: 'ZONE_4CD',    temp: 13, compartments: ['4C', '4D'] },
-  ];
-
-  const [tempZoneConfig, setTempZoneConfig] = useState(defaultTempZoneConfig);
+  const [tempZoneConfig, setTempZoneConfig] = useState<any[]>([]);
 
   const [bookings, setBookings] = useState<CargoInPlan[]>([]);
   // Raw cargoPositions from DB — source of truth for SVG rendering, independent of booking status.
@@ -169,7 +158,8 @@ export default function StowagePlanDetailPage() {
           }
         }
 
-        // Use real cooling section temperatures from the plan if available
+        // Use real cooling section temperatures from the plan if available,
+        // otherwise fall back to the vessel's actual temperatureZones (never use hardcoded defaults).
         if (Array.isArray(p.coolingSectionStatus) && p.coolingSectionStatus.length > 0) {
           setTempZoneConfig(
             p.coolingSectionStatus.map((cs: any) => ({
@@ -177,6 +167,15 @@ export default function StowagePlanDetailPage() {
               zoneId: `ZONE_${cs.zoneId}`,
               temp: cs.assignedTemperature ?? 13,
               compartments: cs.coolingSectionIds ?? [],
+            }))
+          );
+        } else if (temperatureZones.length > 0) {
+          setTempZoneConfig(
+            temperatureZones.map((zone: any) => ({
+              sectionId: zone.zoneId,
+              zoneId: `ZONE_${zone.zoneId}`,
+              temp: 13,
+              compartments: (zone.coolingSections ?? []).map((s: any) => s.sectionId),
             }))
           );
         }
