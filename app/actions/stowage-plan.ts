@@ -519,7 +519,7 @@ export async function getStowagePlanById(id: unknown) {
     if (!plan) {
       return { success: false, error: 'Plan not found' };
     }
-    
+
     return {
       success: true,
       data: JSON.parse(JSON.stringify(plan)),
@@ -2078,10 +2078,13 @@ export async function autoGenerateSinglePlan(
 
       for (const contract of activeContracts as any[]) {
         if (coveredContractIds.has(contract._id.toString())) continue;
-        const polSeq = portCallMap.get(contract.originPort?.portCode);
-        const podSeq = portCallMap.get(contract.destinationPort?.portCode);
+        const polCode = contract.originPort?.portCode;
+        const podCode = contract.destinationPort?.portCode;
+        const polSeq = portCallMap.get(polCode);
+        const podSeq = portCallMap.get(podCode);
         if (polSeq === undefined || podSeq === undefined) continue;
 
+        const contractId = contract._id.toString();
         const counterparties: any[] = contract.counterparties ?? [];
         if (counterparties.length > 0) {
           for (let i = 0; i < counterparties.length; i++) {
@@ -2090,16 +2093,20 @@ export async function autoGenerateSinglePlan(
             const cargoType = (cp.cargoTypes ?? [])[0] ?? contract.cargoType ?? 'OTHER_CHILLED';
             const tempRange = getTempRange(cargoType);
             contractEstimates.push({
-              bookingId:     `CONTRACT-ESTIMATE-${contract._id}-${i}`,
+              bookingId:     `CONTRACT-ESTIMATE-${contractId}-${i}`,
               cargoType,
               tempMin:       tempRange.min,
               tempMax:       tempRange.max,
               pallets:       cp.weeklyEstimate,
+              polPortCode:   polCode ?? '',
+              podPortCode:   podCode ?? '',
+              polSeq:        polSeq as number,
+              podSeq:        podSeq as number,
               polSequence:   polSeq,
               podSequence:   podSeq,
               shipperId:     '',
               consigneeCode: '',
-              confidence:    'ESTIMATED',
+              confidence:    'CONTRACT_ESTIMATE' as const,
               frozen:        false,
             });
           }
@@ -2108,16 +2115,20 @@ export async function autoGenerateSinglePlan(
           const cargoType = contract.cargoType ?? 'OTHER_CHILLED';
           const tempRange = getTempRange(cargoType);
           contractEstimates.push({
-            bookingId:     `CONTRACT-ESTIMATE-${contract._id}`,
+            bookingId:     `CONTRACT-ESTIMATE-${contractId}`,
             cargoType,
             tempMin:       tempRange.min,
             tempMax:       tempRange.max,
             pallets:       contract.weeklyPallets,
+            polPortCode:   polCode ?? '',
+            podPortCode:   podCode ?? '',
+            polSeq:        polSeq as number,
+            podSeq:        podSeq as number,
             polSequence:   polSeq,
             podSequence:   podSeq,
             shipperId:     '',
             consigneeCode: '',
-            confidence:    'ESTIMATED',
+            confidence:    'CONTRACT_ESTIMATE' as const,
             frozen:        false,
           });
         }
@@ -2158,6 +2169,8 @@ export async function autoGenerateSinglePlan(
       ...contractEstimates.map(ce => ({
         _id: { toString: () => ce.bookingId },
         cargoType: ce.cargoType,
+        polPortCode: ce.polPortCode,
+        podPortCode: ce.podPortCode,
       })),
     ];
 
