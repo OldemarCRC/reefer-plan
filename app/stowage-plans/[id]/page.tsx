@@ -1055,65 +1055,89 @@ export default function StowagePlanDetailPage() {
         )}
       </div>
 
-      {/* Cell Booking Panel — contextual eligible-bookings when a section cell is clicked */}
-      {selectedSectionId && canEdit && !isLocked && (() => {
+      {/* Cell Booking Panel — section info + consignees always; eligible bookings when editable */}
+      {selectedSectionId && (() => {
         const zone = tempZoneConfig.find(z => z.compartments.includes(selectedSectionId));
         const zoneTemp = zone?.temp;
         const sectionCap = compartmentCapacities[selectedSectionId] ?? 0;
         const sectionUsed = usedInCompartment[selectedSectionId] ?? 0;
         const sectionFree = Math.max(0, sectionCap - sectionUsed);
-        const eligibleBookings = bookings.filter(b => {
+
+        // Consignees from saved cargo positions for this section
+        const sectionPositions = planCargoPositions.filter(
+          pos => (pos.coolingSectionId ?? pos.compartment?.id) === selectedSectionId
+        );
+        const consigneeNames = [...new Set(
+          sectionPositions
+            .map((pos: any) => bookings.find(b => b.bookingId === String(pos.bookingId))?.consignee)
+            .filter(Boolean)
+        )] as string[];
+
+        const eligibleBookings = canEdit && !isLocked ? bookings.filter(b => {
           if (remainingQty(b) <= 0) return false;
           if (zoneTemp != null) {
             const req = cargoTempRequirements[b.cargoType];
             if (req && (zoneTemp < req.min || zoneTemp > req.max)) return false;
           }
           return true;
-        });
+        }) : [];
+
         return (
           <div className={styles.cellPanel}>
             <div className={styles.cellPanelHeader}>
               <span className={styles.cellPanelSection}>{selectedSectionId}</span>
               {zone && (
                 <span className={styles.cellPanelTemp}>
-                  {zone.temp > 0 ? '+' : ''}{zone.temp}°C · {sectionFree} free of {sectionCap}
+                  {zone.temp > 0 ? '+' : ''}{zone.temp}°C{canEdit && !isLocked ? ` · ${sectionFree} free of ${sectionCap}` : ''}
                 </span>
               )}
-              <span className={styles.cellPanelTitle}>Eligible Bookings</span>
+              {canEdit && !isLocked && <span className={styles.cellPanelTitle}>Eligible Bookings</span>}
               <button className={styles.cellPanelClose} onClick={() => setSelectedSectionId(null)}>✕</button>
             </div>
-            {eligibleBookings.length === 0 ? (
-              <p className={styles.cellPanelEmpty}>No eligible bookings for this temperature zone.</p>
-            ) : (
-              <div className={styles.cellPanelList}>
-                {eligibleBookings.map(b => {
-                  const remaining = remainingQty(b);
-                  return (
-                    <div
-                      key={b.bookingId}
-                      className={`${styles.cellPanelRow} ${b.bookingId === selectedBookingId ? styles.cellPanelRowActive : ''}`}
-                    >
-                      <span className={styles.cellPanelDot} style={{ background: podColorMap[b.pod] ?? '#64748b' }} />
-                      <span className={styles.cellPanelBookingNum}>{b.bookingNumber}</span>
-                      <span className={styles.cellPanelCargo}>{b.cargoType.replace(/_/g, ' ')}</span>
-                      <span className={styles.cellPanelShipper}>{b.shipperName || b.consignee}</span>
-                      <span className={styles.cellPanelRoute}>{b.pol} → {b.pod}</span>
-                      <span className={styles.cellPanelPallets}>{remaining} pal left</span>
-                      <button
-                        className={styles.cellPanelAssign}
-                        onClick={() => {
-                          setSelectedBookingId(b.bookingId);
-                          setAssigningBooking(b);
-                          setSelectedCompartment(selectedSectionId);
-                          setAssignQuantity(Math.min(remaining, sectionFree) || 1);
-                        }}
+            {/* Consignees row */}
+            <div style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+              <span style={{ fontWeight: 600, color: 'var(--text-primary)', marginRight: '0.4rem' }}>Consignees:</span>
+              {consigneeNames.length > 0
+                ? consigneeNames.map((name, i) => (
+                    <span key={name} style={{ display: 'inline-block', background: 'var(--surface-base)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '0 0.4rem', marginRight: i < consigneeNames.length - 1 ? '0.3rem' : 0, fontSize: '0.75rem' }}>{name}</span>
+                  ))
+                : <span style={{ color: 'var(--text-muted)' }}>No cargo assigned</span>
+              }
+            </div>
+            {canEdit && !isLocked && (
+              eligibleBookings.length === 0 ? (
+                <p className={styles.cellPanelEmpty}>No eligible bookings for this temperature zone.</p>
+              ) : (
+                <div className={styles.cellPanelList}>
+                  {eligibleBookings.map(b => {
+                    const remaining = remainingQty(b);
+                    return (
+                      <div
+                        key={b.bookingId}
+                        className={`${styles.cellPanelRow} ${b.bookingId === selectedBookingId ? styles.cellPanelRowActive : ''}`}
                       >
-                        Assign
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
+                        <span className={styles.cellPanelDot} style={{ background: podColorMap[b.pod] ?? '#64748b' }} />
+                        <span className={styles.cellPanelBookingNum}>{b.bookingNumber}</span>
+                        <span className={styles.cellPanelCargo}>{b.cargoType.replace(/_/g, ' ')}</span>
+                        <span className={styles.cellPanelShipper}>{b.shipperName || b.consignee}</span>
+                        <span className={styles.cellPanelRoute}>{b.pol} → {b.pod}</span>
+                        <span className={styles.cellPanelPallets}>{remaining} pal left</span>
+                        <button
+                          className={styles.cellPanelAssign}
+                          onClick={() => {
+                            setSelectedBookingId(b.bookingId);
+                            setAssigningBooking(b);
+                            setSelectedCompartment(selectedSectionId);
+                            setAssignQuantity(Math.min(remaining, sectionFree) || 1);
+                          }}
+                        >
+                          Assign
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
             )}
           </div>
         );

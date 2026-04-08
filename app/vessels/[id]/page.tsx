@@ -321,6 +321,7 @@ export default async function VesselDetailPage({
           vesselName={vessel.name}
           tempAssignments={profileAssignments}
           vesselLayout={vesselLayout}
+          showCompartmentTooltip={false}
         />
 
         {/* Stats row */}

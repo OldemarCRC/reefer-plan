@@ -183,6 +183,8 @@ interface VesselProfileProps {
   editableZoneTemps?: Record<string, number>;
   /** Called when user changes a zone temperature; all cells in the same zone sync automatically */
   onZoneTempChange?: (zoneId: string, temp: number) => void;
+  /** When false, the hover/click detail panel is not rendered. Defaults to true. */
+  showCompartmentTooltip?: boolean;
 }
 
 export default function VesselProfile({
@@ -195,6 +197,7 @@ export default function VesselProfile({
   highlightedCompartmentIds,
   editableZoneTemps,
   onZoneTempChange,
+  showCompartmentTooltip = true,
 }: VesselProfileProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -793,7 +796,7 @@ export default function VesselProfile({
         </svg>
 
         {/* Detail panel */}
-        {detail && detail.assignment && (
+        {showCompartmentTooltip && detail && detail.assignment && (
           <div
             className={styles.detailPanel}
             style={{ borderLeftColor: detail.assignment.podColor ?? detail.assignment.zoneColor }}
