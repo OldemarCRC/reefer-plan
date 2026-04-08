@@ -1351,12 +1351,13 @@ function mapEngineOutputToDocument(engineOutput: ReturnType<typeof generateStowa
     const polPortCode = (bk as any)?.pol?.portCode ?? (bk as any)?.polPortCode ?? undefined;
     const podPortCode = (bk as any)?.pod?.portCode ?? (bk as any)?.podPortCode ?? undefined;
     return {
-      bookingId:   a.bookingId,
-      cargoType:   bk?.cargoType ?? undefined,
+      bookingId:     a.bookingId,
+      cargoType:     bk?.cargoType ?? undefined,
+      consigneeName: (bk as any)?.consignee?.name ?? undefined,
       polPortCode,
       podPortCode,
-      quantity:    a.palletsAssigned,
-      compartment: { id: a.sectionId, holdNumber, level },
+      quantity:      a.palletsAssigned,
+      compartment:   { id: a.sectionId, holdNumber, level },
     };
   });
 

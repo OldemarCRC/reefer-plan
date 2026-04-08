@@ -534,6 +534,7 @@ const CargoPositionSchema = new Schema({
   shipmentId: { type: Schema.Types.ObjectId, ref: 'Shipment' }, // optional — not all positions come from formal shipments
   bookingId: { type: String },          // booking reference (string for flexibility)
   bookingNumber: { type: String },      // denormalized booking number snapshot
+  consigneeName: { type: String },      // snapshot from booking at plan-save time
   cargoUnitId: { type: String },
   cargoType: { type: String },          // e.g. 'BANANAS', 'TABLE_GRAPES' — used for temp-conflict checks
   polPortCode: { type: String },         // port of loading code — snapshot for SVG POL display

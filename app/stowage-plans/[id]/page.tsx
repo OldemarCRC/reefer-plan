@@ -380,17 +380,22 @@ export default function StowagePlanDetailPage() {
     OTHER_FROZEN: 'FRZN', OTHER_CHILLED: 'CHLD',
   };
 
-  // Consignees keyed by section ID — passed to VesselProfile click panel
+  // Consignees keyed by section ID — passed to VesselProfile click panel.
+  // Primary: pos.consigneeName (saved by engine for real bookings since schema v1.50).
+  // Fallback: look up from bookings state (covers manually-assigned positions).
+  // CONTRACT-ESTIMATE positions have no consignee data — skipped.
   const consigneesBySection = useMemo(() => {
     const map: Record<string, string[]> = {};
     for (const pos of planCargoPositions) {
       const sid = (pos.coolingSectionId ?? pos.compartment?.id ?? '') as string;
       if (!sid) continue;
-      const b = bookings.find(b => b.bookingId === String(pos.bookingId));
-      if (b?.consignee) {
-        if (!map[sid]) map[sid] = [];
-        if (!map[sid].includes(b.consignee)) map[sid].push(b.consignee);
-      }
+      const name: string =
+        (pos as any).consigneeName ??
+        bookings.find(b => b.bookingId === String(pos.bookingId))?.consignee ??
+        '';
+      if (!name) continue;
+      if (!map[sid]) map[sid] = [];
+      if (!map[sid].includes(name)) map[sid].push(name);
     }
     return map;
   }, [planCargoPositions, bookings]);

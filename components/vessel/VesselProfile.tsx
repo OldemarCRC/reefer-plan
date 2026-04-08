@@ -639,31 +639,38 @@ export default function VesselProfile({
                   <>
                     <rect x={comp.x} y={footerY} width={comp.w} height={CELL_FOOTER_H}
                       fill="#070f1c" opacity={0.78} />
-                    {/* Dividers: in editable mode without assignment, only 2 separators */}
-                    {(!editableZoneTemps || comp.assignment ? [1, 2, 3, 4] : [1, 2]).map(i => (
-                      <line key={`fd${i}`}
-                        x1={comp.x + comp.w * i / 5} y1={footerY + 2}
-                        x2={comp.x + comp.w * i / 5} y2={footerY + CELL_FOOTER_H - 2}
+                    {/* Dividers at proportional positions */}
+                    {(!editableZoneTemps || comp.assignment
+                      ? [0.12, 0.24, 0.36, 0.78]
+                      : [0.12]
+                    ).map(pos => (
+                      <line key={`fd${pos}`}
+                        x1={comp.x + comp.w * pos} y1={footerY + 2}
+                        x2={comp.x + comp.w * pos} y2={footerY + CELL_FOOTER_H - 2}
                         stroke="#1E3A5F" strokeWidth={0.5} />
                     ))}
                     {/* Design / historical / actual / POL — only when assignment exists */}
                     {comp.assignment && <>
-                      <text x={comp.x + comp.w / 10} y={footerY + CELL_FOOTER_H / 2}
+                      {/* Col 1 — design factor */}
+                      <text x={comp.x + comp.w * 0.06} y={footerY + CELL_FOOTER_H / 2}
                         textAnchor="middle" dominantBaseline="middle"
                         style={{ fontSize: '7px', fill: '#475569' }}>
                         {dFactor}
                       </text>
-                      <text x={comp.x + comp.w * 3 / 10} y={footerY + CELL_FOOTER_H / 2}
+                      {/* Col 2 — historical factor */}
+                      <text x={comp.x + comp.w * 0.18} y={footerY + CELL_FOOTER_H / 2}
                         textAnchor="middle" dominantBaseline="middle"
                         style={{ fontSize: '7px', fill: hFactor !== '—' ? '#94a3b8' : '#334155' }}>
                         {hFactor}
                       </text>
-                      <text x={comp.x + comp.w / 2} y={footerY + CELL_FOOTER_H / 2}
+                      {/* Col 3 — actual factor */}
+                      <text x={comp.x + comp.w * 0.30} y={footerY + CELL_FOOTER_H / 2}
                         textAnchor="middle" dominantBaseline="middle"
                         style={{ fontSize: '7px', fill: actualFactor !== '—' ? '#fbbf24' : '#334155' }}>
                         {actualFactor}
                       </text>
-                      <text x={comp.x + comp.w * 7 / 10} y={footerY + CELL_FOOTER_H / 2}
+                      {/* Col 4 — POL codes */}
+                      <text x={comp.x + comp.w * 0.57} y={footerY + CELL_FOOTER_H / 2}
                         textAnchor="middle" dominantBaseline="middle"
                         style={{ fontSize: '7px', fill: polCodes.length > 0 ? '#60a5fa' : '#334155' }}>
                         {polLabel}
@@ -674,18 +681,18 @@ export default function VesselProfile({
                       <>
                         {/* Zone label above the input — links sibling cells visually */}
                         <text
-                          x={comp.x + comp.w * 17 / 20}
+                          x={comp.x + comp.w * 0.89}
                           y={footerY - 3}
                           textAnchor="middle"
                           style={{ fontSize: '7px', fill: 'rgba(255,255,255,0.35)', fontFamily: 'monospace', pointerEvents: 'none' }}
                         >
                           {cellZoneId}
                         </text>
-                        {/* Wider, taller foreignObject spanning last 2/5 of cell, extending into body */}
+                        {/* foreignObject spanning last 22% of cell, extending into body */}
                         <foreignObject
-                          x={comp.x + comp.w * 3 / 5}
+                          x={comp.x + comp.w * 0.78}
                           y={footerY - 7}
-                          width={Math.max(1, comp.w * 2 / 5 - 2)}
+                          width={Math.max(1, comp.w * 0.22 - 2)}
                           height={22}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '2px', width: '100%', height: '100%', padding: '0 2px', boxSizing: 'border-box' }}>
@@ -749,7 +756,7 @@ export default function VesselProfile({
                         </foreignObject>
                       </>
                     ) : (
-                      <text x={comp.x + comp.w * 9 / 10} y={footerY + CELL_FOOTER_H / 2}
+                      <text x={comp.x + comp.w * 0.89} y={footerY + CELL_FOOTER_H / 2}
                         textAnchor="middle" dominantBaseline="middle"
                         style={{ fontSize: '7px', fill: '#d8b4fe' }}>
                         {tempLabel}
@@ -798,11 +805,22 @@ export default function VesselProfile({
           </text>
         </svg>
 
-        {/* Detail panel */}
+        {/* Detail panel — absolutely positioned overlay inside svgWrap */}
         {showCompartmentTooltip && detail && detail.assignment && (
           <div
             className={styles.detailPanel}
-            style={{ borderLeftColor: detail.assignment.podColor ?? detail.assignment.zoneColor, position: 'relative' }}
+            style={{
+              borderLeftColor: detail.assignment.podColor ?? detail.assignment.zoneColor,
+              position: 'absolute',
+              top: '8px',
+              right: '8px',
+              zIndex: 10,
+              minWidth: '200px',
+              background: 'rgba(10,22,40,0.97)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: '8px',
+              padding: '12px 14px',
+            }}
           >
             {/* Close button — only shown when panel is pinned by a click (selectedId set) */}
             {selectedId && (
