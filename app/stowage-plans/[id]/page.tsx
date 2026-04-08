@@ -380,6 +380,21 @@ export default function StowagePlanDetailPage() {
     OTHER_FROZEN: 'FRZN', OTHER_CHILLED: 'CHLD',
   };
 
+  // Consignees keyed by section ID — passed to VesselProfile click panel
+  const consigneesBySection = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const pos of planCargoPositions) {
+      const sid = (pos.coolingSectionId ?? pos.compartment?.id ?? '') as string;
+      if (!sid) continue;
+      const b = bookings.find(b => b.bookingId === String(pos.bookingId));
+      if (b?.consignee) {
+        if (!map[sid]) map[sid] = [];
+        if (!map[sid].includes(b.consignee)) map[sid].push(b.consignee);
+      }
+    }
+    return map;
+  }, [planCargoPositions, bookings]);
+
   // Transform plan data to VesselProfile format
   const vesselProfileData = useMemo(() => {
     const result: VoyageTempAssignment[] = [];
@@ -1037,6 +1052,7 @@ export default function StowagePlanDetailPage() {
           conflictCompartmentIds={conflictCompartmentIds}
           highlightedCompartmentIds={highlightedSectionIds}
           vesselLayout={vesselLayout}
+          consigneesBySection={consigneesBySection}
           onCompartmentClick={(id) => {
             setSelectedSectionId(prev => prev === id ? null : id);
             setHighlightedSectionIds([]);
