@@ -75,6 +75,13 @@ export default async function BookingsPage() {
     vesselName: v.vesselName || (typeof v.vesselId === 'object' ? v.vesselId.name : ''),
     departureDate: v.departureDate || v.startDate,
     status: v.status,
+    portCalls: (v.portCalls ?? []).map((pc: any) => ({
+      portCode: pc.portCode,
+      eta: pc.eta ? new Date(pc.eta).toISOString() : undefined,
+      ata: pc.ata ? new Date(pc.ata).toISOString() : undefined,
+      atd: pc.atd ? new Date(pc.atd).toISOString() : undefined,
+      operations: pc.operations ?? [],
+    })),
   }));
 
   const confirmed = displayBookings.filter((b) => b.status === 'CONFIRMED').length;

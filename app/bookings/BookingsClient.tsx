@@ -123,6 +123,13 @@ export interface VoyageOption {
   vesselName: string;
   departureDate: string;
   status: string;
+  portCalls?: Array<{
+    portCode: string;
+    eta?: string;
+    ata?: string;
+    atd?: string;
+    operations: string[];
+  }>;
 }
 
 interface BookingRow {
@@ -439,6 +446,36 @@ function CreateBookingModal({
 
   function goToStep3() {
     if (!selectedContract || !selectedVoyageId) return;
+
+    // Guard: validate POL port call status before advancing
+    const polPortCode = selectedContract.originPort?.portCode;
+    if (polPortCode && selectedVoyage?.portCalls) {
+      const polPortCall = selectedVoyage.portCalls.find(
+        (pc) => pc.portCode === polPortCode
+      );
+      if (polPortCall) {
+        const now = new Date(); now.setHours(0, 0, 0, 0);
+        const eta = polPortCall.eta ? new Date(polPortCall.eta) : null;
+        const ata = polPortCall.ata ? new Date(polPortCall.ata) : null;
+        const atd = polPortCall.atd ? new Date(polPortCall.atd) : null;
+
+        if (atd) {
+          setError('The vessel has already departed this loading port. No further bookings can be created.');
+          return;
+        }
+        if (eta) {
+          const etaDay = new Date(eta); etaDay.setHours(0, 0, 0, 0);
+          if (etaDay <= now && !ata) {
+            setError(
+              `The ETA for ${polPortCall.portCode ?? polPortCode} has passed but no actual arrival (ATA) has been recorded. ` +
+              `Please update the ATA on the voyage port call editor before creating bookings.`
+            );
+            return;
+          }
+        }
+      }
+    }
+
     const rows: BookingRow[] = [];
 
     if (

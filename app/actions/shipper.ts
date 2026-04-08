@@ -375,18 +375,22 @@ export async function getUpcomingVoyagesForService(serviceId: string, shipperPol
       status: v.status,
       departureDate: v.departureDate ? v.departureDate.toISOString() : null,
       portCalls: (v.portCalls ?? []).map((pc: any) => {
-        const atd = pc.atd ? pc.atd.toISOString() : null;
-        const eta = pc.eta ? pc.eta.toISOString() : null;
-        // inOperation: vessel has arrived (ETA ≤ now) but not yet departed (no ATD)
-        const inOperation = !atd && !!pc.eta && new Date(pc.eta) <= now;
+        const etaDate = pc.eta ? new Date(pc.eta) : null;
+        const ataDate = pc.ata ? new Date(pc.ata) : null;
+        const atdDate = pc.atd ? new Date(pc.atd) : null;
+        const etaDay = etaDate ? new Date(etaDate.getFullYear(), etaDate.getMonth(), etaDate.getDate()) : null;
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        // inOperation: ETA day passed AND ATA recorded AND no ATD yet
+        const inOperation = !!(etaDay && etaDay <= todayStart && ataDate && !atdDate);
         return {
           portCode: pc.portCode,
           portName: pc.portName,
           country: pc.country ?? '',
           sequence: pc.sequence,
-          eta,
+          eta: pc.eta ? pc.eta.toISOString() : null,
+          ata: pc.ata ? pc.ata.toISOString() : null,
+          atd: pc.atd ? pc.atd.toISOString() : null,
           etd: pc.etd ? pc.etd.toISOString() : null,
-          atd,
           inOperation,
           operations: pc.operations ?? [],
         };

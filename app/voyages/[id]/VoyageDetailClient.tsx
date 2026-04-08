@@ -691,12 +691,15 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
                             type="datetime-local"
                             className={clientStyles.dateTimeInput}
                             value={editAta}
+                            min={editEta ? new Date(editEta).toISOString().slice(0, 16) : undefined}
                             max={new Date().toISOString().slice(0, 16)}
                             onChange={e => {
                               const val = e.target.value;
                               setEditAta(val);
                               if (val && new Date(val) > new Date()) {
                                 setAtaError('ATA cannot be in the future');
+                              } else if (editEta && val && new Date(val) < new Date(editEta)) {
+                                setAtaError('ATA cannot be before ETA');
                               } else {
                                 setAtaError('');
                               }
@@ -718,12 +721,17 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
                             type="datetime-local"
                             className={clientStyles.dateTimeInput}
                             value={editAtd}
+                            min={editAta ? new Date(editAta).toISOString().slice(0, 16) : editEta ? new Date(editEta).toISOString().slice(0, 16) : undefined}
                             max={new Date().toISOString().slice(0, 16)}
                             onChange={e => {
                               const val = e.target.value;
                               setEditAtd(val);
                               if (val && new Date(val) > new Date()) {
                                 setAtdError('ATD cannot be in the future');
+                              } else if (editAta && val && new Date(val) < new Date(editAta)) {
+                                setAtdError('ATD cannot be before ATA');
+                              } else if (!editAta && editEta && val && new Date(val) < new Date(editEta)) {
+                                setAtdError('ATD cannot be before ETA');
                               } else {
                                 setAtdError('');
                               }

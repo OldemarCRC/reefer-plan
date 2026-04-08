@@ -692,6 +692,20 @@ export async function updatePortRotation(
         if (change.atd && new Date(change.atd) > now) {
           return { success: false, error: 'ATD cannot be in the future — actual departure must have already occurred' };
         }
+        // Validate: ATA must be >= ETA (if both present)
+        const effectiveEtaForAta = change.eta !== undefined ? (change.eta ? new Date(change.eta) : undefined) : pc.eta;
+        if (change.ata && effectiveEtaForAta && new Date(change.ata) < effectiveEtaForAta) {
+          return { success: false, error: 'ATA cannot be before ETA — vessel cannot arrive before the estimated time' };
+        }
+        // Validate: ATD must be >= ATA if ATA is set, else >= ETA
+        const effectiveAta = change.ata !== undefined ? (change.ata ? new Date(change.ata) : undefined) : pc.ata;
+        if (change.atd) {
+          if (effectiveAta && new Date(change.atd) < effectiveAta) {
+            return { success: false, error: 'ATD cannot be before ATA — vessel cannot depart before arriving' };
+          } else if (!effectiveAta && effectiveEtaForAta && new Date(change.atd) < effectiveEtaForAta) {
+            return { success: false, error: 'ATD cannot be before ETA — vessel cannot depart before the estimated arrival' };
+          }
+        }
         if (change.ata !== undefined) pc.ata = change.ata ? new Date(change.ata) : undefined;
         if (change.atd !== undefined) pc.atd = change.atd ? new Date(change.atd) : undefined;
         // Auto-lock LOAD ports when ATD is recorded — cargo operations are closed

@@ -173,26 +173,52 @@ export async function createBookingFromContract(data: unknown) {
     const vesselDoc = await VesselModel.findById((voyage as any).vesselId).select('name').lean();
     const resolvedVesselName = (voyage as any).vesselName || (vesselDoc as any)?.name || '';
 
-    // Reject if the POL port call has already been locked (vessel departed)
+    // Validate POL port call status
     const polPortCode = (contract.originPort as any)?.portCode;
+    const creatorRole = (session?.user as any)?.role;
     if (polPortCode) {
-      const polPc = (voyage.portCalls as any[])?.find(
+      const polPortCall = (voyage.portCalls as any[])?.find(
         (pc: any) => pc.portCode === polPortCode
       );
-      if (polPc?.locked) {
-        return {
-          success: false,
-          error: 'Loading operations for this port are closed. The vessel has already departed.',
-        };
-      }
-      // EXPORTERs are additionally blocked when the vessel is currently in port (ETA passed, ATD not yet recorded)
-      if ((session?.user as any)?.role === 'EXPORTER') {
-        const polEta = polPc?.eta ? new Date(polPc.eta) : null;
-        if (polEta && polEta <= new Date() && !polPc?.atd) {
+
+      if (polPortCall) {
+        const now = new Date();
+        const eta  = polPortCall.eta  ? new Date(polPortCall.eta)  : null;
+        const ata  = polPortCall.ata  ? new Date(polPortCall.ata)  : null;
+        const atd  = polPortCall.atd  ? new Date(polPortCall.atd)  : null;
+
+        // Rule 1: ATD set → vessel departed → ALL roles blocked
+        if (atd) {
           return {
             success: false,
-            error: 'Booking submissions are closed while the vessel is in port. Please contact your shipping coordinator.',
+            error: 'The vessel has already departed this loading port. No further bookings are allowed.',
           };
+        }
+
+        // Rule 2: ETA is in the past
+        if (eta) {
+          const etaDay = new Date(eta); etaDay.setHours(0, 0, 0, 0);
+          const today  = new Date(now); today.setHours(0, 0, 0, 0);
+
+          if (etaDay <= today) {
+            if (creatorRole === 'EXPORTER') {
+              return {
+                success: false,
+                error: ata
+                  ? 'The vessel is currently in port operations. Please contact your shipping coordinator to request space on this sailing.'
+                  : 'The estimated arrival date has passed. Please contact your shipping coordinator for the updated schedule.',
+              };
+            } else {
+              // ADMIN / SHIPPING_PLANNER: require ATA to be recorded
+              if (!ata) {
+                return {
+                  success: false,
+                  error: `The estimated arrival date for ${polPortCode} has passed but no actual arrival time has been recorded. Please update the actual arrival time (ATA) for this port call before creating bookings.`,
+                };
+              }
+              // ATA recorded → vessel in operations → planner/admin can proceed
+            }
+          }
         }
       }
     }
@@ -319,8 +345,6 @@ export async function createBookingFromContract(data: unknown) {
       requestedQuantity: validated.requestedQuantity,
       shipperName,
     };
-
-    const creatorRole = (session?.user as any)?.role;
 
     if (creatorRole === 'EXPORTER') {
       // Shipper submitted their own booking — confirm receipt to them directly.
@@ -638,20 +662,50 @@ export async function updateBookingQuantity(data: unknown) {
     const booking = await BookingModel.findById(validated.bookingId);
     if (!booking) return { success: false, error: 'Booking not found' };
 
-    // Reject edits if the booking's POL has already departed (load port locked)
+    // Validate POL port call status before allowing edits
     const polPortCode = (booking.pol as any)?.portCode;
     if (polPortCode && booking.voyageId) {
       const voyage = await VoyageModel.findById(booking.voyageId)
         .select('portCalls')
         .lean();
-      const polPc = (voyage?.portCalls as any[])?.find(
+      const polPortCall = (voyage?.portCalls as any[])?.find(
         (pc: any) => pc.portCode === polPortCode
       );
-      if (polPc?.locked) {
-        return {
-          success: false,
-          error: 'Loading operations for this port are closed. The vessel has already departed.',
-        };
+
+      if (polPortCall) {
+        const now = new Date();
+        const eta  = polPortCall.eta  ? new Date(polPortCall.eta)  : null;
+        const ata  = polPortCall.ata  ? new Date(polPortCall.ata)  : null;
+        const atd  = polPortCall.atd  ? new Date(polPortCall.atd)  : null;
+
+        // ATD set → vessel departed → ALL roles blocked
+        if (atd) {
+          return {
+            success: false,
+            error: 'The vessel has already departed this loading port. No further changes are allowed.',
+          };
+        }
+
+        // ETA passed: EXPORTER blocked; planner requires ATA to be recorded
+        if (eta) {
+          const etaDay = new Date(eta); etaDay.setHours(0, 0, 0, 0);
+          const today  = new Date(now); today.setHours(0, 0, 0, 0);
+          if (etaDay <= today) {
+            if (isExporter) {
+              return {
+                success: false,
+                error: ata
+                  ? 'The vessel is currently in port operations. Please contact your shipping coordinator.'
+                  : 'The estimated arrival date has passed. Please contact your shipping coordinator for the updated schedule.',
+              };
+            } else if (!ata) {
+              return {
+                success: false,
+                error: `The ETA for ${polPortCode} has passed but no ATA has been recorded. Please update the ATA before modifying bookings.`,
+              };
+            }
+          }
+        }
       }
     }
 
