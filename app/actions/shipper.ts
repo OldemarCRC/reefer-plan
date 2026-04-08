@@ -353,7 +353,7 @@ export async function getContractsForShipper(shipperCode: string, shipperId?: st
 // Returns future voyages for a specific service
 // ----------------------------------------------------------------------------
 
-export async function getUpcomingVoyagesForService(serviceId: string) {
+export async function getUpcomingVoyagesForService(serviceId: string, shipperPolPortCode?: string) {
   try {
     await connectDB();
 
@@ -368,25 +368,40 @@ export async function getUpcomingVoyagesForService(serviceId: string) {
       .limit(12)
       .lean();
 
-    return {
-      success: true,
-      data: (voyages as any[]).map((v: any) => ({
-        _id: v._id.toString(),
-        voyageNumber: v.voyageNumber,
-        vesselName: v.vesselName,
-        status: v.status,
-        departureDate: v.departureDate ? v.departureDate.toISOString() : null,
-        portCalls: (v.portCalls ?? []).map((pc: any) => ({
+    const mapped = (voyages as any[]).map((v: any) => ({
+      _id: v._id.toString(),
+      voyageNumber: v.voyageNumber,
+      vesselName: v.vesselName,
+      status: v.status,
+      departureDate: v.departureDate ? v.departureDate.toISOString() : null,
+      portCalls: (v.portCalls ?? []).map((pc: any) => {
+        const atd = pc.atd ? pc.atd.toISOString() : null;
+        const eta = pc.eta ? pc.eta.toISOString() : null;
+        // inOperation: vessel has arrived (ETA ≤ now) but not yet departed (no ATD)
+        const inOperation = !atd && !!pc.eta && new Date(pc.eta) <= now;
+        return {
           portCode: pc.portCode,
           portName: pc.portName,
           country: pc.country ?? '',
           sequence: pc.sequence,
-          eta: pc.eta ? pc.eta.toISOString() : null,
+          eta,
           etd: pc.etd ? pc.etd.toISOString() : null,
+          atd,
+          inOperation,
           operations: pc.operations ?? [],
-        })),
-      })),
-    };
+        };
+      }),
+    }));
+
+    // If a POL port code is provided, exclude voyages where that port has already departed
+    const filtered = shipperPolPortCode
+      ? mapped.filter(v => {
+          const polPc = v.portCalls.find((pc: any) => pc.portCode === shipperPolPortCode);
+          return !polPc || !polPc.atd;
+        })
+      : mapped;
+
+    return { success: true, data: filtered };
   } catch (error) {
     console.error('Error fetching voyages for service:', error);
     return { success: false, data: [], error: 'Failed to fetch voyages' };

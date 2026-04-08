@@ -185,6 +185,16 @@ export async function createBookingFromContract(data: unknown) {
           error: 'Loading operations for this port are closed. The vessel has already departed.',
         };
       }
+      // EXPORTERs are additionally blocked when the vessel is currently in port (ETA passed, ATD not yet recorded)
+      if ((session?.user as any)?.role === 'EXPORTER') {
+        const polEta = polPc?.eta ? new Date(polPc.eta) : null;
+        if (polEta && polEta <= new Date() && !polPc?.atd) {
+          return {
+            success: false,
+            error: 'Booking submissions are closed while the vessel is in port. Please contact your shipping coordinator.',
+          };
+        }
+      }
     }
 
     // Look up service for shortCode

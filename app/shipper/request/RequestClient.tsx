@@ -104,7 +104,8 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
       return;
     }
 
-    const result = await getUpcomingVoyagesForService(serviceId);
+    const polCode = selectedContract?.originPort?.portCode ?? undefined;
+    const result = await getUpcomingVoyagesForService(serviceId, polCode);
     setVoyagesLoading(false);
     if (!result.success || result.data.length === 0) {
       setError('No upcoming voyages found for this service.');
@@ -118,6 +119,21 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
   const handleStep2Next = () => {
     if (!selectedVoyageId) return;
     setError(null);
+
+    // Guard: check POL port call status before advancing
+    const polCode = selectedContract?.originPort?.portCode;
+    if (polCode) {
+      const polPc = selectedVoyage?.portCalls?.find((pc: any) => pc.portCode === polCode);
+      if (polPc?.atd) {
+        setError('This voyage has already departed from your loading port. Please select another voyage.');
+        return;
+      }
+      if (polPc?.inOperation) {
+        setError('Loading operations are currently in progress at your port. Please contact your shipping coordinator to book this voyage.');
+        return;
+      }
+    }
+
     // Lock to contract's cargoType if set; otherwise auto-select if only one option
     if (contractCargoType) {
       setCargoType(contractCargoType);
@@ -301,6 +317,9 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
               <label className={styles.formLabel}>Available Sailings — {selectedContract?.serviceCode}</label>
               {voyages.map((v: any) => {
                 const ports = [...v.portCalls].sort((a: any, b: any) => a.sequence - b.sequence);
+                const polCode = selectedContract?.originPort?.portCode;
+                const polPc = polCode ? ports.find((pc: any) => pc.portCode === polCode) : undefined;
+                const isInOperation = polPc?.inOperation === true;
                 return (
                   <div
                     key={v._id}
@@ -312,6 +331,11 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
                       <span className={styles.voyageOptionVessel}>{v.vesselName}</span>
                       <span className={styles.voyageOptionDep}>Dep. {fmtDate(v.departureDate)}</span>
                     </div>
+                    {isInOperation && (
+                      <div style={{ fontSize: '11px', color: '#f59e0b', background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.28)', borderRadius: '4px', padding: '2px 8px', marginBottom: '4px', display: 'inline-block' }}>
+                        ⚠ In port operations — contact coordinator
+                      </div>
+                    )}
                     <div className={styles.portChain}>
                       {ports.map((pc: any, i: number) => (
                         <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
