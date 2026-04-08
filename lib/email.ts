@@ -308,7 +308,7 @@ export async function sendBookingReceivedToShipper(
       <p>Thank you${to.name ? `, ${to.name}` : ''}. We have received your booking request and it is currently under review.</p>
       ${bookingDetailTable([
         ['Booking Number', data.bookingNumber],
-        ['Voyage / Vessel', `${data.voyageNumber}${data.vesselName ? ` · ${data.vesselName}` : ''}`],
+        ['Vessel / Voyage', `${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber}`],
         ['Service', data.serviceCode],
         ['Route', `${data.polPortName} → ${data.podPortName}`],
         ['Cargo Type', formatCargoType(data.cargoType)],
@@ -332,7 +332,7 @@ export async function sendBookingReceivedToShipper(
     to: toAddress,
     subject: `Booking Request Received — ${data.bookingNumber}`,
     html,
-    text: `Your booking request ${data.bookingNumber} has been received and is pending review.\nVoyage: ${data.voyageNumber} | Route: ${data.polPortName} → ${data.podPortName}`,
+    text: `Your booking request ${data.bookingNumber} has been received and is pending review.\nVessel / Voyage: ${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber} | Route: ${data.polPortName} → ${data.podPortName}`,
   });
 }
 
@@ -352,7 +352,7 @@ export async function sendBookingCreatedOnBehalf(
       <p>A booking has been submitted by <strong style="color: #f1f5f9;">${plannerName}</strong> on behalf of your company.</p>
       ${bookingDetailTable([
         ['Booking Number', data.bookingNumber],
-        ['Voyage / Vessel', `${data.voyageNumber}${data.vesselName ? ` · ${data.vesselName}` : ''}`],
+        ['Vessel / Voyage', `${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber}`],
         ['Service', data.serviceCode],
         ['Route', `${data.polPortName} → ${data.podPortName}`],
         ['Cargo Type', formatCargoType(data.cargoType)],
@@ -376,7 +376,7 @@ export async function sendBookingCreatedOnBehalf(
     to: toAddress,
     subject: `A booking has been created on your behalf — ${data.bookingNumber}`,
     html,
-    text: `A booking (${data.bookingNumber}) has been submitted by ${plannerName} on behalf of your company.\nVoyage: ${data.voyageNumber} | Route: ${data.polPortName} → ${data.podPortName}`,
+    text: `A booking (${data.bookingNumber}) has been submitted by ${plannerName} on behalf of your company.\nVessel / Voyage: ${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber} | Route: ${data.polPortName} → ${data.podPortName}`,
   });
 }
 
@@ -396,7 +396,7 @@ export async function sendBookingReceivedToPlanners(
       <p>A new booking request has been submitted and is awaiting your confirmation.</p>
       ${bookingDetailTable([
         ['Booking Number', data.bookingNumber],
-        ['Voyage / Vessel', `${data.voyageNumber}${data.vesselName ? ` · ${data.vesselName}` : ''}`],
+        ['Vessel / Voyage', `${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber}`],
         ['Service', data.serviceCode],
         ['Route', `${data.polPortName} → ${data.podPortName}`],
         ['Cargo Type', formatCargoType(data.cargoType)],
@@ -415,7 +415,7 @@ export async function sendBookingReceivedToPlanners(
       to: toAddress,
       subject: `New Booking Request — ${data.bookingNumber} — Action Required`,
       html,
-      text: `New booking ${data.bookingNumber} requires review.\nShipper: ${data.shipperName} | Voyage: ${data.voyageNumber} | Route: ${data.polPortName} → ${data.podPortName}`,
+      text: `New booking ${data.bookingNumber} requires review.\nShipper: ${data.shipperName} | Vessel / Voyage: ${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber} | Route: ${data.polPortName} → ${data.podPortName}`,
     });
   }));
 }
@@ -479,7 +479,7 @@ export async function sendBookingStatusChanged(
       </p>
       ${bookingDetailTable([
         ['Booking Number', data.bookingNumber],
-        ['Voyage / Vessel', `${data.voyageNumber}${data.vesselName ? ` · ${data.vesselName}` : ''}`],
+        ['Vessel / Voyage', `${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber}`],
         ['Route', `${data.polPortName} → ${data.podPortName}`],
         ['Cargo Type', formatCargoType(data.cargoType)],
       ])}
@@ -494,7 +494,7 @@ export async function sendBookingStatusChanged(
     to: toAddress,
     subject: subjectMap[data.newStatus] ?? `Booking ${data.bookingNumber} — status update`,
     html,
-    text: `Your booking ${data.bookingNumber} status: ${data.newStatus}.\nVoyage: ${data.voyageNumber}`,
+    text: `Your booking ${data.bookingNumber} status: ${data.newStatus}.\nVessel / Voyage: ${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber}`,
   });
 }
 
@@ -595,7 +595,7 @@ export async function sendBookingCancelledToShipper(
     body: `
       ${bookingDetailTable([
         ['Booking Number', data.bookingNumber],
-        ['Voyage / Vessel', `${data.voyageNumber}${data.vesselName ? ` · ${data.vesselName}` : ''}`],
+        ['Vessel / Voyage', `${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber}`],
       ])}
       <p>This booking was cancelled by <strong style="color: #f1f5f9;">${data.cancelledBy}</strong> on ${date} at ${time} UTC.</p>
     `,
@@ -606,7 +606,7 @@ export async function sendBookingCancelledToShipper(
     to: toEmail,
     subject: `Booking Cancelled — ${data.bookingNumber}`,
     html,
-    text: `Booking ${data.bookingNumber} (voyage ${data.voyageNumber}) was cancelled by ${data.cancelledBy} on ${date} at ${time} UTC.`,
+    text: `Booking ${data.bookingNumber} — Vessel / Voyage: ${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber} — was cancelled by ${data.cancelledBy} on ${date} at ${time} UTC.`,
   });
 }
 
@@ -625,7 +625,7 @@ export async function sendBookingCancelledToPlanners(
     body: `
       ${bookingDetailTable([
         ['Booking Number', data.bookingNumber],
-        ['Voyage / Vessel', `${data.voyageNumber}${data.vesselName ? ` · ${data.vesselName}` : ''}`],
+        ['Vessel / Voyage', `${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber}`],
         ['Shipper', data.shipperName],
       ])}
       <p>Cancelled by <strong style="color: #f1f5f9;">${data.cancelledBy}</strong> on ${date} at ${time} UTC.</p>
@@ -641,7 +641,7 @@ export async function sendBookingCancelledToPlanners(
       to: toAddress,
       subject: `Booking Cancelled by Shipper — ${data.bookingNumber}`,
       html,
-      text: `Booking ${data.bookingNumber} (voyage ${data.voyageNumber}) was cancelled by ${data.cancelledBy}.`,
+      text: `Booking ${data.bookingNumber} — Vessel / Voyage: ${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber} — was cancelled by ${data.cancelledBy}.`,
     });
   }));
 }
@@ -681,7 +681,7 @@ export async function sendBookingModifiedToShipper(
     body: `
       ${bookingDetailTable([
         ['Booking Number', data.bookingNumber],
-        ['Voyage / Vessel', `${data.voyageNumber}${data.vesselName ? ` · ${data.vesselName}` : ''}`],
+        ['Vessel / Voyage', `${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber}`],
         ['New Quantity', `${data.newQuantity} pallets`],
       ])}
       <p>The requested quantity has been updated to <strong style="color: #f1f5f9;">${data.newQuantity} pallets</strong> by <strong style="color: #f1f5f9;">${data.modifiedBy}</strong>.</p>
@@ -695,7 +695,7 @@ export async function sendBookingModifiedToShipper(
     to: toEmail,
     subject: `Booking Updated — ${data.bookingNumber}`,
     html,
-    text: `Booking ${data.bookingNumber} (voyage ${data.voyageNumber}) quantity updated to ${data.newQuantity} pallets by ${data.modifiedBy}.`,
+    text: `Booking ${data.bookingNumber} — Vessel / Voyage: ${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber} — quantity updated to ${data.newQuantity} pallets by ${data.modifiedBy}.`,
   });
 }
 
@@ -713,7 +713,7 @@ export async function sendBookingModifiedToPlanners(
     body: `
       ${bookingDetailTable([
         ['Booking Number', data.bookingNumber],
-        ['Voyage / Vessel', `${data.voyageNumber}${data.vesselName ? ` · ${data.vesselName}` : ''}`],
+        ['Vessel / Voyage', `${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber}`],
         ['Shipper', data.shipperName],
         ['New Quantity', `${data.newQuantity} pallets`],
       ])}
@@ -730,7 +730,7 @@ export async function sendBookingModifiedToPlanners(
       to: toAddress,
       subject: `Booking Modified by Shipper — ${data.bookingNumber}`,
       html,
-      text: `Booking ${data.bookingNumber} (voyage ${data.voyageNumber}) quantity updated to ${data.newQuantity} pallets by ${data.modifiedBy}.`,
+      text: `Booking ${data.bookingNumber} — Vessel / Voyage: ${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber} — quantity updated to ${data.newQuantity} pallets by ${data.modifiedBy}.`,
     });
   }));
 }
