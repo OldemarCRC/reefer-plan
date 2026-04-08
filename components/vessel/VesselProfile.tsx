@@ -844,15 +844,23 @@ export default function VesselProfile({
               </button>
             )}
             <div className={styles.detailHeader}>
-              <span className={styles.detailId}>{detail.id}</span>
-              <span
-                className={styles.detailZone}
-                style={{
-                  background: `${(detail.assignment.podColor ?? detail.assignment.zoneColor)}20`,
+              <span className={styles.detailId}>
+                {detail.id}
+                <span style={{
+                  color: 'rgba(255,255,255,0.35)',
+                  fontWeight: 400,
+                  margin: '0 4px',
+                }}>/</span>
+                <span style={{
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
                   color: detail.assignment.podColor ?? detail.assignment.zoneColor,
-                }}
-              >
-                {detail.assignment.zoneName}
+                  background: `${(detail.assignment.podColor ?? detail.assignment.zoneColor)}20`,
+                  padding: '1px 6px',
+                  borderRadius: '3px',
+                }}>
+                  {detail.assignment.zoneName}
+                </span>
               </span>
             </div>
             {/* Consignees */}
