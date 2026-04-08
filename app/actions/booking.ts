@@ -8,7 +8,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { BookingModel, ContractModel, VoyageModel, ServiceModel, OfficeModel, UserModel } from '@/lib/db/schemas';
+import { BookingModel, ContractModel, VoyageModel, VesselModel, ServiceModel, OfficeModel, UserModel } from '@/lib/db/schemas';
 import {
   sendBookingReceivedToShipper,
   sendBookingCreatedOnBehalf,
@@ -169,6 +169,10 @@ export async function createBookingFromContract(data: unknown) {
       return { success: false, error: 'Voyage not found' };
     }
 
+    // Resolve vessel name — voyage.vesselName may be empty for older documents
+    const vesselDoc = await VesselModel.findById((voyage as any).vesselId).select('name').lean();
+    const resolvedVesselName = (voyage as any).vesselName || (vesselDoc as any)?.name || '';
+
     // Reject if the POL port call has already been locked (vessel departed)
     const polPortCode = (contract.originPort as any)?.portCode;
     if (polPortCode) {
@@ -261,7 +265,7 @@ export async function createBookingFromContract(data: unknown) {
       contractId: validated.contractId,
       voyageId: validated.voyageId,
       voyageNumber: voyage.voyageNumber,
-      vesselName: (voyage as any).vesselName ?? '',
+      vesselName: resolvedVesselName,
       officeCode: contract.officeCode,
       serviceCode: contract.serviceCode,
       client: {
@@ -297,7 +301,7 @@ export async function createBookingFromContract(data: unknown) {
       bookingId: booking._id.toString(),
       bookingNumber,
       voyageNumber: voyage.voyageNumber,
-      vesselName: (voyage as any).vesselName ?? '',
+      vesselName: resolvedVesselName,
       serviceCode: contract.serviceCode,
       polPortName: (contract.originPort as any)?.portName ?? (contract.originPort as any)?.portCode ?? '',
       podPortName: (contract.destinationPort as any)?.portName ?? (contract.destinationPort as any)?.portCode ?? '',
@@ -405,6 +409,16 @@ export async function approveBooking(data: unknown) {
     booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
     await booking.save();
 
+    let resolvedVesselName = booking.vesselName ?? '';
+    if (!resolvedVesselName && booking.voyageId) {
+      const voy = await VoyageModel.findById(booking.voyageId).select('vesselName vesselId').lean();
+      resolvedVesselName = (voy as any)?.vesselName ?? '';
+      if (!resolvedVesselName && (voy as any)?.vesselId) {
+        const ves = await VesselModel.findById((voy as any).vesselId).select('name').lean();
+        resolvedVesselName = (ves as any)?.name ?? '';
+      }
+    }
+
     const shipperUserForApprove = await UserModel.findOne({
       shipperId: booking.shipperId,
     }).select('email').lean() as any;
@@ -417,7 +431,7 @@ export async function approveBooking(data: unknown) {
           bookingId: booking._id.toString(),
           bookingNumber: booking.bookingNumber,
           voyageNumber: booking.voyageNumber ?? '',
-          vesselName: booking.vesselName ?? '',
+          vesselName: resolvedVesselName,
           serviceCode: booking.serviceCode ?? '',
           polPortName: (booking.pol as any)?.portName ?? (booking.pol as any)?.portCode ?? '',
           podPortName: (booking.pod as any)?.portName ?? (booking.pod as any)?.portCode ?? '',
@@ -475,6 +489,16 @@ export async function rejectBooking(data: unknown) {
     booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
     await booking.save();
 
+    let resolvedVesselName = booking.vesselName ?? '';
+    if (!resolvedVesselName && booking.voyageId) {
+      const voy = await VoyageModel.findById(booking.voyageId).select('vesselName vesselId').lean();
+      resolvedVesselName = (voy as any)?.vesselName ?? '';
+      if (!resolvedVesselName && (voy as any)?.vesselId) {
+        const ves = await VesselModel.findById((voy as any).vesselId).select('name').lean();
+        resolvedVesselName = (ves as any)?.name ?? '';
+      }
+    }
+
     const shipperUserForReject = await UserModel.findOne({
       shipperId: booking.shipperId,
     }).select('email').lean() as any;
@@ -487,7 +511,7 @@ export async function rejectBooking(data: unknown) {
           bookingId: booking._id.toString(),
           bookingNumber: booking.bookingNumber,
           voyageNumber: booking.voyageNumber ?? '',
-          vesselName: booking.vesselName ?? '',
+          vesselName: resolvedVesselName,
           serviceCode: booking.serviceCode ?? '',
           polPortName: (booking.pol as any)?.portName ?? (booking.pol as any)?.portCode ?? '',
           podPortName: (booking.pod as any)?.portName ?? (booking.pod as any)?.portCode ?? '',
@@ -537,13 +561,23 @@ export async function cancelBooking(data: unknown) {
     booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
     await booking.save();
 
+    let resolvedVesselName = booking.vesselName ?? '';
+    if (!resolvedVesselName && booking.voyageId) {
+      const voy = await VoyageModel.findById(booking.voyageId).select('vesselName vesselId').lean();
+      resolvedVesselName = (voy as any)?.vesselName ?? '';
+      if (!resolvedVesselName && (voy as any)?.vesselId) {
+        const ves = await VesselModel.findById((voy as any).vesselId).select('name').lean();
+        resolvedVesselName = (ves as any)?.name ?? '';
+      }
+    }
+
     // Notify the other party
     if (role === 'EXPORTER') {
       const plannerRecipients = await lookupPlannerRecipients(booking.serviceCode ?? '');
       sendBookingCancelledToPlanners(plannerRecipients, {
         bookingNumber: booking.bookingNumber,
         voyageNumber: booking.voyageNumber ?? '',
-        vesselName: booking.vesselName ?? '',
+        vesselName: resolvedVesselName,
         shipperName: booking.shipper?.name ?? '',
         cancelledBy: (session.user as any).email ?? '',
       }).catch(err => console.error('[email] cancelBooking planner notify failed:', err.message));
@@ -555,7 +589,7 @@ export async function cancelBooking(data: unknown) {
         sendBookingCancelledToShipper(shipperUserForCancel.email, {
           bookingNumber: booking.bookingNumber,
           voyageNumber: booking.voyageNumber ?? '',
-          vesselName: booking.vesselName ?? '',
+          vesselName: resolvedVesselName,
           cancelledBy: session.user.name ?? (session.user as any).email ?? 'system',
         }).catch(err => console.error('[email] cancelBooking shipper notify failed:', err.message));
       } else {
@@ -640,13 +674,23 @@ export async function updateBookingQuantity(data: unknown) {
     }
     await booking.save();
 
+    let resolvedVesselName = booking.vesselName ?? '';
+    if (!resolvedVesselName && booking.voyageId) {
+      const voy = await VoyageModel.findById(booking.voyageId).select('vesselName vesselId').lean();
+      resolvedVesselName = (voy as any)?.vesselName ?? '';
+      if (!resolvedVesselName && (voy as any)?.vesselId) {
+        const ves = await VesselModel.findById((voy as any).vesselId).select('name').lean();
+        resolvedVesselName = (ves as any)?.name ?? '';
+      }
+    }
+
     // Notify the other party
     if (isExporter) {
       const plannerRecipients = await lookupPlannerRecipients(booking.serviceCode ?? '');
       sendBookingModifiedToPlanners(plannerRecipients, {
         bookingNumber: booking.bookingNumber,
         voyageNumber: booking.voyageNumber ?? '',
-        vesselName: booking.vesselName ?? '',
+        vesselName: resolvedVesselName,
         shipperName: booking.shipper?.name ?? '',
         newQuantity: validated.requestedQuantity,
         modifiedBy: (session.user as any).email ?? '',
@@ -660,7 +704,7 @@ export async function updateBookingQuantity(data: unknown) {
           bookingId: booking._id.toString(),
           bookingNumber: booking.bookingNumber,
           voyageNumber: booking.voyageNumber ?? '',
-          vesselName: booking.vesselName ?? '',
+          vesselName: resolvedVesselName,
           newQuantity: validated.requestedQuantity,
           modifiedBy: session.user.name ?? (session.user as any).email ?? 'system',
         }).catch(err => console.error('[email] updateBookingQuantity shipper notify failed:', err.message));
