@@ -378,36 +378,32 @@
   outline: none;
 }
 
-/* --- Actual arrival/departure display (ATA/ATD) --- */
+/* --- Actual arrival/departure display (ATA/ATD columns) --- */
 
-.actualValue {
-  font-size: 10px;
-  color: var(--color-text-muted);
+.ataValue {
   font-family: var(--font-mono);
-  margin-top: 3px;
+  font-size: var(--text-xs);
+  color: #22c55e;
+  white-space: nowrap;
+}
+
+.atdValue {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.ataMissing {
+  font-size: var(--text-xs);
+  color: #f59e0b;
+  cursor: default;
 }
 
 .actualError {
   font-size: 10px;
   color: var(--color-danger);
   margin-top: 3px;
-}
-
-/* --- Actual arrival/departure edit inputs --- */
-
-.actualInputRow {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 5px;
-}
-
-.actualLabel {
-  font-size: 10px;
-  color: var(--color-text-muted);
-  font-weight: 600;
-  font-family: var(--font-mono);
-  min-width: 28px;
 }
 
 .dateTimeInput {

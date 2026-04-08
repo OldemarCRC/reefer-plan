@@ -591,7 +591,9 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
               <th>Code</th>
               <th>Port</th>
               <th>ETA</th>
+              <th>ATA <span style={{ fontSize: '9px', color: '#22c55e', display: 'block', fontWeight: 400 }}>actual</span></th>
               <th>ETD</th>
+              <th>ATD <span style={{ fontSize: '9px', color: '#94a3b8', display: 'block', fontWeight: 400 }}>actual</span></th>
               <th>Operations</th>
               <th>Status</th>
               <th></th>
@@ -675,9 +677,10 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
                     )}
                   </td>
 
-                  {/* ETA / ETD */}
+                  {/* ETA | ATA | ETD | ATD — 4 separate columns */}
                   {isEditing && editMode === 'dates' ? (
                     <>
+                      {/* ETA */}
                       <td>
                         <input
                           type="date"
@@ -685,29 +688,31 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
                           value={editEta}
                           onChange={e => setEditEta(e.target.value)}
                         />
-                        <div className={clientStyles.actualInputRow}>
-                          <label className={clientStyles.actualLabel}>ATA</label>
-                          <input
-                            type="datetime-local"
-                            className={clientStyles.dateTimeInput}
-                            value={editAta}
-                            min={editEta ? new Date(editEta).toISOString().slice(0, 16) : undefined}
-                            max={new Date().toISOString().slice(0, 16)}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setEditAta(val);
-                              if (val && new Date(val) > new Date()) {
-                                setAtaError('ATA cannot be in the future');
-                              } else if (editEta && val && new Date(val) < new Date(editEta)) {
-                                setAtaError('ATA cannot be before ETA');
-                              } else {
-                                setAtaError('');
-                              }
-                            }}
-                          />
-                        </div>
+                      </td>
+                      {/* ATA */}
+                      <td>
+                        <input
+                          type="datetime-local"
+                          className={clientStyles.dateTimeInput}
+                          value={editAta}
+                          min={editEta ? new Date(editEta).toISOString().slice(0, 16) : undefined}
+                          max={new Date().toISOString().slice(0, 16)}
+                          style={{ borderColor: ataError ? 'rgba(239,68,68,0.8)' : editAta ? 'rgba(34,197,94,0.7)' : undefined }}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setEditAta(val);
+                            if (val && new Date(val) > new Date()) {
+                              setAtaError('ATA cannot be in the future');
+                            } else if (editEta && val && new Date(val) < new Date(editEta)) {
+                              setAtaError('ATA cannot be before ETA');
+                            } else {
+                              setAtaError('');
+                            }
+                          }}
+                        />
                         {ataError && <div className={clientStyles.actualError}>{ataError}</div>}
                       </td>
+                      {/* ETD */}
                       <td>
                         <input
                           type="date"
@@ -715,44 +720,54 @@ export function PortCallsEditor({ voyageId, portCalls: initialPortCalls, service
                           value={editEtd}
                           onChange={e => setEditEtd(e.target.value)}
                         />
-                        <div className={clientStyles.actualInputRow}>
-                          <label className={clientStyles.actualLabel}>ATD</label>
-                          <input
-                            type="datetime-local"
-                            className={clientStyles.dateTimeInput}
-                            value={editAtd}
-                            min={editAta ? new Date(editAta).toISOString().slice(0, 16) : editEta ? new Date(editEta).toISOString().slice(0, 16) : undefined}
-                            max={new Date().toISOString().slice(0, 16)}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setEditAtd(val);
-                              if (val && new Date(val) > new Date()) {
-                                setAtdError('ATD cannot be in the future');
-                              } else if (editAta && val && new Date(val) < new Date(editAta)) {
-                                setAtdError('ATD cannot be before ATA');
-                              } else if (!editAta && editEta && val && new Date(val) < new Date(editEta)) {
-                                setAtdError('ATD cannot be before ETA');
-                              } else {
-                                setAtdError('');
-                              }
-                            }}
-                          />
-                        </div>
+                      </td>
+                      {/* ATD */}
+                      <td>
+                        <input
+                          type="datetime-local"
+                          className={clientStyles.dateTimeInput}
+                          value={editAtd}
+                          min={editAta ? new Date(editAta).toISOString().slice(0, 16) : editEta ? new Date(editEta).toISOString().slice(0, 16) : undefined}
+                          max={new Date().toISOString().slice(0, 16)}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setEditAtd(val);
+                            if (val && new Date(val) > new Date()) {
+                              setAtdError('ATD cannot be in the future');
+                            } else if (editAta && val && new Date(val) < new Date(editAta)) {
+                              setAtdError('ATD cannot be before ATA');
+                            } else if (!editAta && editEta && val && new Date(val) < new Date(editEta)) {
+                              setAtdError('ATD cannot be before ETA');
+                            } else {
+                              setAtdError('');
+                            }
+                          }}
+                        />
                         {atdError && <div className={clientStyles.actualError}>{atdError}</div>}
                       </td>
                     </>
                   ) : (
                     <>
-                      <td className={styles.cellMono}>
-                        {formatDate(pc.eta)}
-                        {pc.ata && (
-                          <div className={clientStyles.actualValue}>ATA {formatDateTime(pc.ata)}</div>
+                      {/* ETA */}
+                      <td className={styles.cellMono}>{formatDate(pc.eta)}</td>
+                      {/* ATA */}
+                      <td>
+                        {pc.ata ? (
+                          <span className={clientStyles.ataValue}>{formatDateTime(pc.ata)}</span>
+                        ) : pc.eta && new Date(pc.eta) < new Date() ? (
+                          <span className={clientStyles.ataMissing} title="ATA not recorded">·</span>
+                        ) : (
+                          <span className={styles.cellMuted}>—</span>
                         )}
                       </td>
-                      <td className={styles.cellMono}>
-                        {formatDate(pc.etd)}
-                        {pc.atd && (
-                          <div className={clientStyles.actualValue}>ATD {formatDateTime(pc.atd)}</div>
+                      {/* ETD */}
+                      <td className={styles.cellMono}>{formatDate(pc.etd)}</td>
+                      {/* ATD */}
+                      <td>
+                        {pc.atd ? (
+                          <span className={clientStyles.atdValue}>{formatDateTime(pc.atd)}</span>
+                        ) : (
+                          <span className={styles.cellMuted}>—</span>
                         )}
                       </td>
                     </>
