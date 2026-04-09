@@ -66,6 +66,7 @@ export interface DisplayBooking {
   _id: string;
   bookingNumber: string;
   voyageNumber: string;
+  vesselName: string;
   clientName: string;
   shipperName: string;
   consigneeName: string;
@@ -148,7 +149,7 @@ interface BookingRow {
 
 interface BookingsClientProps {
   bookings: DisplayBooking[];
-  voyageNumbers: string[];
+  voyageOptions: { voyageNumber: string; vesselName: string }[];
   contracts: ContractOption[];
   voyages: VoyageOption[];
   confirmedCount: number;
@@ -161,7 +162,7 @@ interface BookingsClientProps {
 
 export default function BookingsClient({
   bookings,
-  voyageNumbers,
+  voyageOptions,
   contracts,
   voyages,
   confirmedCount,
@@ -172,6 +173,9 @@ export default function BookingsClient({
   const [filterVoyage, setFilterVoyage] = useState('');
   const [filterCargo, setFilterCargo] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterShipper, setFilterShipper] = useState('');
+  const [filterConsignee, setFilterConsignee] = useState('');
+  const [filterRoute, setFilterRoute] = useState('');
 
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -184,6 +188,9 @@ export default function BookingsClient({
       if (filterStatus && b.status !== filterStatus) return false;
       if (filterCargo && b.cargoType !== filterCargo) return false;
       if (filterVoyage && b.voyageNumber !== filterVoyage) return false;
+      if (filterShipper && b.shipperName !== filterShipper) return false;
+      if (filterConsignee && b.consigneeName !== filterConsignee) return false;
+      if (filterRoute && `${b.polCode} → ${b.podCode}` !== filterRoute) return false;
       if (searchText) {
         const q = searchText.toLowerCase();
         const match =
@@ -195,11 +202,23 @@ export default function BookingsClient({
       }
       return true;
     });
-  }, [bookings, filterStatus, filterCargo, filterVoyage, searchText]);
+  }, [bookings, filterStatus, filterCargo, filterVoyage, filterShipper, filterConsignee, filterRoute, searchText]);
 
   const cargoTypes = useMemo(() => {
     return [...new Set(bookings.map((b) => b.cargoType))].sort();
   }, [bookings]);
+
+  const shippers = useMemo(() =>
+    [...new Set(bookings.map(b => b.shipperName).filter(Boolean))].sort()
+  , [bookings]);
+
+  const consignees = useMemo(() =>
+    [...new Set(bookings.map(b => b.consigneeName).filter(Boolean))].sort()
+  , [bookings]);
+
+  const routes = useMemo(() =>
+    [...new Set(bookings.map(b => `${b.polCode} → ${b.podCode}`).filter(b => b !== ' → '))].sort()
+  , [bookings]);
 
   return (
     <>
@@ -231,8 +250,10 @@ export default function BookingsClient({
           onChange={(e) => setFilterVoyage(e.target.value)}
         >
           <option value="">All Voyages</option>
-          {voyageNumbers.map((v) => (
-            <option key={v} value={v}>{v}</option>
+          {voyageOptions.map(v => (
+            <option key={v.voyageNumber} value={v.voyageNumber}>
+              {v.vesselName ? `${v.vesselName} ${v.voyageNumber}` : v.voyageNumber}
+            </option>
           ))}
         </select>
         <select
@@ -258,6 +279,21 @@ export default function BookingsClient({
           <option value="REJECTED">Rejected</option>
           <option value="CANCELLED">Cancelled</option>
         </select>
+        <select className={styles.select} value={filterShipper}
+          onChange={e => setFilterShipper(e.target.value)}>
+          <option value="">All Shippers</option>
+          {shippers.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select className={styles.select} value={filterConsignee}
+          onChange={e => setFilterConsignee(e.target.value)}>
+          <option value="">All Consignees</option>
+          {consignees.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select className={styles.select} value={filterRoute}
+          onChange={e => setFilterRoute(e.target.value)}>
+          <option value="">All Routes</option>
+          {routes.map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
       </div>
 
       {/* Table */}
@@ -267,9 +303,9 @@ export default function BookingsClient({
             <thead>
               <tr>
                 <th>Booking</th>
-                <th>Voyage</th>
                 <th>Service</th>
-                <th>Client</th>
+                <th>Vessel</th>
+                <th>Voyage</th>
                 <th>Shipper</th>
                 <th>Consignee</th>
                 <th>Cargo</th>
@@ -300,9 +336,9 @@ export default function BookingsClient({
                         <EstimateSourceBadge source={b.estimateSource} />
                       </div>
                     </td>
-                    <td className={styles.cellMuted}>{b.voyageNumber}</td>
                     <td className={styles.cellMuted}>{b.serviceCode || '—'}</td>
-                    <td>{b.clientName}</td>
+                    <td className={styles.cellMuted}>{b.vesselName || '—'}</td>
+                    <td className={styles.cellMuted}>{b.voyageNumber}</td>
                     <td className={styles.cellMuted}>{b.shipperName}</td>
                     <td className={styles.cellMuted}>{b.consigneeName}</td>
                     <td>

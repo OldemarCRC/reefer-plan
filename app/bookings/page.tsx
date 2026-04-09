@@ -27,6 +27,7 @@ export default async function BookingsPage() {
     _id: b._id,
     bookingNumber: b.bookingNumber,
     voyageNumber: b.voyageId?.voyageNumber || b.voyageNumber || 'N/A',
+    vesselName: b.vesselName ?? b.voyageId?.vesselName ?? '',
     clientName: b.clientName || b.client?.name || 'Unknown',
     shipperName: b.shipper?.name || '—',
     consigneeName: b.consignee?.name || '—',
@@ -89,16 +90,18 @@ export default async function BookingsPage() {
     b.status === 'PENDING' || b.status === 'STANDBY' || b.status === 'PARTIAL'
   ).length;
 
-  const voyageNumbers = [
-    ...new Set(displayBookings.map((b) => b.voyageNumber).filter((v) => v !== 'N/A')),
-  ];
+  const voyageOptions = [...new Map(
+    displayBookings
+      .filter((b) => b.voyageNumber !== 'N/A')
+      .map(b => [b.voyageNumber, { voyageNumber: b.voyageNumber, vesselName: b.vesselName ?? '' }])
+  ).values()].sort((a, b) => a.voyageNumber.localeCompare(b.voyageNumber));
 
   return (
     <AppShell>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', minWidth: 0, width: '100%' }}>
         <BookingsClient
           bookings={displayBookings}
-          voyageNumbers={voyageNumbers}
+          voyageOptions={voyageOptions}
           contracts={contracts}
           voyages={voyages}
           confirmedCount={confirmed}
