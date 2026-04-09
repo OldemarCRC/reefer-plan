@@ -7,9 +7,12 @@ import type { DisplayBooking, ContractOption, VoyageOption } from './BookingsCli
 import type { CargoType } from '@/types/models';
 import { auth } from '@/auth';
 
-export default async function BookingsPage({ searchParams }: { searchParams?: Promise<{ archived?: string }> }) {
+const ARCHIVED_STATUSES = ['CANCELLED', 'REJECTED'];
+
+export default async function BookingsPage({ searchParams }: { searchParams?: Promise<{ archived?: string; status?: string }> }) {
   const params = await searchParams;
-  const showArchived = params?.archived === 'true';
+  const statusParam = params?.status ?? '';
+  const showArchived = params?.archived === 'true' || ARCHIVED_STATUSES.includes(statusParam);
   const [session, bookingsResult, contractsResult, voyagesResult] = await Promise.all([
     auth(),
     getBookings(showArchived),
@@ -109,6 +112,7 @@ export default async function BookingsPage({ searchParams }: { searchParams?: Pr
           confirmedCount={confirmed}
           pendingCount={pending}
           showArchived={showArchived}
+          initialStatusFilter={statusParam}
         />
       </div>
     </AppShell>

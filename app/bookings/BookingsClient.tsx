@@ -155,6 +155,7 @@ interface BookingsClientProps {
   confirmedCount: number;
   pendingCount: number;
   showArchived: boolean;
+  initialStatusFilter?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -169,12 +170,13 @@ export default function BookingsClient({
   confirmedCount,
   pendingCount,
   showArchived,
+  initialStatusFilter = '',
 }: BookingsClientProps) {
   const router = useRouter();
   const [searchText, setSearchText] = useState('');
   const [filterVoyage, setFilterVoyage] = useState('');
   const [filterCargo, setFilterCargo] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
+  const [filterStatus, setFilterStatus] = useState(initialStatusFilter);
   const [filterShipper, setFilterShipper] = useState('');
   const [filterConsignee, setFilterConsignee] = useState('');
   const [filterRoute, setFilterRoute] = useState('');
@@ -271,7 +273,25 @@ export default function BookingsClient({
         <select
           className={styles.select}
           value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
+          onChange={e => {
+            const val = e.target.value;
+            setFilterStatus(val);
+            const archivedStatuses = ['CANCELLED', 'REJECTED'];
+            if (archivedStatuses.includes(val)) {
+              const p = new URLSearchParams(window.location.search);
+              p.set('archived', 'true');
+              p.set('status', val);
+              router.push(`/bookings?${p.toString()}`);
+            } else if (val === '') {
+              const p = new URLSearchParams(window.location.search);
+              // If archived was set via a status param, clear both; otherwise keep explicit archived toggle
+              if (p.has('status')) {
+                p.delete('status');
+                p.delete('archived');
+              }
+              router.push(`/bookings?${p.toString()}`);
+            }
+          }}
         >
           <option value="">{showArchived ? 'All Statuses' : 'All Active Statuses'}</option>
           <option value="PENDING">Pending</option>
