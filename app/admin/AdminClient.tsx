@@ -3963,7 +3963,14 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
       {activeTab === 'ports'    && <PortsTab initialPorts={ports} unecePorts={unecePorts} />}
       {activeTab === 'shippers' && <ShippersTab initialShippers={shippers} />}
       {activeTab === 'offices'  && <OfficesTab initialOffices={offices} allServices={services as AdminService[]} />}
-      {activeTab === 'bookings'  && <BookingsTab initialBookings={bookings} showArchived={showArchivedBookings} initialStatusFilter={initialBookingStatusFilter} />}
+      {activeTab === 'bookings'  && (
+        <BookingsTab
+          key={`bookings-${showArchivedBookings}-${initialBookingStatusFilter}`}
+          initialBookings={bookings}
+          showArchived={showArchivedBookings}
+          initialStatusFilter={initialBookingStatusFilter}
+        />
+      )}
       {activeTab === 'customers' && <CustomersTab initialCustomers={customers} />}
     </div>
   );
