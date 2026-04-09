@@ -898,17 +898,38 @@ export async function markPlanSent(data: unknown) {
     const vesselName: string = (plan.vesselId as any)?.name ?? plan.vesselName ?? 'Unknown Vessel';
     const voyageNumber: string = (plan.voyageId as any)?.voyageNumber ?? plan.voyageNumber ?? 'N/A';
 
-    // Look up booking numbers for cargo positions
-    const rawBookingIds = (plan.cargoPositions ?? [])
-      .map((p: any) => p.bookingId)
-      .filter(Boolean);
-    const uniqueIds = [...new Set(rawBookingIds.map((id: any) => String(id)))];
-    const bookingDocs = uniqueIds.length > 0
-      ? await BookingModel.find({ _id: { $in: uniqueIds } }, 'bookingNumber').lean()
-      : [];
-    const bookingMap: Record<string, string> = Object.fromEntries(
-      (bookingDocs as any[]).map((b: any) => [String(b._id), b.bookingNumber as string])
-    );
+    // Build bookingNumber map from snapshots saved on cargoPositions first.
+    // Only fall back to DB lookup for legacy positions that predate snapshot saving.
+    const bookingMap: Record<string, string> = {};
+
+    // Step 1: populate from snapshots (no DB query needed)
+    for (const pos of (plan.cargoPositions ?? []) as any[]) {
+      const bid = String(pos.bookingId ?? '');
+      if (bid && pos.bookingNumber) {
+        bookingMap[bid] = pos.bookingNumber;
+      }
+    }
+
+    // Step 2: DB fallback only for real ObjectId bookingIds missing a snapshot
+    const missingIds = [...new Set(
+      ((plan.cargoPositions ?? []) as any[])
+        .map((p: any) => String(p.bookingId ?? ''))
+        .filter((id: string) =>
+          id &&
+          !id.startsWith('CONTRACT-ESTIMATE-') &&
+          /^[a-f\d]{24}$/i.test(id) &&
+          !bookingMap[id]
+        )
+    )];
+    if (missingIds.length > 0) {
+      const fallbackDocs = await BookingModel.find(
+        { _id: { $in: missingIds } },
+        'bookingNumber'
+      ).lean();
+      for (const b of fallbackDocs as any[]) {
+        bookingMap[String(b._id)] = (b as any).bookingNumber;
+      }
+    }
 
     // Zone lookup: compartmentId → { zoneId, temp }
     const zoneByComp: Record<string, { zoneId: string; temp: number }> = {};
