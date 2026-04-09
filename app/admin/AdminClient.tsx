@@ -193,6 +193,7 @@ interface AdminBooking {
   _id: string;
   bookingNumber: string;
   voyageNumber: string;
+  vesselName?: string;
   shipper: { name: string; code: string };
   consignee: { name: string; code: string };
   cargoType: string;
@@ -4514,10 +4515,17 @@ function BookingsTab({ initialBookings }: { initialBookings: AdminBooking[] }) {
   const [cancelTarget, setCancelTarget] = useState<AdminBooking | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<AdminBooking | null>(null);
 
-  const voyageNumbers = useMemo(
-    () => [...new Set(bookings.map((b: any) => b.voyageNumber).filter(Boolean))].sort() as string[],
-    [bookings]
-  );
+  const voyageOptions = useMemo(() =>
+    [...new Map(
+      bookings
+        .filter((b: any) => b.voyageNumber)
+        .map((b: any) => [b.voyageNumber, {
+          voyageNumber: b.voyageNumber as string,
+          vesselName: (b.vesselName ?? '') as string,
+        }])
+    ).values()]
+    .sort((a, b) => a.voyageNumber.localeCompare(b.voyageNumber))
+  , [bookings]);
 
   const filtered = useMemo(() => {
     return bookings.filter((b: any) => {
@@ -4552,6 +4560,7 @@ function BookingsTab({ initialBookings }: { initialBookings: AdminBooking[] }) {
             <DRow label="Booking #" value={<code>{b.bookingNumber}</code>} />
             <DRow label="Status" value={<BookingStatusBadge status={b.status} />} />
             <DRow label="Voyage" value={b.voyageNumber} />
+            <DRow label="Vessel" value={b.vesselName || '—'} />
             <DRow label="Created" value={fmtDate(b.createdAt)} />
             <DRow label="Shipper Name" value={b.shipper?.name} />
             <DRow label="Shipper Code" value={b.shipper?.code} mono />
@@ -4611,8 +4620,10 @@ function BookingsTab({ initialBookings }: { initialBookings: AdminBooking[] }) {
             onChange={e => setVoyageFilter(e.target.value)}
           >
             <option value="">All Voyages</option>
-            {voyageNumbers.map((v: any) => (
-              <option key={v} value={v}>{v}</option>
+            {voyageOptions.map(v => (
+              <option key={v.voyageNumber} value={v.voyageNumber}>
+                {v.vesselName ? `${v.vesselName} ${v.voyageNumber}` : v.voyageNumber}
+              </option>
             ))}
           </select>
         </div>
@@ -4623,6 +4634,7 @@ function BookingsTab({ initialBookings }: { initialBookings: AdminBooking[] }) {
           <thead>
             <tr>
               <th>Booking #</th>
+              <th>Vessel</th>
               <th>Voyage</th>
               <th>Shipper</th>
               <th>Consignee</th>
@@ -4636,11 +4648,12 @@ function BookingsTab({ initialBookings }: { initialBookings: AdminBooking[] }) {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={10} className={styles.emptyCell}>No bookings match the current filters.</td></tr>
+              <tr><td colSpan={11} className={styles.emptyCell}>No bookings match the current filters.</td></tr>
             ) : (
               filtered.map((b: any) => (
                 <tr key={b._id} className={styles.trClickable} onClick={() => setSelectedBooking(b)}>
                   <td className={styles.cellMono}>{b.bookingNumber}</td>
+                  <td className={styles.cellSecondary}>{b.vesselName || '—'}</td>
                   <td className={styles.cellSecondary}>{b.voyageNumber || '—'}</td>
                   <td>{b.shipper?.name || '—'}</td>
                   <td className={styles.cellSecondary}>{b.consignee?.name || '—'}</td>
