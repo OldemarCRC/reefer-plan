@@ -154,6 +154,7 @@ interface BookingsClientProps {
   voyages: VoyageOption[];
   confirmedCount: number;
   pendingCount: number;
+  showArchived: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -167,6 +168,7 @@ export default function BookingsClient({
   voyages,
   confirmedCount,
   pendingCount,
+  showArchived,
 }: BookingsClientProps) {
   const router = useRouter();
   const [searchText, setSearchText] = useState('');
@@ -271,7 +273,7 @@ export default function BookingsClient({
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
         >
-          <option value="">All Status</option>
+          <option value="">{showArchived ? 'All Statuses' : 'All Active Statuses'}</option>
           <option value="PENDING">Pending</option>
           <option value="CONFIRMED">Confirmed</option>
           <option value="PARTIAL">Partial</option>
@@ -294,6 +296,20 @@ export default function BookingsClient({
           <option value="">All Routes</option>
           {routes.map(r => <option key={r} value={r}>{r}</option>)}
         </select>
+        <button
+          className={showArchived ? styles.btnToggleActive : styles.btnToggle}
+          onClick={() => {
+            const params = new URLSearchParams(window.location.search);
+            if (showArchived) {
+              params.delete('archived');
+            } else {
+              params.set('archived', 'true');
+            }
+            router.push(`/bookings?${params.toString()}`);
+          }}
+        >
+          {showArchived ? 'Hide Archived' : 'Show Archived'}
+        </button>
       </div>
 
       {/* Table */}

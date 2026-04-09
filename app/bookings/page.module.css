@@ -81,6 +81,30 @@
   cursor: pointer;
 }
 
+.btnToggle {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  margin-left: auto;
+}
+.btnToggle:hover {
+  border-color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+}
+.btnToggleActive {
+  composes: btnToggle;
+  border-color: var(--color-blue);
+  color: var(--color-blue-light);
+  background: var(--color-blue-muted);
+}
+
 /* --- Table card --- */
 
 .tableCard {

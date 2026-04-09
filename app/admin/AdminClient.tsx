@@ -3911,9 +3911,10 @@ interface AdminClientProps {
   bookings: AdminBooking[];
   customers: AdminCustomer[];
   initialTab?: string;
+  showArchivedBookings?: boolean;
 }
 
-export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports, shippers, unecePorts, bookings, customers, initialTab = 'voyages' }: AdminClientProps) {
+export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports, shippers, unecePorts, bookings, customers, initialTab = 'voyages', showArchivedBookings = false }: AdminClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>((initialTab as Tab) || 'voyages');
 
@@ -3961,7 +3962,7 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
       {activeTab === 'ports'    && <PortsTab initialPorts={ports} unecePorts={unecePorts} />}
       {activeTab === 'shippers' && <ShippersTab initialShippers={shippers} />}
       {activeTab === 'offices'  && <OfficesTab initialOffices={offices} allServices={services as AdminService[]} />}
-      {activeTab === 'bookings'  && <BookingsTab initialBookings={bookings} />}
+      {activeTab === 'bookings'  && <BookingsTab initialBookings={bookings} showArchived={showArchivedBookings} />}
       {activeTab === 'customers' && <CustomersTab initialCustomers={customers} />}
     </div>
   );
@@ -4505,7 +4506,7 @@ function CustomersTab({ initialCustomers }: { initialCustomers: AdminCustomer[] 
 // Bookings Tab
 // ---------------------------------------------------------------------------
 
-function BookingsTab({ initialBookings }: { initialBookings: AdminBooking[] }) {
+function BookingsTab({ initialBookings, showArchived = false }: { initialBookings: AdminBooking[]; showArchived?: boolean }) {
   const router = useRouter();
   const [bookings, setBookings] = useState<AdminBooking[]>(initialBookings);
   const [statusFilter, setStatusFilter] = useState('');
@@ -4606,7 +4607,7 @@ function BookingsTab({ initialBookings }: { initialBookings: AdminBooking[] }) {
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
           >
-            <option value="">All Statuses</option>
+            <option value="">{showArchived ? 'All Statuses' : 'All Active Statuses'}</option>
             <option value="PENDING">Pending</option>
             <option value="CONFIRMED">Confirmed</option>
             <option value="PARTIAL">Partial</option>
@@ -4626,6 +4627,23 @@ function BookingsTab({ initialBookings }: { initialBookings: AdminBooking[] }) {
               </option>
             ))}
           </select>
+        </div>
+        <div className={styles.toolbarRight}>
+          <button
+            className={showArchived ? styles.btnWarn : styles.btnSecondary}
+            onClick={() => {
+              const params = new URLSearchParams(window.location.search);
+              if (showArchived) {
+                params.delete('archived');
+              } else {
+                params.set('archived', 'true');
+              }
+              params.set('tab', 'bookings');
+              router.push(`/admin?${params.toString()}`);
+            }}
+          >
+            {showArchived ? 'Hide Archived' : 'Show Archived'}
+          </button>
         </div>
       </div>
 

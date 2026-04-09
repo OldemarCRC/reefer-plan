@@ -7,10 +7,12 @@ import type { DisplayBooking, ContractOption, VoyageOption } from './BookingsCli
 import type { CargoType } from '@/types/models';
 import { auth } from '@/auth';
 
-export default async function BookingsPage() {
+export default async function BookingsPage({ searchParams }: { searchParams?: Promise<{ archived?: string }> }) {
+  const params = await searchParams;
+  const showArchived = params?.archived === 'true';
   const [session, bookingsResult, contractsResult, voyagesResult] = await Promise.all([
     auth(),
-    getBookings(),
+    getBookings(showArchived),
     getActiveContracts(),
     getVoyages(),
   ]);
@@ -106,6 +108,7 @@ export default async function BookingsPage() {
           voyages={voyages}
           confirmedCount={confirmed}
           pendingCount={pending}
+          showArchived={showArchived}
         />
       </div>
     </AppShell>

@@ -17,9 +17,10 @@ export const metadata = { title: 'Admin — Reefer Planner' };
 
 const VALID_TABS = ['voyages','contracts','plans','vessels','services','users','ports','shippers','offices','bookings','customers'];
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
-  const { tab } = await searchParams;
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string; archived?: string }> }) {
+  const { tab, archived } = await searchParams;
   const initialTab = VALID_TABS.includes(tab ?? '') ? tab! : 'voyages';
+  const showArchived = archived === 'true';
   const [voyagesResult, contractsRes, officesRes, servicesRes, plansRes, vesselsRes, usersRes, portsRes, shippersRes, unecePortsRes, bookingsRes, customersRes] = await Promise.all([
     getAdminVoyages(),
     getContracts(),
@@ -31,7 +32,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     getPorts(),
     getShippers(),
     getUnecePorts(),
-    getAdminBookings(),
+    getAdminBookings(showArchived),
     getCustomers(),
   ]);
 
@@ -98,6 +99,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         bookings={bookings}
         customers={customers}
         initialTab={initialTab}
+        showArchivedBookings={showArchived}
       />
     </AppShell>
   );

@@ -791,7 +791,7 @@ export async function updateBookingQuantity(data: unknown) {
 // GET ALL BOOKINGS (admin — auth guarded)
 // ----------------------------------------------------------------------------
 
-export async function getAdminBookings() {
+export async function getAdminBookings(includeArchived = false) {
   try {
     const session = await auth();
     if (!session?.user) return { success: false, data: [], error: 'Unauthorized' };
@@ -800,7 +800,22 @@ export async function getAdminBookings() {
 
     await connectDB();
 
-    const bookings = await BookingModel.find({})
+    let voyageIdFilter: any = {};
+    if (!includeArchived) {
+      const inactiveVoyages = await VoyageModel.find({
+        status: { $in: ['COMPLETED', 'CLOSED', 'CANCELLED'] }
+      }).select('_id').lean();
+      const inactiveVoyageIds = (inactiveVoyages as any[]).map((v: any) => v._id);
+      voyageIdFilter = inactiveVoyageIds.length > 0
+        ? { voyageId: { $nin: inactiveVoyageIds } }
+        : {};
+    }
+
+    const statusFilter = includeArchived ? {} : {
+      status: { $nin: ['CANCELLED', 'REJECTED'] }
+    };
+
+    const bookings = await BookingModel.find({ ...statusFilter, ...voyageIdFilter })
       .populate('voyageId', 'departureDate weekNumber')
       .lean();
 
@@ -822,14 +837,33 @@ export async function getAdminBookings() {
 // GET ALL BOOKINGS
 // ----------------------------------------------------------------------------
 
-export async function getBookings() {
+export async function getBookings(includeArchived = false) {
   try {
     await connectDB();
 
     const session = await auth();
     const serviceFilter = (session?.user as any)?.serviceFilter ?? [];
 
-    const bookings = await BookingModel.find(buildServiceFilter(serviceFilter))
+    let voyageIdFilter: any = {};
+    if (!includeArchived) {
+      const inactiveVoyages = await VoyageModel.find({
+        status: { $in: ['COMPLETED', 'CLOSED', 'CANCELLED'] }
+      }).select('_id').lean();
+      const inactiveVoyageIds = (inactiveVoyages as any[]).map((v: any) => v._id);
+      voyageIdFilter = inactiveVoyageIds.length > 0
+        ? { voyageId: { $nin: inactiveVoyageIds } }
+        : {};
+    }
+
+    const statusFilter = includeArchived ? {} : {
+      status: { $nin: ['CANCELLED', 'REJECTED'] }
+    };
+
+    const bookings = await BookingModel.find({
+      ...buildServiceFilter(serviceFilter),
+      ...statusFilter,
+      ...voyageIdFilter,
+    })
       .populate('voyageId')
       .lean();
 
