@@ -1193,6 +1193,9 @@ const SaveCargoAssignmentsSchema = z.object({
     quantity: z.number().int().nonnegative(),
     snapshotTotalQuantity: z.number().int().nonnegative().optional(),
     compartmentId: z.string().min(1),
+    polPortCode: z.string().optional(),
+    podPortCode: z.string().optional(),
+    consigneeName: z.string().optional(),
   })),
 });
 
@@ -1224,6 +1227,9 @@ export async function saveCargoAssignments(data: unknown) {
         holdNumber: getHoldNumber(a.compartmentId),
         level: getLevel(a.compartmentId),
       },
+      polPortCode: a.polPortCode || undefined,
+      podPortCode: a.podPortCode || undefined,
+      consigneeName: a.consigneeName || undefined,
       weight: 0,
       position: { lcg: 0, tcg: 0, vcg: 0 },
     }));

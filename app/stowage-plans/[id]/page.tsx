@@ -723,16 +723,17 @@ export default function StowagePlanDetailPage() {
   };
 
   const handleSavePlan = () => {
-    const allAssignments = bookings.flatMap(b =>
-      b.assignments.map(a => ({
-        bookingId: b.bookingId,
-        bookingNumber: b.bookingNumber,
-        cargoType: b.cargoType,
-        quantity: a.quantity,
-        snapshotTotalQuantity: b.totalQuantity,
-        compartmentId: a.compartmentId,
-      }))
-    );
+    const allAssignments = planCargoPositions.map((pos: any) => ({
+      bookingId: pos.bookingId ?? undefined,
+      bookingNumber: pos.bookingNumber ?? undefined,
+      cargoType: pos.cargoType ?? '',
+      quantity: pos.quantity ?? 0,
+      snapshotTotalQuantity: pos.snapshotTotalQuantity ?? pos.quantity ?? 0,
+      compartmentId: pos.coolingSectionId ?? pos.compartment?.id ?? '',
+      polPortCode: pos.polPortCode ?? undefined,
+      podPortCode: pos.podPortCode ?? undefined,
+      consigneeName: pos.consigneeName ?? undefined,
+    })).filter((a: any) => a.compartmentId && a.quantity > 0);
     startSaveTransition(async () => {
       const result = await saveCargoAssignments({ planId, assignments: allAssignments });
       setSaveMsg(
