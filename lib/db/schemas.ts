@@ -687,6 +687,12 @@ const StowagePlanSchema = new Schema({
     portSequence:  { type: Number, required: true },
     portCode:      { type: String, required: true },
   }],
+  // Space forecast integration (added v1.24.0)
+  forecastSnapshot: {
+    takenAt:     { type: Date },
+    forecastIds: [{ type: String }],
+  },
+  pendingForecastUpdates: [{ type: String }],
   createdBy: { type: String, default: 'SYSTEM' },
 }, {
   timestamps: true,
@@ -800,6 +806,47 @@ CustomerSchema.index({ active: 1 });
 CustomerSchema.index({ countryCode: 1 });
 
 // ============================================================================
+// SPACE FORECAST SCHEMA
+// ============================================================================
+
+const SpaceForecastSchema = new Schema({
+  forecastNumber:       { type: String, required: true, unique: true, trim: true },
+  contractId:           { type: Schema.Types.ObjectId, ref: 'Contract', required: true },
+  contractNumber:       { type: String, required: true, trim: true },
+  voyageId:             { type: Schema.Types.ObjectId, ref: 'Voyage', required: true },
+  voyageNumber:         { type: String, required: true, trim: true },
+  vesselName:           { type: String, required: true, trim: true },
+  serviceCode:          { type: String, required: true, trim: true },
+  officeCode:           { type: String, required: true, trim: true },
+  shipperId:            { type: Schema.Types.ObjectId, ref: 'Shipper', required: true },
+  shipperName:          { type: String, required: true, trim: true },
+  consigneeName:        { type: String, required: true, trim: true },
+  consigneeCode:        { type: String, required: true, trim: true },
+  cargoType: { type: String, required: true, enum: [
+    'BANANAS', 'ORGANIC_BANANAS', 'PLANTAINS', 'FROZEN_FISH', 'TABLE_GRAPES',
+    'CITRUS', 'AVOCADOS', 'BERRIES', 'KIWIS', 'PINEAPPLES', 'CHERRIES',
+    'BLUEBERRIES', 'PLUMS', 'PEACHES', 'APPLES', 'PEARS', 'PAPAYA',
+    'MANGOES', 'OTHER_FROZEN', 'OTHER_CHILLED',
+  ]},
+  polPortCode:          { type: String, required: true, trim: true, uppercase: true },
+  podPortCode:          { type: String, required: true, trim: true, uppercase: true },
+  estimatedPallets:     { type: Number, required: true, min: 1 },
+  source:               { type: String, required: true, enum: ['SHIPPER_PORTAL', 'PLANNER_ENTRY', 'CONTRACT_DEFAULT'] },
+  submittedBy:          { type: String, required: true, trim: true },
+  submittedAt:          { type: Date, required: true, default: Date.now },
+  planImpact:           { type: String, required: true, enum: ['PENDING_REVIEW', 'INCORPORATED', 'SUPERSEDED', 'NO_CHANGE'], default: 'PENDING_REVIEW' },
+  incorporatedInPlanId: { type: Schema.Types.ObjectId, ref: 'StowagePlan' },
+  reviewedBy:           { type: String, trim: true },
+  reviewedAt:           { type: Date },
+  previousForecastId:   { type: Schema.Types.ObjectId, ref: 'SpaceForecast' },
+  notes:                { type: String, trim: true },
+}, { timestamps: true });
+
+SpaceForecastSchema.index({ voyageId: 1, shipperId: 1, contractId: 1 });
+SpaceForecastSchema.index({ voyageId: 1, planImpact: 1 });
+SpaceForecastSchema.index({ contractId: 1, submittedAt: -1 });
+
+// ============================================================================
 // MODELS EXPORT
 // ============================================================================
 
@@ -854,3 +901,6 @@ export const StowagePlanModel: AnyModel = mongoose.model('StowagePlan', StowageP
 
 export const UserModel: AnyModel =
   mongoose.models.User || mongoose.model('User', UserSchema);
+
+export const SpaceForecastModel: AnyModel =
+  mongoose.models.SpaceForecast || mongoose.model('SpaceForecast', SpaceForecastSchema);

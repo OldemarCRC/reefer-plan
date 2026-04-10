@@ -650,7 +650,50 @@ export interface StowagePlan {
     note?: string;
   }[];
 
+  forecastSnapshot?: {
+    takenAt: Date;
+    forecastIds: string[];
+  };
+  pendingForecastUpdates?: string[];
   createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ----------------------------------------------------------------------------
+// SPACE FORECAST
+// ----------------------------------------------------------------------------
+
+export type SpaceForecastSource = 'SHIPPER_PORTAL' | 'PLANNER_ENTRY' | 'CONTRACT_DEFAULT';
+export type SpaceForecastPlanImpact = 'PENDING_REVIEW' | 'INCORPORATED' | 'SUPERSEDED' | 'NO_CHANGE';
+
+export interface SpaceForecast {
+  _id: string;
+  forecastNumber: string;
+  contractId: string;
+  contractNumber: string;
+  voyageId: string;
+  voyageNumber: string;
+  vesselName: string;
+  serviceCode: string;
+  officeCode: string;
+  shipperId: string;
+  shipperName: string;
+  consigneeName: string;
+  consigneeCode: string;
+  cargoType: CargoType;
+  polPortCode: string;
+  podPortCode: string;
+  estimatedPallets: number;
+  source: SpaceForecastSource;
+  submittedBy: string;
+  submittedAt: Date;
+  planImpact: SpaceForecastPlanImpact;
+  incorporatedInPlanId?: string;
+  reviewedBy?: string;
+  reviewedAt?: Date;
+  previousForecastId?: string;
+  notes?: string;
   createdAt: Date;
   updatedAt: Date;
 }
