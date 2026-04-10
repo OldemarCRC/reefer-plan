@@ -693,6 +693,7 @@ const StowagePlanSchema = new Schema({
     forecastIds: [{ type: String }],
   },
   pendingForecastUpdates: [{ type: String }],
+  pendingBookingReplacements: [{ type: String }],
   createdBy: { type: String, default: 'SYSTEM' },
 }, {
   timestamps: true,
@@ -834,7 +835,7 @@ const SpaceForecastSchema = new Schema({
   source:               { type: String, required: true, enum: ['SHIPPER_PORTAL', 'PLANNER_ENTRY', 'CONTRACT_DEFAULT'] },
   submittedBy:          { type: String, required: true, trim: true },
   submittedAt:          { type: Date, required: true, default: Date.now },
-  planImpact:           { type: String, required: true, enum: ['PENDING_REVIEW', 'INCORPORATED', 'SUPERSEDED', 'NO_CHANGE'], default: 'PENDING_REVIEW' },
+  planImpact:           { type: String, required: true, enum: ['PENDING_REVIEW', 'INCORPORATED', 'SUPERSEDED', 'NO_CHANGE', 'REPLACED_BY_BOOKING'], default: 'PENDING_REVIEW' },
   incorporatedInPlanId: { type: Schema.Types.ObjectId, ref: 'StowagePlan' },
   reviewedBy:           { type: String, trim: true },
   reviewedAt:           { type: Date },

@@ -655,6 +655,7 @@ export interface StowagePlan {
     forecastIds: string[];
   };
   pendingForecastUpdates?: string[];
+  pendingBookingReplacements?: string[];
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -665,7 +666,7 @@ export interface StowagePlan {
 // ----------------------------------------------------------------------------
 
 export type SpaceForecastSource = 'SHIPPER_PORTAL' | 'PLANNER_ENTRY' | 'CONTRACT_DEFAULT';
-export type SpaceForecastPlanImpact = 'PENDING_REVIEW' | 'INCORPORATED' | 'SUPERSEDED' | 'NO_CHANGE';
+export type SpaceForecastPlanImpact = 'PENDING_REVIEW' | 'INCORPORATED' | 'SUPERSEDED' | 'NO_CHANGE' | 'REPLACED_BY_BOOKING';
 
 export interface SpaceForecast {
   _id: string;

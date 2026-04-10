@@ -8,7 +8,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { BookingModel, ContractModel, VoyageModel, VesselModel, ServiceModel, OfficeModel, UserModel } from '@/lib/db/schemas';
+import { BookingModel, ContractModel, VoyageModel, VesselModel, ServiceModel, OfficeModel, UserModel, SpaceForecastModel, StowagePlanModel } from '@/lib/db/schemas';
 import {
   sendBookingReceivedToShipper,
   sendBookingCreatedOnBehalf,
@@ -331,6 +331,46 @@ export async function createBookingFromContract(data: unknown) {
       status: 'PENDING',
       requestedDate: new Date(),
     });
+
+    // Silently replace any active forecasts for this contract+voyage+shipper
+    try {
+      const forecastFilter = {
+        contractId: validated.contractId,
+        voyageId: validated.voyageId,
+        planImpact: { $nin: ['SUPERSEDED', 'REPLACED_BY_BOOKING'] },
+      } as any;
+      // match by shipperId if available, fallback to shipperCode
+      if (validated.shipperId) {
+        forecastFilter.shipperId = validated.shipperId;
+      } else if (validated.shipperCode) {
+        forecastFilter.shipperCode = validated.shipperCode;
+      }
+
+      const affectedForecasts = await SpaceForecastModel.find(forecastFilter).select('_id').lean();
+
+      if (affectedForecasts.length > 0) {
+        const affectedIds = (affectedForecasts as any[]).map((f: any) => f._id.toString());
+
+        // Mark forecasts as replaced
+        await SpaceForecastModel.updateMany(
+          { _id: { $in: affectedIds } },
+          { $set: { planImpact: 'REPLACED_BY_BOOKING' } }
+        );
+
+        // For each affected forecast: remove from pendingForecastUpdates, add to pendingBookingReplacements
+        // on any StowagePlan that references them
+        await StowagePlanModel.updateMany(
+          { voyageId: validated.voyageId, pendingForecastUpdates: { $in: affectedIds } },
+          {
+            $pull: { pendingForecastUpdates: { $in: affectedIds } },
+            $addToSet: { pendingBookingReplacements: { $each: affectedIds } },
+          }
+        );
+      }
+    } catch (err) {
+      // fire-and-forget — do not fail booking creation if forecast update fails
+      console.warn('SpaceForecast replacement update failed:', err);
+    }
 
     // Fire-and-forget booking created emails
     const emailData = {

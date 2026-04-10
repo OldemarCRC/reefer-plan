@@ -385,3 +385,44 @@ export async function markForecastIncorporated(
     return { success: false, error: err.message ?? 'Failed to mark forecast as incorporated' };
   }
 }
+
+// ----------------------------------------------------------------------------
+// dismissBookingReplacement — ADMIN or SHIPPING_PLANNER only
+// Acknowledges that a forecast was superseded by a booking; removes it from
+// the plan's pendingBookingReplacements list. planImpact stays REPLACED_BY_BOOKING.
+// ----------------------------------------------------------------------------
+
+export async function dismissBookingReplacement(
+  forecastId: string,
+  planId: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) {
+      return { success: false, error: 'Forbidden' };
+    }
+
+    await connectDB();
+
+    const forecast = await SpaceForecastModel.findById(forecastId).lean();
+    if (!forecast) return { success: false, error: 'Forecast not found' };
+    if ((forecast as any).planImpact !== 'REPLACED_BY_BOOKING') {
+      return { success: false, error: 'Forecast is not in REPLACED_BY_BOOKING state' };
+    }
+
+    await SpaceForecastModel.findByIdAndUpdate(forecastId, {
+      reviewedBy: (session.user as any).email ?? session.user.name,
+      reviewedAt: new Date(),
+    });
+
+    await StowagePlanModel.findByIdAndUpdate(planId, {
+      $pull: { pendingBookingReplacements: forecastId },
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message ?? 'Failed to dismiss booking replacement' };
+  }
+}
