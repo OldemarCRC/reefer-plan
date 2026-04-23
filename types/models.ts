@@ -45,7 +45,7 @@ export const CARGO_WEIGHT_PER_UNIT: Partial<Record<CargoType, number>> = {
 // ----------------------------------------------------------------------------
 
 export interface PortRotation {
-  portCode: string; // "NLRTM", "CLRMOB", "COTUB", "COSMA"
+  portCode: string; // "NLRTM", "CRMOB", "COTRB", "COSMA"
   portName: string;
   country: string;
   sequence: number; // 1, 2, 3, 4...

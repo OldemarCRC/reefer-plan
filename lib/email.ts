@@ -17,10 +17,12 @@ export interface BuildEmailHtmlOptions {
   ctaText?: string;
   ctaUrl?: string;
   footerNote?: string;
+  logoText?: string;   // override default "⚓ Reefer Stowage Planner"
 }
 
 export function buildEmailHtml(options: BuildEmailHtmlOptions): string {
-  const { title, heading, body, ctaText, ctaUrl, footerNote } = options;
+  const { title, heading, body, ctaText, ctaUrl, footerNote, logoText } = options;
+  const logo = logoText ?? '⚓ Reefer Stowage Planner';
 
   const ctaBlock = ctaText && ctaUrl ? `
     <table width="100%" cellpadding="0" cellspacing="0" style="margin: 32px 0 8px;">
@@ -60,7 +62,7 @@ export function buildEmailHtml(options: BuildEmailHtmlOptions): string {
             <td align="center" style="padding: 0 0 24px;">
               <span style="font-family: 'Space Grotesk', Arial, sans-serif; font-size: 20px;
                            font-weight: 700; color: #ffffff; letter-spacing: 0.04em;">
-                ⚓ Reefer Stowage Planner
+                ${logo}
               </span>
             </td>
           </tr>
@@ -199,7 +201,7 @@ function formatRoleLabel(role?: string): string {
 }
 
 export async function sendUserConfirmationEmail(opts: SendUserConfirmationOptions): Promise<void> {
-  const from = `"Reefer Stowage Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
+  const emailUser = process.env.EMAIL_USER?.replace(/'/g, '');
   const baseUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3001';
   const confirmUrl = `${baseUrl}/confirm/${opts.confirmToken}`;
 
@@ -207,6 +209,61 @@ export async function sendUserConfirmationEmail(opts: SendUserConfirmationOption
     ? `"${opts.to.name}" <${opts.to.email}>`
     : opts.to.email;
 
+  if (opts.role === 'EXPORTER') {
+    const agencyName = process.env.AGENCY_NAME ?? 'Reefer Lines';
+    const displayName = opts.to.name ?? opts.to.email;
+    const subject = `Your ${agencyName} Shipper Portal access is ready — set your password`;
+
+    const html = buildEmailHtml({
+      title: subject,
+      logoText: `⚓ ${agencyName} Shipper Portal`,
+      heading: `Welcome to the ${agencyName} Shipper Portal`,
+      body: `
+        <p style="margin: 0 0 14px;">Hi ${displayName},</p>
+        <p style="margin: 0 0 14px;">Welcome to the <strong>${agencyName} Shipper Portal</strong> — your portal for:</p>
+        <ul style="margin: 0 0 14px; padding-left: 22px;">
+          <li style="margin-bottom: 8px;">View upcoming sailing schedules</li>
+          <li style="margin-bottom: 8px;">Submit space estimates for future voyages</li>
+        </ul>
+        <p style="margin: 0 0 14px;">Click the button below to set your password and access your account.</p>
+        <p style="margin: 0 0 14px;">Your invitation link expires in 48 hours.</p>
+        <p style="margin: 16px 0 0; color: #94a3b8; font-size: 13px;">If you weren't expecting this email, you can safely ignore it.</p>
+      `,
+      ctaText: 'Set My Password',
+      ctaUrl: confirmUrl,
+    });
+
+    const text = `
+Hi ${displayName},
+
+Welcome to the ${agencyName} Shipper Portal — your portal for:
+  - View upcoming sailing schedules
+  - Submit space estimates for future voyages
+
+Click the link below to set your password and access your account:
+
+  ${confirmUrl}
+
+Your invitation link expires in 48 hours.
+
+If you weren't expecting this email, you can safely ignore it.
+
+-------------------------
+${agencyName} Shipper Portal
+    `.trim();
+
+    await transporter.sendMail({
+      from: `"${agencyName} Shipper Portal" <${emailUser}>`,
+      to: toAddress,
+      subject,
+      text,
+      html,
+    });
+    return;
+  }
+
+  // Non-EXPORTER roles — existing plain-text template
+  const from = `"Reefer Stowage Planner" <${emailUser}>`;
   const roleLabel = formatRoleLabel(opts.role);
   const subject = `Your Reefer Stowage Planner account is ready — set your password`;
 
