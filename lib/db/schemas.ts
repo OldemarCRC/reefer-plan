@@ -168,20 +168,12 @@ OfficeSchema.index({ active: 1 });
 // CONTRACT SCHEMA
 // ============================================================================
 
-const CounterpartySchema = new Schema({
-  name: { type: String, required: true },
-  code: { type: String, required: true },
-  weeklyEstimate: { type: Number, required: true, min: 0 },
-  cargoTypes: [{ type: String }],
-}, { _id: false });
-
 // New counterparties array — references ShipperModel by ID
 const ContractCounterpartySchema = new Schema({
   shipperId:      { type: Schema.Types.ObjectId, ref: 'Shipper' },
   shipperName:    { type: String, required: true },
   shipperCode:    { type: String, required: true },
   weeklyEstimate: { type: Number, required: true, min: 0 },
-  cargoTypes:     [{ type: String }],
   active:         { type: Boolean, default: true },
 }, { _id: false });
 
@@ -201,9 +193,7 @@ const ContractSchema = new Schema({
   cargoType:    { type: String },              // primary cargo for this contract (optional for AGENT)
   weeklyPallets: { type: Number, min: 0 },    // contract-level weekly capacity (optional)
   notes: { type: String },                     // free-text notes (useful for AGENT contracts)
-  shippers: [CounterpartySchema],       // kept for backward compat with existing docs
-  consignees: [CounterpartySchema],     // kept for backward compat with existing docs
-  counterparties: [ContractCounterpartySchema], // new: refs Shipper collection
+  counterparties: [ContractCounterpartySchema],
   serviceId: { type: Schema.Types.ObjectId, ref: 'Service', required: true },
   serviceCode: { type: String, required: true },
   originPort: {

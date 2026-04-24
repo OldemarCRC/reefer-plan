@@ -25,13 +25,6 @@ const CargoTypeSchema = z.enum([
   'MANGOES', 'OTHER_FROZEN', 'OTHER_CHILLED',
 ]);
 
-const CounterpartySchema = z.object({
-  name: z.string().min(1).max(200),
-  code: z.string().min(1).max(20),
-  weeklyEstimate: z.number().int().min(0),
-  cargoTypes: z.array(CargoTypeSchema).min(1),
-});
-
 const PortInfoSchema = z.object({
   portCode: z.string().min(4).max(6),
   portName: z.string().min(1),
@@ -43,7 +36,6 @@ const ContractCounterpartyInputSchema = z.object({
   shipperName:    z.string().min(1).max(200),
   shipperCode:    z.string().min(1).max(20),
   weeklyEstimate: z.number().int().min(0),
-  cargoTypes:     z.array(CargoTypeSchema).min(1),
 });
 
 const CreateContractSchema = z.object({
@@ -59,8 +51,6 @@ const CreateContractSchema = z.object({
   cargoType:    CargoTypeSchema.optional(),
   weeklyPallets: z.number().int().min(0).optional(),
   notes: z.string().optional(),
-  shippers:       z.array(CounterpartySchema).default([]),
-  consignees:     z.array(CounterpartySchema).default([]),
   counterparties: z.array(ContractCounterpartyInputSchema).default([]),
   serviceId: z.string().min(1, 'Service ID is required'),
   originPort: PortInfoSchema,
@@ -80,8 +70,6 @@ const UpdateContractSchema = z.object({
   cargoType:    CargoTypeSchema.optional(),
   weeklyPallets: z.number().int().min(0).optional(),
   notes: z.string().optional(),
-  shippers: z.array(CounterpartySchema).optional(),
-  consignees: z.array(CounterpartySchema).optional(),
   originPort: PortInfoSchema.optional(),
   destinationPort: PortInfoSchema.optional(),
   validFrom: z.coerce.date().optional(),
@@ -196,8 +184,6 @@ export async function createContract(data: unknown) {
       ...(validated.cargoType ? { cargoType: validated.cargoType } : {}),
       ...(validated.weeklyPallets !== undefined ? { weeklyPallets: validated.weeklyPallets } : {}),
       ...(validated.notes ? { notes: validated.notes } : {}),
-      shippers: validated.shippers,
-      consignees: validated.consignees,
       counterparties: validated.counterparties,
       serviceId: validated.serviceId,
       serviceCode: service.serviceCode,
@@ -249,8 +235,6 @@ export async function updateContract(contractId: unknown, updates: unknown) {
     }
     if (validated.cargoType   !== undefined) setFields.cargoType   = validated.cargoType;
     if (validated.weeklyPallets !== undefined) setFields.weeklyPallets = validated.weeklyPallets;
-    if (validated.shippers    !== undefined) setFields.shippers    = validated.shippers;
-    if (validated.consignees  !== undefined) setFields.consignees  = validated.consignees;
     if (validated.originPort  !== undefined) setFields.originPort  = validated.originPort;
     if (validated.destinationPort !== undefined) setFields.destinationPort = validated.destinationPort;
     if (validated.validFrom   !== undefined) setFields.validFrom   = validated.validFrom;
@@ -462,7 +446,7 @@ export async function getContractsByService(serviceId: unknown) {
 // ----------------------------------------------------------------------------
 // GET SHIPPER CODES
 // Returns {code, name} pairs — pulls from Shipper collection first, then
-// falls back to scanning contracts for legacy shippers.
+// falls back to scanning contract counterparties for any not yet in the collection.
 // Used by admin when assigning shipperCode to EXPORTER users.
 // ----------------------------------------------------------------------------
 
@@ -478,22 +462,12 @@ export async function getShipperCodes(): Promise<{ success: boolean; data: { cod
       if (s.code && s.name) map.set(s.code, s.name);
     }
 
-    // Fallback: scan active contracts for legacy shippers arrays
+    // Fallback: scan active contracts for counterparties not in Shipper collection
     const contracts = await ContractModel.find({ active: true })
-      .select('client shippers consignees counterparties')
+      .select('counterparties')
       .lean();
 
     for (const c of contracts as any[]) {
-      if (c.client?.type === 'SHIPPER' && c.client?.name) {
-        const code = c.client?.clientNumber ?? c.client?.name.slice(0, 10).toUpperCase().replace(/\s/g, '');
-        if (!map.has(code)) map.set(code, c.client.name);
-      }
-      for (const s of c.shippers ?? []) {
-        if (s.code && s.name && !map.has(s.code)) map.set(s.code, s.name);
-      }
-      for (const s of c.consignees ?? []) {
-        if (s.code && s.name && !map.has(s.code)) map.set(s.code, s.name);
-      }
       for (const s of c.counterparties ?? []) {
         if (s.shipperCode && s.shipperName && !map.has(s.shipperCode)) map.set(s.shipperCode, s.shipperName);
       }
@@ -519,7 +493,6 @@ export async function getShipperCodes(): Promise<{ success: boolean; data: { cod
 const AddContractShipperSchema = z.object({
   shipperId:      z.string().min(1, 'Shipper is required'),
   weeklyEstimate: z.number().int().min(0),
-  cargoTypes:     z.array(CargoTypeSchema).min(1, 'At least one cargo type is required'),
 });
 
 export async function addShipperToContract(contractId: unknown, data: unknown) {
@@ -557,7 +530,6 @@ export async function addShipperToContract(contractId: unknown, data: unknown) {
             shipperName: (shipper as any).name,
             shipperCode: (shipper as any).code,
             weeklyEstimate: validated.weeklyEstimate,
-            cargoTypes: validated.cargoTypes,
             active: true,
           },
         },

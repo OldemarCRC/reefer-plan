@@ -9,16 +9,6 @@ import {
 } from '@/app/actions/contract';
 import styles from './page.module.css';
 
-const ALL_CARGO_TYPES = [
-  'BANANAS', 'ORGANIC_BANANAS', 'PLANTAINS', 'FROZEN_FISH', 'TABLE_GRAPES',
-  'CITRUS', 'AVOCADOS', 'BERRIES', 'KIWIS', 'PINEAPPLES', 'CHERRIES',
-  'BLUEBERRIES', 'PLUMS', 'PEACHES', 'APPLES', 'PEARS', 'PAPAYA',
-  'MANGOES', 'OTHER_FROZEN', 'OTHER_CHILLED',
-] as const;
-
-function formatCargo(type: string): string {
-  return type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 interface ShipperOption {
   id: string;
@@ -31,7 +21,6 @@ interface ContractCounterparty {
   shipperName: string;
   shipperCode: string;
   weeklyEstimate: number;
-  cargoTypes: string[];
   active?: boolean;
 }
 
@@ -102,7 +91,6 @@ export default function ContractShippersPanel({
   const [addOpen, setAddOpen] = useState(false);
   const [selShipperId, setSelShipperId] = useState('');
   const [weeklyEst, setWeeklyEst] = useState(0);
-  const [selCargoTypes, setSelCargoTypes] = useState<string[]>([]);
   const [addError, setAddError] = useState('');
 
   // Shippers not yet assigned (by id and code)
@@ -120,19 +108,9 @@ export default function ContractShippersPanel({
   // Projected total if we add the new entry
   const projectedTotal = activeWeeklyTotal + weeklyEst;
 
-  function toggleCargo(ct: string) {
-    setSelCargoTypes((prev) =>
-      prev.includes(ct) ? prev.filter((x) => x !== ct) : [...prev, ct]
-    );
-  }
-
   function handleAdd() {
     if (!selShipperId) {
       setAddError('Select a shipper');
-      return;
-    }
-    if (selCargoTypes.length === 0) {
-      setAddError('Select at least one cargo type');
       return;
     }
 
@@ -154,13 +132,11 @@ export default function ContractShippersPanel({
       const res = await addShipperToContract(contractId, {
         shipperId: selShipperId,
         weeklyEstimate: weeklyEst,
-        cargoTypes: selCargoTypes,
       });
       if (res.success) {
         setAddOpen(false);
         setSelShipperId('');
         setWeeklyEst(0);
-        setSelCargoTypes([]);
         setActionMsg({ type: 'success', text: res.message ?? 'Shipper added' });
         router.refresh();
       } else {
@@ -236,7 +212,6 @@ export default function ContractShippersPanel({
                 <th>Name</th>
                 <th>Code</th>
                 <th className={styles.thRight}>Weekly Est.</th>
-                <th>Cargo Types</th>
                 <th>Status</th>
                 {contractActive && <th>Actions</th>}
               </tr>
@@ -249,13 +224,6 @@ export default function ContractShippersPanel({
                     <td>{cp.shipperName}</td>
                     <td className={styles.cellMono}>{cp.shipperCode}</td>
                     <td className={styles.cellRight}>{cp.weeklyEstimate}</td>
-                    <td>
-                      <div className={styles.cargoChips}>
-                        {(cp.cargoTypes || []).map((ct) => (
-                          <span key={ct} className={styles.cargoTag}>{formatCargo(ct)}</span>
-                        ))}
-                      </div>
-                    </td>
                     <td>
                       <span className={isActive ? styles.statusActive : styles.statusInactive}>
                         {isActive ? 'Active' : 'Inactive'}
@@ -334,23 +302,6 @@ export default function ContractShippersPanel({
                 onChange={(e) => setWeeklyEst(parseInt(e.target.value) || 0)}
                 disabled={isPending}
               />
-            </div>
-          </div>
-
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Authorized Cargo Types</label>
-            <div className={styles.cargoGrid}>
-              {ALL_CARGO_TYPES.map((ct) => (
-                <label key={ct} className={styles.cargoCheckbox}>
-                  <input
-                    type="checkbox"
-                    checked={selCargoTypes.includes(ct)}
-                    onChange={() => toggleCargo(ct)}
-                    disabled={isPending}
-                  />
-                  {formatCargo(ct)}
-                </label>
-              ))}
             </div>
           </div>
 

@@ -65,7 +65,6 @@ interface CounterpartyForm {
   name: string;
   code: string;
   weeklyEstimate: string;
-  cargoTypes: CargoType[];
 }
 
 interface ShipperOption {
@@ -136,7 +135,7 @@ function formatCargo(type: string): string {
 }
 
 function emptyCounterparty(): CounterpartyForm {
-  return { name: '', code: '', weeklyEstimate: '', cargoTypes: [] };
+  return { name: '', code: '', weeklyEstimate: '' };
 }
 
 // ---------------------------------------------------------------------------
@@ -146,11 +145,10 @@ function emptyCounterparty(): CounterpartyForm {
 interface ConsigneeShipperRow {
   shipperId: string;
   weeklyEstimate: string;
-  cargoTypes: CargoType[];
 }
 
 function emptyShipperRow(): ConsigneeShipperRow {
-  return { shipperId: '', weeklyEstimate: '', cargoTypes: [] };
+  return { shipperId: '', weeklyEstimate: '' };
 }
 
 // ---------------------------------------------------------------------------
@@ -216,14 +214,6 @@ function CreateContractModal({
     updated[idx] = { ...updated[idx], [field]: value };
     setCounterparties(updated);
   };
-  const toggleCargoType = (idx: number, ct: CargoType) => {
-    const cp = counterparties[idx];
-    const types = cp.cargoTypes.includes(ct)
-      ? cp.cargoTypes.filter((t) => t !== ct)
-      : [...cp.cargoTypes, ct];
-    updateCounterparty(idx, 'cargoTypes', types);
-  };
-
   // --- Shipper row helpers (CONSIGNEE contract) ---
   const addShipperRow = () => setShipperRows([...shipperRows, emptyShipperRow()]);
   const removeShipperRow = (idx: number) => {
@@ -235,14 +225,6 @@ function CreateContractModal({
     updated[idx] = { ...updated[idx], [field]: value };
     setShipperRows(updated);
   };
-  const toggleShipperRowCargo = (idx: number, ct: CargoType) => {
-    const row = shipperRows[idx];
-    const types = row.cargoTypes.includes(ct)
-      ? row.cargoTypes.filter((t) => t !== ct)
-      : [...row.cargoTypes, ct];
-    updateShipperRow(idx, 'cargoTypes', types);
-  };
-
   // --- Customer search helpers ---
   const activeCustomers = customers.filter((c) => c.active);
   const filteredCustomers = customerSearch.trim()
@@ -299,14 +281,14 @@ function CreateContractModal({
       return;
     }
 
-    const validCounterparties = counterparties.filter((cp) => cp.name && cp.code && cp.cargoTypes.length > 0);
+    const validCounterparties = counterparties.filter((cp) => cp.name && cp.code);
     if (clientType === 'SHIPPER' && validCounterparties.length === 0) {
-      setErrorMsg('Add at least one consignee with name, code, and cargo types.');
+      setErrorMsg('Add at least one consignee with name and code.');
       return;
     }
 
-    // Build counterparties for CONSIGNEE: validate selected shippers have cargo types
-    const validShipperRows = shipperRows.filter((r) => r.shipperId && r.cargoTypes.length > 0);
+    // Build counterparties for CONSIGNEE: collect rows with a shipper selected
+    const validShipperRows = shipperRows.filter((r) => r.shipperId);
 
     const payload: any = {
       officeId,
@@ -315,22 +297,6 @@ function CreateContractModal({
       ...(cargoType ? { cargoType: cargoType as CargoType } : {}),
       ...(weeklyPallets ? { weeklyPallets: parseInt(weeklyPallets) } : {}),
       ...(notes.trim() ? { notes: notes.trim() } : {}),
-      shippers: clientType === 'CONSIGNEE'
-        ? validCounterparties.map((cp) => ({
-            name: cp.name,
-            code: cp.code,
-            weeklyEstimate: parseInt(cp.weeklyEstimate) || 0,
-            cargoTypes: cp.cargoTypes,
-          }))
-        : [],
-      consignees: clientType === 'SHIPPER'
-        ? validCounterparties.map((cp) => ({
-            name: cp.name,
-            code: cp.code,
-            weeklyEstimate: parseInt(cp.weeklyEstimate) || 0,
-            cargoTypes: cp.cargoTypes,
-          }))
-        : [],
       counterparties: clientType === 'CONSIGNEE'
         ? validShipperRows.map((r) => {
             const s = shippers.find((sh) => sh._id === r.shipperId)!;
@@ -339,7 +305,6 @@ function CreateContractModal({
               shipperName: s?.name ?? '',
               shipperCode: s?.code ?? '',
               weeklyEstimate: parseInt(r.weeklyEstimate) || 0,
-              cargoTypes: r.cargoTypes,
             };
           })
         : [],
@@ -575,21 +540,6 @@ function CreateContractModal({
                         />
                       </div>
                     </div>
-                    <div className={styles.formRow}>
-                      <label className={styles.formLabel}>Cargo Types</label>
-                      <div className={styles.cargoChips}>
-                        {CARGO_TYPES.map((ct) => (
-                          <button
-                            key={ct}
-                            type="button"
-                            className={`${styles.cargoChip} ${row.cargoTypes.includes(ct) ? styles['cargoChip--active'] : ''}`}
-                            onClick={() => toggleShipperRowCargo(idx, ct)}
-                          >
-                            {formatCargo(ct)}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
                   </div>
                 );
               })}
@@ -624,21 +574,6 @@ function CreateContractModal({
                   <div className={styles.formRow}>
                     <label className={styles.formLabel}>Weekly Estimate (pallets)</label>
                     <input className={styles.formInput} type="number" min="0" value={cp.weeklyEstimate} onChange={(e) => updateCounterparty(idx, 'weeklyEstimate', e.target.value)} placeholder="0" />
-                  </div>
-                  <div className={styles.formRow}>
-                    <label className={styles.formLabel}>Cargo Types</label>
-                    <div className={styles.cargoChips}>
-                      {CARGO_TYPES.map((ct) => (
-                        <button
-                          key={ct}
-                          type="button"
-                          className={`${styles.cargoChip} ${cp.cargoTypes.includes(ct) ? styles['cargoChip--active'] : ''}`}
-                          onClick={() => toggleCargoType(idx, ct)}
-                        >
-                          {formatCargo(ct)}
-                        </button>
-                      ))}
-                    </div>
                   </div>
                 </div>
               ))}
