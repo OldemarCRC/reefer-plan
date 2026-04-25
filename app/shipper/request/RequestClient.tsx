@@ -72,11 +72,14 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
     return selectedContract.consignees?.[0]?.code ?? '';
   })();
 
-  // Weekly estimate hint from contract
+  // Weekly estimate hint from contract — check counterparties[] first (new format), then legacy shippers[], then weeklyPallets cap
   const weeklyHint = (() => {
     if (!selectedContract) return null;
+    const cp = (selectedContract.counterparties ?? []).find((x: any) => x.shipperCode === shipperCode);
+    if (cp?.weeklyEstimate != null) return cp.weeklyEstimate;
     const shipper = (selectedContract.shippers ?? []).find((s: any) => s.code === shipperCode);
-    return shipper?.weeklyEstimate ?? null;
+    if (shipper?.weeklyEstimate != null) return shipper.weeklyEstimate;
+    return selectedContract.weeklyPallets ?? null;
   })();
 
   // If the contract has a top-level cargoType, that's the only option
@@ -246,12 +249,20 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
                   contractNumber: c.contractNumber,
                   serviceCode: c.serviceCode ?? c.serviceId?.serviceCode ?? '',
                   clientName: c.client?.name ?? '',
+                  clientType: c.client?.type,
                   cargoType: c.cargoType,
                   polCode: c.originPort?.portCode ?? '',
                   podCode: c.destinationPort?.portCode ?? '',
                   polName: c.originPort?.portName,
                   podName: c.destinationPort?.portName,
                   weeklyPallets: c.weeklyPallets,
+                  shipperNames: (() => {
+                    if (c.client?.type === 'SHIPPER') return [c.client?.name ?? shipperCode];
+                    const cp = (c.counterparties ?? []).find((x: any) => x.shipperCode === shipperCode);
+                    if (cp) return [cp.shipperName ?? shipperCode];
+                    const s = (c.shippers ?? []).find((x: any) => x.code === shipperCode);
+                    return [s?.name ?? shipperCode];
+                  })(),
                 }))}
                 value={selectedContractId}
                 onChange={(id) => setSelectedContractId(id)}
@@ -371,8 +382,19 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
           <div className={styles.wizardPanel}>
             <div className={styles.wizardTitle}>Cargo Details</div>
 
-            <div style={{ background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
-              <strong>{selectedContract?.contractNumber}</strong> · Voyage <strong>{selectedVoyage?.voyageNumber}</strong> · {selectedVoyage?.vesselName}
+            <div className={styles.contractInfoPanel}>
+              <div className={styles.contractInfoPanelHeader}>
+                <span className={styles.contractInfoPanelNum}>{selectedContract?.contractNumber}</span>
+                <span>{selectedContract?.originPort?.portCode} → {selectedContract?.destinationPort?.portCode}</span>
+                {contractCargoType && <span>{contractCargoType.replace(/_/g, ' ')}</span>}
+                <span>Voyage {selectedVoyage?.voyageNumber} · {selectedVoyage?.vesselName}</span>
+              </div>
+              {weeklyHint != null && (
+                <div>
+                  <span className={styles.contractInfoPanelEstimateLabel}>Weekly estimate on your contract: </span>
+                  <span className={styles.contractInfoPanelEstimate}>{weeklyHint} pallets</span>
+                </div>
+              )}
             </div>
 
             <div className={styles.formGroup}>
@@ -407,11 +429,6 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
                 onChange={e => setQuantity(e.target.value)}
                 placeholder="e.g. 300"
               />
-              {weeklyHint && (
-                <div className={styles.formHint}>
-                  Contract weekly estimate: {weeklyHint} pallets
-                </div>
-              )}
             </div>
 
             <div className={styles.formGroup}>

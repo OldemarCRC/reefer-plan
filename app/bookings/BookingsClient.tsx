@@ -79,6 +79,7 @@ export interface DisplayBooking {
   status: string;
   estimateSource: string;
   serviceCode: string;
+  weeklyEstimate?: number;
 }
 
 interface CounterpartyInfo {
@@ -699,6 +700,12 @@ function CreateBookingModal({
                   polName: c.originPort.portName,
                   podName: c.destinationPort.portName,
                   weeklyPallets: c.weeklyPallets,
+                  shipperNames: (() => {
+                    const active = (c.counterparties ?? []).filter(cp => cp.active !== false);
+                    if (active.length > 0) return active.map(cp => cp.shipperName);
+                    if (c.shippers.length > 0) return c.shippers.map(s => s.name);
+                    return undefined;
+                  })(),
                 }))}
                 value={selectedContractId}
                 onChange={(id) => setSelectedContractId(id)}
@@ -711,10 +718,28 @@ function CreateBookingModal({
               return (
                 <>
                   <div className={styles.contractCard}>
-                    <div className={styles.contractCardRow}>
-                      <span className={styles.contractCardLabel}>Client</span>
-                      <span className={styles.contractCardValue}>{selectedContract.clientName} <span className={styles.contractCardMeta}>({selectedContract.clientType})</span></span>
-                    </div>
+                    {!isLegacy && activeCounterparties.length > 0 && (
+                      <div className={styles.contractCardRow}>
+                        <span className={styles.contractCardLabel}>Shipper(s)</span>
+                        <span className={styles.contractCardValue}>
+                          {activeCounterparties.map(cp => cp.shipperName).join(', ')}
+                        </span>
+                      </div>
+                    )}
+                    {isLegacy && selectedContract.shippers.length > 0 && (
+                      <div className={styles.contractCardRow}>
+                        <span className={styles.contractCardLabel}>Shipper(s)</span>
+                        <span className={styles.contractCardValue}>
+                          {selectedContract.shippers.map(s => s.name).join(', ')}
+                        </span>
+                      </div>
+                    )}
+                    {selectedContract.clientType === 'CONSIGNEE' && (
+                      <div className={styles.contractCardRow}>
+                        <span className={styles.contractCardLabel}>Consignee</span>
+                        <span className={styles.contractCardValue}>{selectedContract.clientName}</span>
+                      </div>
+                    )}
                     {selectedContract.cargoType && (
                       <div className={styles.contractCardRow}>
                         <span className={styles.contractCardLabel}>Cargo</span>
@@ -725,26 +750,20 @@ function CreateBookingModal({
                       <span className={styles.contractCardLabel}>Route</span>
                       <span className={styles.contractCardValue}>{selectedContract.originPort.portName} → {selectedContract.destinationPort.portName}</span>
                     </div>
-                    <div className={styles.contractCardRow}>
-                      <span className={styles.contractCardLabel}>Service</span>
-                      <span className={`${styles.contractCardValue} ${styles.contractCardMono}`}>{selectedContract.serviceCode}</span>
-                    </div>
                     {selectedContract.weeklyPallets != null && (
                       <div className={styles.contractCardRow}>
-                        <span className={styles.contractCardLabel}>Weekly cap</span>
+                        <span className={styles.contractCardLabel}>Contract cap</span>
                         <span className={styles.contractCardValue}>{selectedContract.weeklyPallets} pal/wk</span>
                       </div>
                     )}
                     <div className={styles.contractCardRow}>
+                      <span className={styles.contractCardLabel}>Service</span>
+                      <span className={`${styles.contractCardValue} ${styles.contractCardMono}`}>{selectedContract.serviceCode}</span>
+                    </div>
+                    <div className={styles.contractCardRow}>
                       <span className={styles.contractCardLabel}>Office</span>
                       <span className={`${styles.contractCardValue} ${styles.contractCardMono}`}>{selectedContract.officeCode}</span>
                     </div>
-                    {!isLegacy && (
-                      <div className={styles.contractCardRow}>
-                        <span className={styles.contractCardLabel}>Shippers</span>
-                        <span className={styles.contractCardValue}>{activeCounterparties.length} active</span>
-                      </div>
-                    )}
                   </div>
                   {noShippers && (
                     <p className={styles.noVoyagesMsg}>
@@ -814,6 +833,14 @@ function CreateBookingModal({
         {/* Step 3: Counterparty rows */}
         {step === 3 && (
           <div className={styles.modalBody}>
+            {selectedContract && (
+              <div className={styles.contractInfoBox}>
+                <span className={styles.contractInfoTag}>{selectedContract.contractNumber}</span>
+                <span>{selectedContract.originPort.portCode} → {selectedContract.destinationPort.portCode}</span>
+                {selectedContract.cargoType && <span>{selectedContract.cargoType.replace(/_/g, ' ')}</span>}
+                {selectedContract.weeklyPallets != null && <span>Cap: {selectedContract.weeklyPallets} pal/wk</span>}
+              </div>
+            )}
             <div className={styles.modalScroll}>
               <p className={styles.formLabel} style={{ marginBottom: '8px' }}>
                 {selectedContract?.clientType === 'CONSIGNEE' ? 'Shippers' : 'Consignees'}
@@ -960,6 +987,11 @@ function ApproveModal({
         </div>
 
         {error && <div className={styles.modalError}>{error}</div>}
+        {booking.weeklyEstimate != null && booking.requestedQuantity !== booking.weeklyEstimate && (
+          <div className={styles.approveWarning}>
+            Shipper requested {booking.requestedQuantity} pallets — contract estimate is {booking.weeklyEstimate} pallets
+          </div>
+        )}
 
         <div className={styles.modalBody}>
           <div className={styles.formRow}>

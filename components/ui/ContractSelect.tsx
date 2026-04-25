@@ -15,6 +15,7 @@ export interface ContractSelectItem {
   polName?: string;
   podName?: string;
   weeklyPallets?: number;
+  shipperNames?: string[];
 }
 
 interface ContractSelectProps {
@@ -52,15 +53,20 @@ export default function ContractSelect({
     setOpen(false);
   }
 
-  // Build sub-line text for trigger and option rows
-  function buildSubLine(c: ContractSelectItem) {
-    const parts: string[] = [];
-    if (c.clientName) parts.push(c.clientName);
-    if (c.cargoType) parts.push(c.cargoType.replace(/_/g, ' '));
+  function buildLine1(c: ContractSelectItem): string {
+    if (c.clientType === 'CONSIGNEE') {
+      const shippers = c.shipperNames?.length ? c.shipperNames.join(', ') : '—';
+      return `${shippers} → ${c.clientName}`;
+    }
+    return c.shipperNames?.join(', ') ?? c.clientName ?? '—';
+  }
+
+  function buildLine2(c: ContractSelectItem): string {
     const route = c.polName && c.podName
       ? `${c.polName} → ${c.podName}`
       : `${c.polCode} → ${c.podCode}`;
-    parts.push(route);
+    const parts = [route];
+    if (c.cargoType) parts.push(c.cargoType.replace(/_/g, ' '));
     if (c.weeklyPallets) parts.push(`${c.weeklyPallets} pal/wk`);
     return parts.join(' · ');
   }
@@ -77,10 +83,10 @@ export default function ContractSelect({
         {selected ? (
           <span className={styles.triggerContent}>
             <span className={styles.triggerMain}>
-              {selected.contractNumber}
-              <span className={styles.optionService}> · {selected.serviceCode}</span>
+              <span className={styles.triggerLine1}>{buildLine1(selected)}</span>
+              <span className={styles.triggerTag}>{selected.contractNumber}</span>
             </span>
-            <span className={styles.triggerSub}>{buildSubLine(selected)}</span>
+            <span className={styles.triggerSub}>{buildLine2(selected)}</span>
           </span>
         ) : (
           <span className={styles.triggerPlaceholder}>{placeholder}</span>
@@ -98,11 +104,11 @@ export default function ContractSelect({
               className={`${styles.option} ${c.id === value ? styles['option--selected'] : ''}`}
               onMouseDown={() => handleSelect(c.id)}
             >
-              <div className={styles.optionMain}>
-                {c.contractNumber}
-                <span className={styles.optionService}> · {c.serviceCode}</span>
+              <div className={styles.optionHeader}>
+                <div className={styles.optionLine1}>{buildLine1(c)}</div>
+                <span className={styles.optionTag}>{c.contractNumber}</span>
               </div>
-              <div className={styles.optionSub}>{buildSubLine(c)}</div>
+              <div className={styles.optionLine2}>{buildLine2(c)}</div>
             </li>
           ))}
         </ul>

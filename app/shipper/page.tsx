@@ -84,9 +84,11 @@ export default async function ShipperDashboardPage() {
         <div className={styles.summaryCard}>
           <div className={styles.summaryCardLabel}>On Standby</div>
           <div className={`${styles.summaryCardValue} ${styles['summaryCardValue--muted']}`}>
-            {summary.standbyCount}
+            {summary.standbyPallets}
           </div>
-          <div className={styles.summaryCardDesc}>Standby allocation</div>
+          <div className={styles.summaryCardDesc}>
+            Pallets on Standby · {summary.standbyCount} booking{summary.standbyCount !== 1 ? 's' : ''}
+          </div>
         </div>
       </div>
 

@@ -45,6 +45,17 @@ export default async function BookingsPage({ searchParams }: { searchParams?: Pr
     status: b.status || 'PENDING',
     estimateSource: b.estimateSource || 'CONTRACT_DEFAULT',
     serviceCode: b.serviceCode || '',
+    weeklyEstimate: (() => {
+      const sc = b.shipper?.code;
+      if (!sc) return undefined;
+      for (const rc of rawContracts) {
+        const cp = (rc.counterparties ?? []).find((x: any) => x.shipperCode === sc);
+        if (cp?.weeklyEstimate != null) return cp.weeklyEstimate;
+        const s = (rc.shippers ?? []).find((x: any) => x.code === sc);
+        if (s?.weeklyEstimate != null) return s.weeklyEstimate;
+      }
+      return undefined;
+    })(),
   }));
 
   const contracts: ContractOption[] = rawContracts.map((c: any) => ({
