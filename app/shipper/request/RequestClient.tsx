@@ -87,9 +87,7 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
 
   const contractCargoTypes = (() => {
     if (!selectedContract) return CARGO_TYPES;
-    if (contractCargoType) return [contractCargoType];
-    const shipper = (selectedContract.shippers ?? []).find((s: any) => s.code === shipperCode);
-    return shipper?.cargoTypes?.length ? shipper.cargoTypes : CARGO_TYPES;
+    return [selectedContract.cargoType ?? 'OTHER_CHILLED'];
   })();
 
   // Step 1 → 2: load voyages for selected contract's service

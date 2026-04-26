@@ -550,6 +550,7 @@ function CreateBookingModal({
     }
 
     const rows: BookingRow[] = [];
+    const contractCargoType = selectedContract.cargoType ?? 'OTHER_CHILLED';
 
     if (
       selectedContract.counterparties &&
@@ -558,57 +559,51 @@ function CreateBookingModal({
     ) {
       // New format: CONSIGNEE contracts only — counterparties are shippers (active only)
       for (const cp of selectedContract.counterparties.filter((cp) => cp.active !== false)) {
-        for (const cargoType of cp.cargoTypes) {
-          rows.push({
-            counterpartyName: cp.shipperName,
-            counterpartyCode: cp.shipperCode,
-            shipperId: cp.shipperId,
-            shipperCode: cp.shipperCode,
-            consigneeCode: selectedContract.clientName,
-            cargoType,
-            cargoMode: 'HOLD',
-            weeklyEstimate: cp.weeklyEstimate,
-            requestedQuantity: cp.weeklyEstimate,
-            estimatedWeightPerUnit: CARGO_WEIGHT_PER_UNIT[cargoType] ?? 1000,
-            estimateSource: 'CONTRACT_DEFAULT',
-          });
-        }
+        rows.push({
+          counterpartyName: cp.shipperName,
+          counterpartyCode: cp.shipperCode,
+          shipperId: cp.shipperId,
+          shipperCode: cp.shipperCode,
+          consigneeCode: selectedContract.clientName,
+          cargoType: contractCargoType,
+          cargoMode: 'HOLD',
+          weeklyEstimate: cp.weeklyEstimate,
+          requestedQuantity: cp.weeklyEstimate,
+          estimatedWeightPerUnit: CARGO_WEIGHT_PER_UNIT[contractCargoType] ?? 1000,
+          estimateSource: 'CONTRACT_DEFAULT',
+        });
       }
     } else if (selectedContract.clientType === 'CONSIGNEE') {
       // Legacy: counterparties are shippers
       for (const shipper of selectedContract.shippers) {
-        for (const cargoType of shipper.cargoTypes) {
-          rows.push({
-            counterpartyName: shipper.name,
-            counterpartyCode: shipper.code,
-            shipperCode: shipper.code,
-            consigneeCode: selectedContract.clientName,
-            cargoType,
-            cargoMode: 'HOLD',
-            weeklyEstimate: shipper.weeklyEstimate,
-            requestedQuantity: shipper.weeklyEstimate,
-            estimatedWeightPerUnit: CARGO_WEIGHT_PER_UNIT[cargoType] ?? 1000,
-            estimateSource: 'CONTRACT_DEFAULT',
-          });
-        }
+        rows.push({
+          counterpartyName: shipper.name,
+          counterpartyCode: shipper.code,
+          shipperCode: shipper.code,
+          consigneeCode: selectedContract.clientName,
+          cargoType: contractCargoType,
+          cargoMode: 'HOLD',
+          weeklyEstimate: shipper.weeklyEstimate,
+          requestedQuantity: shipper.weeklyEstimate,
+          estimatedWeightPerUnit: CARGO_WEIGHT_PER_UNIT[contractCargoType] ?? 1000,
+          estimateSource: 'CONTRACT_DEFAULT',
+        });
       }
     } else {
       // Legacy: client is SHIPPER, counterparties are consignees
       for (const consignee of selectedContract.consignees) {
-        for (const cargoType of consignee.cargoTypes) {
-          rows.push({
-            counterpartyName: consignee.name,
-            counterpartyCode: consignee.code,
-            shipperCode: selectedContract.clientName,
-            consigneeCode: consignee.code,
-            cargoType,
-            cargoMode: 'HOLD',
-            weeklyEstimate: consignee.weeklyEstimate,
-            requestedQuantity: consignee.weeklyEstimate,
-            estimatedWeightPerUnit: CARGO_WEIGHT_PER_UNIT[cargoType] ?? 1000,
-            estimateSource: 'CONTRACT_DEFAULT',
-          });
-        }
+        rows.push({
+          counterpartyName: consignee.name,
+          counterpartyCode: consignee.code,
+          shipperCode: selectedContract.clientName,
+          consigneeCode: consignee.code,
+          cargoType: contractCargoType,
+          cargoMode: 'HOLD',
+          weeklyEstimate: consignee.weeklyEstimate,
+          requestedQuantity: consignee.weeklyEstimate,
+          estimatedWeightPerUnit: CARGO_WEIGHT_PER_UNIT[contractCargoType] ?? 1000,
+          estimateSource: 'CONTRACT_DEFAULT',
+        });
       }
     }
     setBookingRows(rows);
