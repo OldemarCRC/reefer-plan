@@ -172,12 +172,14 @@ export async function getShipperDashboard(shipperCode: string, shipperId?: strin
       .reduce((sum: number, b: any) => sum + (b.confirmedQuantity ?? 0), 0);
 
     const pendingCount = bList.filter((b: any) => b.status === 'PENDING').length;
-    const standbyBookings = bList.filter((b: any) => b.status === 'STANDBY');
+    const pendingPallets = bList
+      .filter((b: any) => b.status === 'PENDING')
+      .reduce((sum: number, b: any) => sum + (b.requestedQuantity ?? 0), 0);
+    const standbyBookings = bList.filter((b: any) => (b.standbyQuantity ?? 0) > 0);
     const standbyCount = standbyBookings.length;
-    const standbyPallets = standbyBookings.reduce(
-      (sum: number, b: any) => sum + (b.confirmedQuantity ?? b.requestedQuantity ?? 0),
-      0
-    );
+    const standbyPallets = bList
+      .filter((b: any) => (b.standbyQuantity ?? 0) > 0)
+      .reduce((sum: number, b: any) => sum + (b.standbyQuantity ?? 0), 0);
 
     // Upcoming voyages that have at least one booking for this shipper
     const voyageIds = [...new Set(bList.map((b: any) => b.voyageId?.toString()).filter(Boolean))];
@@ -228,7 +230,7 @@ export async function getShipperDashboard(shipperCode: string, shipperId?: strin
     return {
       success: true,
       data: {
-        summary: { activeBookings, confirmedPallets, pendingCount, standbyCount, standbyPallets },
+        summary: { activeBookings, confirmedPallets, pendingCount, pendingPallets, standbyCount, standbyPallets },
         upcomingVoyages,
         recentBookings,
       },

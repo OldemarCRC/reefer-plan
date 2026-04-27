@@ -77,9 +77,11 @@ export default async function ShipperDashboardPage() {
         <div className={styles.summaryCard}>
           <div className={styles.summaryCardLabel}>Awaiting Approval</div>
           <div className={`${styles.summaryCardValue} ${styles['summaryCardValue--yellow']}`}>
-            {summary.pendingCount}
+            {summary.pendingPallets}
           </div>
-          <div className={styles.summaryCardDesc}>Pending confirmation</div>
+          <div className={styles.summaryCardDesc}>
+            Across {summary.pendingCount} booking{summary.pendingCount !== 1 ? 's' : ''} pending confirmation
+          </div>
         </div>
         <div className={styles.summaryCard}>
           <div className={styles.summaryCardLabel}>On Standby</div>
