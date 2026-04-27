@@ -18,6 +18,7 @@ import {
   sendBookingCancelledToPlanners,
   sendBookingModifiedToShipper,
   sendBookingModifiedToPlanners,
+  sendStandbyResolved,
 } from '@/lib/email';
 import type { BookingStatus } from '@/types/models';
 import { auth } from '@/auth';
@@ -83,6 +84,7 @@ const CancelBookingSchema = z.object({
 const UpdateBookingQuantitySchema = z.object({
   bookingId: z.string().min(1),
   requestedQuantity: z.number().int().min(1).max(10000),
+  confirmedQuantity: z.number().int().min(0).optional(),
   notes: z.string().max(1000).optional(),
   status: z.enum(['PENDING', 'CONFIRMED', 'PARTIAL', 'STANDBY', 'REJECTED', 'CANCELLED']).optional(),
 });
@@ -629,7 +631,7 @@ export async function resolveStandby(data: unknown) {
 
     const shipperUser = await UserModel.findOne({ shipperId: booking.shipperId }).select('email').lean() as any;
     if (shipperUser?.email) {
-      sendBookingStatusChanged(
+      sendStandbyResolved(
         { email: shipperUser.email },
         {
           bookingId: booking._id.toString(),
@@ -640,11 +642,11 @@ export async function resolveStandby(data: unknown) {
           polPortName: (booking.pol as any)?.portName ?? (booking.pol as any)?.portCode ?? '',
           podPortName: (booking.pod as any)?.portName ?? (booking.pod as any)?.portCode ?? '',
           cargoType: booking.cargoType,
-          requestedQuantity: booking.requestedQuantity,
-          confirmedQuantity: booking.confirmedQuantity,
-          standbyQuantity: booking.standbyQuantity,
-          rejectedQuantity: booking.rejectedQuantity,
-          newStatus: booking.status as 'CONFIRMED' | 'PARTIAL' | 'REJECTED' | 'STANDBY',
+          action: validated.action,
+          resolvedQuantity: qty,
+          confirmedQuantity: booking.confirmedQuantity ?? 0,
+          standbyQuantity: booking.standbyQuantity ?? 0,
+          rejectedQuantity: booking.rejectedQuantity ?? 0,
         }
       ).catch(err => console.error('[email] resolveStandby email failed:', err.message));
     } else {
@@ -872,6 +874,10 @@ export async function updateBookingQuantity(data: unknown) {
       }
     }
 
+    const previousQuantity = booking.requestedQuantity;
+    const newQuantity = validated.requestedQuantity;
+    let requiresReapproval = false;
+
     if (isExporter) {
       // Ownership check
       const shipperCode = (session.user as any).shipperCode;
@@ -889,16 +895,44 @@ export async function updateBookingQuantity(data: unknown) {
       if (validated.status && validated.status !== 'CANCELLED') {
         return { success: false, error: 'Forbidden: you can only cancel bookings' };
       }
-    }
 
-    booking.requestedQuantity = validated.requestedQuantity;
-    if (validated.notes !== undefined) booking.notes = validated.notes;
-    if (validated.status) {
-      booking.status = validated.status;
+      booking.requestedQuantity = newQuantity;
+      if (validated.notes !== undefined) booking.notes = validated.notes;
+
       if (validated.status === 'CANCELLED') {
+        booking.status = 'CANCELLED';
         booking.approvedBy = (session.user as any).name ?? (session.user as any).email ?? 'system';
+      } else if (newQuantity > previousQuantity) {
+        // Increase requires re-approval: reset to PENDING and clear all allocation
+        booking.status = 'PENDING';
+        booking.confirmedQuantity = 0;
+        booking.standbyQuantity = 0;
+        booking.rejectedQuantity = 0;
+        requiresReapproval = true;
+      }
+      // Decrease: keep current status unchanged
+    } else {
+      // Planner / Admin
+      booking.requestedQuantity = newQuantity;
+      if (validated.confirmedQuantity !== undefined) booking.confirmedQuantity = validated.confirmedQuantity;
+      if (validated.notes !== undefined) booking.notes = validated.notes;
+      if (validated.status) {
+        booking.status = validated.status;
+        if (validated.status === 'CANCELLED') {
+          booking.approvedBy = (session.user as any).name ?? (session.user as any).email ?? 'system';
+        }
       }
     }
+
+    if (!(booking as any).changelog) (booking as any).changelog = [];
+    (booking as any).changelog.push({
+      changedAt: new Date(),
+      changedBy: session.user.name ?? (session.user as any).email ?? 'system',
+      field: 'requestedQuantity',
+      fromValue: String(previousQuantity),
+      toValue: String(newQuantity),
+    });
+
     await booking.save();
 
     let resolvedVesselName = booking.vesselName ?? '';
@@ -919,8 +953,9 @@ export async function updateBookingQuantity(data: unknown) {
         voyageNumber: booking.voyageNumber ?? '',
         vesselName: resolvedVesselName,
         shipperName: booking.shipper?.name ?? '',
-        newQuantity: validated.requestedQuantity,
+        newQuantity,
         modifiedBy: (session.user as any).email ?? '',
+        requiresReapproval,
       }).catch(err => console.error('[email] updateBookingQuantity planner notify failed:', err.message));
     } else {
       const shipperUserForModify = await UserModel.findOne({
@@ -932,7 +967,8 @@ export async function updateBookingQuantity(data: unknown) {
           bookingNumber: booking.bookingNumber,
           voyageNumber: booking.voyageNumber ?? '',
           vesselName: resolvedVesselName,
-          newQuantity: validated.requestedQuantity,
+          newQuantity,
+          previousQuantity,
           modifiedBy: session.user.name ?? (session.user as any).email ?? 'system',
         }).catch(err => console.error('[email] updateBookingQuantity shipper notify failed:', err.message));
       } else {

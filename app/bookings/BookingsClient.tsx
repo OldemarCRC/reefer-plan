@@ -370,7 +370,12 @@ export default function BookingsClient({
                 filtered.map((b) => (
                   <tr
                     key={b._id}
-                    className={b.status === 'PENDING' || b.status === 'STANDBY' ? styles.rowHighlight : ''}
+                    className={
+                      b.status === 'PENDING' ||
+                      b.status === 'STANDBY' ||
+                      (b.status === 'PARTIAL' && (b.standbyQuantity ?? 0) > 0)
+                        ? styles.rowHighlight : ''
+                    }
                   >
                     <td className={styles.cellMono}>
                       <div className={styles.bookingCell}>

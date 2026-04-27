@@ -104,7 +104,9 @@ export default async function BookingsPage({ searchParams }: { searchParams?: Pr
 
   const confirmed = displayBookings.filter((b) => b.status === 'CONFIRMED').length;
   const pending = displayBookings.filter((b) =>
-    b.status === 'PENDING' || b.status === 'STANDBY' || b.status === 'PARTIAL'
+    b.status === 'PENDING' ||
+    b.status === 'STANDBY' ||
+    (b.status === 'PARTIAL' && (b.standbyQuantity ?? 0) > 0)
   ).length;
 
   const voyageOptions = [...new Map(

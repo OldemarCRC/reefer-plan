@@ -486,16 +486,21 @@ export async function sendBookingStatusChanged(
   const from = `"Reefer Stowage Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
   const baseUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3001';
 
+  const conf = data.confirmedQuantity ?? 0;
+  const isPartialRejection = data.newStatus === 'REJECTED' && conf > 0;
+
   const subjectMap: Record<string, string> = {
     CONFIRMED: `Booking Confirmed — ${data.bookingNumber}`,
     PARTIAL:   `Booking Partially Confirmed — ${data.bookingNumber}`,
-    REJECTED:  `Booking Not Accepted — ${data.bookingNumber}`,
+    REJECTED:  isPartialRejection
+      ? `Booking Partially Not Accepted — ${data.bookingNumber}`
+      : `Booking Not Accepted — ${data.bookingNumber}`,
     STANDBY:   `Booking on Standby — ${data.bookingNumber}`,
   };
   const headingMap: Record<string, string> = {
     CONFIRMED: 'Your booking has been confirmed',
     PARTIAL:   'Your booking has been partially confirmed',
-    REJECTED:  'Your booking could not be accepted',
+    REJECTED:  isPartialRejection ? 'An update on your booking' : 'Your booking could not be accepted',
     STANDBY:   'Your booking is on standby',
   };
   const badgeStyle: Record<string, { bg: string; fg: string }> = {
@@ -511,14 +516,25 @@ export async function sendBookingStatusChanged(
   if (data.newStatus === 'CONFIRMED') {
     statusMessage = `<p>Your full quantity of <strong style="color: #f1f5f9;">${data.requestedQuantity} pallets</strong> has been confirmed.</p>`;
   } else if (data.newStatus === 'PARTIAL') {
-    const conf = data.confirmedQuantity ?? 0;
-    const stby = data.standbyQuantity ?? (data.requestedQuantity - conf);
-    statusMessage = `<p><strong style="color: #f1f5f9;">${conf}</strong> of your requested <strong style="color: #f1f5f9;">${data.requestedQuantity} pallets</strong> have been confirmed. <strong style="color: #f1f5f9;">${stby} pallets</strong> remain on standby.</p>`;
+    const stby = data.standbyQuantity ?? 0;
+    const rej  = data.rejectedQuantity ?? 0;
+    statusMessage = `<p><strong style="color: #f1f5f9;">${conf}</strong> of your <strong style="color: #f1f5f9;">${data.requestedQuantity}</strong> requested pallets have been confirmed.</p>`;
+    if (stby > 0) {
+      statusMessage += `<p><strong style="color: #f1f5f9;">${stby} pallets</strong> are on standby — you will be notified when a final decision is made.</p>`;
+    }
+    if (rej > 0) {
+      statusMessage += `<p><strong style="color: #f1f5f9;">${rej} pallets</strong> could not be accommodated on this sailing.</p>`;
+    }
   } else if (data.newStatus === 'REJECTED') {
-    statusMessage = `<p>Unfortunately your booking could not be accepted.</p>`;
-    if (data.rejectionReason) {
-      statusMessage += `<p style="background: #1a0f0f; border-left: 3px solid #ef4444; padding: 10px 14px;
-        border-radius: 4px; color: #fca5a5; font-size: 13px; margin: 12px 0 0;">${data.rejectionReason}</p>`;
+    if (isPartialRejection) {
+      const rej = data.rejectedQuantity ?? 0;
+      statusMessage = `<p>An update on your booking: <strong style="color: #f1f5f9;">${conf} pallets</strong> have been confirmed. <strong style="color: #f1f5f9;">${rej} pallets</strong> could not be accommodated.</p>`;
+    } else {
+      statusMessage = `<p>Unfortunately, we were unable to accommodate your booking request of <strong style="color: #f1f5f9;">${data.requestedQuantity} pallets</strong> on this sailing.</p>`;
+      if (data.rejectionReason) {
+        statusMessage += `<p style="background: #1a0f0f; border-left: 3px solid #ef4444; padding: 10px 14px;
+          border-radius: 4px; color: #fca5a5; font-size: 13px; margin: 12px 0 0;">${data.rejectionReason}</p>`;
+      }
     }
   } else {
     statusMessage = `<p>Your booking is on standby. You will be notified if space becomes available.</p>`;
@@ -569,10 +585,11 @@ function formatUtcDateTime(d: Date): { date: string; time: string } {
 // 3A — Password change notification
 export async function sendPasswordChangedNotification(to: EmailRecipient): Promise<void> {
   const from = `"Reefer Stowage Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
+  const agencyName = process.env.AGENCY_NAME ?? 'Reefer Stowage Planner';
   const { date, time } = formatUtcDateTime(new Date());
 
   const html = buildEmailHtml({
-    title: 'Your password has been changed — Reefer Stowage Planner',
+    title: `Your password has been changed — ${agencyName}`,
     heading: 'Password changed successfully',
     body: `
       <p>Your password was changed on <strong style="color: #f1f5f9;">${date}</strong> at <strong style="color: #f1f5f9;">${time} UTC</strong>.</p>
@@ -588,7 +605,7 @@ export async function sendPasswordChangedNotification(to: EmailRecipient): Promi
   await transporter.sendMail({
     from,
     to: toAddress,
-    subject: 'Your password has been changed — Reefer Stowage Planner',
+    subject: `Your password has been changed — ${agencyName}`,
     html,
     text: `Your password was changed on ${date} at ${time} UTC. If you did not make this change, contact your administrator immediately.`,
   });
@@ -597,10 +614,11 @@ export async function sendPasswordChangedNotification(to: EmailRecipient): Promi
 // 3B — Failed login warning (5th attempt)
 export async function sendFailedLoginWarning(to: EmailRecipient): Promise<void> {
   const from = `"Reefer Stowage Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
+  const agencyName = process.env.AGENCY_NAME ?? 'Reefer Stowage Planner';
   const { date, time } = formatUtcDateTime(new Date());
 
   const html = buildEmailHtml({
-    title: 'Multiple failed login attempts — Reefer Stowage Planner',
+    title: `Multiple failed login attempts — ${agencyName}`,
     heading: 'Unusual login activity detected',
     body: `
       <p>We detected <strong style="color: #f1f5f9;">5 failed login attempts</strong> on your account on <strong style="color: #f1f5f9;">${date}</strong> at <strong style="color: #f1f5f9;">${time} UTC</strong>.</p>
@@ -615,7 +633,7 @@ export async function sendFailedLoginWarning(to: EmailRecipient): Promise<void> 
   await transporter.sendMail({
     from,
     to: toAddress,
-    subject: 'Multiple failed login attempts — Reefer Stowage Planner',
+    subject: `Multiple failed login attempts — ${agencyName}`,
     html,
     text: `We detected 5 failed login attempts on your account on ${date} at ${time} UTC. Your account has been temporarily rate-limited.`,
   });
@@ -714,6 +732,7 @@ export interface BookingModifiedShipperData {
   voyageNumber: string;
   vesselName?: string;
   newQuantity: number;
+  previousQuantity?: number;
   modifiedBy: string;
 }
 
@@ -724,6 +743,7 @@ export interface BookingModifiedPlannerData {
   shipperName: string;
   newQuantity: number;
   modifiedBy: string;
+  requiresReapproval?: boolean;
 }
 
 export async function sendBookingModifiedToShipper(
@@ -737,12 +757,13 @@ export async function sendBookingModifiedToShipper(
     title: `Booking Updated — ${data.bookingNumber}`,
     heading: 'Your booking has been updated',
     body: `
+      <p>Your booking <strong style="color: #f1f5f9;">${data.bookingNumber}</strong> has been updated by your shipping coordinator. The requested quantity is now <strong style="color: #f1f5f9;">${data.newQuantity} pallets</strong>.</p>
+      ${data.previousQuantity != null ? `<p style="color: #94a3b8; font-size: 13px;">Previous quantity: ${data.previousQuantity} pallets.</p>` : ''}
       ${bookingDetailTable([
         ['Booking Number', data.bookingNumber],
         ['Vessel / Voyage', `${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber}`],
         ['New Quantity', `${data.newQuantity} pallets`],
       ])}
-      <p>The requested quantity has been updated to <strong style="color: #f1f5f9;">${data.newQuantity} pallets</strong> by <strong style="color: #f1f5f9;">${data.modifiedBy}</strong>.</p>
     `,
     ctaText: 'View Booking',
     ctaUrl: `${baseUrl}/shipper/bookings/${data.bookingId}`,
@@ -776,6 +797,11 @@ export async function sendBookingModifiedToPlanners(
         ['New Quantity', `${data.newQuantity} pallets`],
       ])}
       <p>Modified by <strong style="color: #f1f5f9;">${data.modifiedBy}</strong>.</p>
+      ${data.requiresReapproval ? `
+      <p style="background: #1c1a00; border-left: 3px solid #f59e0b; padding: 10px 14px;
+        border-radius: 4px; color: #fde68a; font-size: 13px; margin: 12px 0 0;">
+        &#9888; This modification increased the requested quantity and requires re-approval.
+      </p>` : ''}
     `,
     ctaText: 'View Bookings',
     ctaUrl: `${baseUrl}/bookings`,
@@ -791,4 +817,82 @@ export async function sendBookingModifiedToPlanners(
       text: `Booking ${data.bookingNumber} — Vessel / Voyage: ${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber} — quantity updated to ${data.newQuantity} pallets by ${data.modifiedBy}.`,
     });
   }));
+}
+
+// ============================================================================
+// STANDBY RESOLUTION EMAIL
+// Sent to shipper when planners confirm or reject standby pallets
+// ============================================================================
+
+export interface StandbyResolvedEmailData {
+  bookingId: string;
+  bookingNumber: string;
+  voyageNumber: string;
+  vesselName?: string;
+  serviceCode: string;
+  polPortName: string;
+  podPortName: string;
+  cargoType: string;
+  action: 'CONFIRM' | 'REJECT';
+  resolvedQuantity: number;
+  confirmedQuantity: number;
+  standbyQuantity: number;
+  rejectedQuantity: number;
+}
+
+export async function sendStandbyResolved(
+  to: EmailRecipient,
+  data: StandbyResolvedEmailData
+): Promise<void> {
+  const from = `"Reefer Stowage Planner" <${process.env.EMAIL_USER?.replace(/'/g, '')}>`;
+  const baseUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3001';
+  const isConfirm = data.action === 'CONFIRM';
+
+  const subject = isConfirm
+    ? `Standby Pallets Confirmed — ${data.bookingNumber}`
+    : `Standby Pallets Not Accepted — ${data.bookingNumber}`;
+
+  const heading = isConfirm
+    ? 'Standby pallets have been confirmed'
+    : 'Standby pallets could not be accommodated';
+
+  let bodyContent = '';
+  if (isConfirm) {
+    bodyContent = `<p><strong style="color: #f1f5f9;">${data.resolvedQuantity} pallets</strong> that were on standby for booking <span style="font-family: monospace;">${data.bookingNumber}</span> have now been confirmed. Total confirmed: <strong style="color: #f1f5f9;">${data.confirmedQuantity} pallets</strong>.</p>`;
+    if (data.standbyQuantity > 0) {
+      bodyContent += `<p><strong style="color: #f1f5f9;">${data.standbyQuantity} pallets</strong> remain on standby.</p>`;
+    }
+  } else {
+    bodyContent = `<p><strong style="color: #f1f5f9;">${data.resolvedQuantity} pallets</strong> on standby for booking <span style="font-family: monospace;">${data.bookingNumber}</span> could not be accommodated and have been rejected.</p>`;
+    if (data.confirmedQuantity > 0) {
+      bodyContent += `<p>Your confirmed quantity remains <strong style="color: #f1f5f9;">${data.confirmedQuantity} pallets</strong>.</p>`;
+    }
+  }
+
+  const html = buildEmailHtml({
+    title: subject,
+    heading,
+    body: `
+      ${bodyContent}
+      ${bookingDetailTable([
+        ['Booking Number', data.bookingNumber],
+        ['Vessel / Voyage', `${data.vesselName ? `${data.vesselName} / ` : ''}${data.voyageNumber}`],
+        ['Route', `${data.polPortName} → ${data.podPortName}`],
+        ['Cargo Type', formatCargoType(data.cargoType)],
+      ])}
+    `,
+    ctaText: 'View Booking Details',
+    ctaUrl: `${baseUrl}/shipper/bookings/${data.bookingId}`,
+  });
+
+  const toAddress = to.name ? `"${to.name}" <${to.email}>` : to.email;
+  await transporter.sendMail({
+    from,
+    to: toAddress,
+    subject,
+    html,
+    text: isConfirm
+      ? `${data.resolvedQuantity} standby pallets for booking ${data.bookingNumber} have been confirmed. Total confirmed: ${data.confirmedQuantity} pallets.${data.standbyQuantity > 0 ? ` ${data.standbyQuantity} pallets remain on standby.` : ''}`
+      : `${data.resolvedQuantity} standby pallets for booking ${data.bookingNumber} could not be accommodated and have been rejected.${data.confirmedQuantity > 0 ? ` Your confirmed quantity remains ${data.confirmedQuantity} pallets.` : ''}`,
+  });
 }
