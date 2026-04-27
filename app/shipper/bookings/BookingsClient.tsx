@@ -71,10 +71,15 @@ export default function BookingsClient({
   return (
     <div>
       <div className={styles.pageHeader}>
-        <h1 className={styles.pageTitle}>My Bookings</h1>
-        <p className={styles.pageSubtitle}>
-          {shipperCode ? `Shipper code: ${shipperCode}` : 'All cargo bookings for your account.'}
-        </p>
+        <div>
+          <h1 className={styles.pageTitle}>My Bookings</h1>
+          <p className={styles.pageSubtitle}>
+            {shipperCode ? `Shipper code: ${shipperCode}` : 'All cargo bookings for your account.'}
+          </p>
+        </div>
+        <Link href="/shipper/request" className={styles.filterNewBtn}>
+          + New Request
+        </Link>
       </div>
 
       <div className={styles.filterBar}>
@@ -93,9 +98,6 @@ export default function BookingsClient({
             <option key={s} value={s}>{s === 'ALL' ? 'All Statuses' : s}</option>
           ))}
         </select>
-        <Link href="/shipper/request" className={styles.filterNewBtn}>
-          + New Request
-        </Link>
       </div>
 
       {filtered.length === 0 ? (

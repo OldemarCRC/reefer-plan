@@ -5,7 +5,12 @@
 /* --- Page header --- */
 
 .pageHeader {
-  margin-bottom: var(--space-6);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
 .pageTitle {
@@ -100,14 +105,19 @@
 /* --- Booking table --- */
 
 .tableWrapper {
+  display: block;
   background: var(--color-bg-secondary);
   border: var(--border-subtle);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
 }
 
 .table {
   width: 100%;
+  min-width: 700px;
   border-collapse: collapse;
   font-size: var(--text-sm);
 }
@@ -289,6 +299,8 @@
 
 .filterBar {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-3);
   margin-bottom: var(--space-4);
   flex-wrap: wrap;
@@ -775,6 +787,7 @@
   font-weight: var(--weight-semibold);
   text-decoration: none;
   white-space: nowrap;
+  flex-shrink: 0;
   min-height: 44px;
 }
 
@@ -794,6 +807,14 @@
 /* ============================================================================
    RESPONSIVE — Tablet (768px–1023px) and Mobile (≤767px)
    ============================================================================ */
+
+/* Intermediate: reinforce table scroll on 10" tablets and 14" laptops */
+@media (min-width: 768px) and (max-width: 1199px) {
+  .tableWrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
 
 /* Tablet: 2-column summary grid */
 @media (min-width: 768px) and (max-width: 1023px) {
@@ -898,6 +919,18 @@
     flex-wrap: wrap;
   }
 
+  /* ---------- Page header: stack button below title on mobile ---------- */
+
+  .pageHeader {
+    align-items: flex-start;
+  }
+
+  .filterNewBtn {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+
   /* ---------- Filter bar: vertical stack ---------- */
 
   .filterBar {
@@ -913,12 +946,6 @@
 
   .filterSelect {
     width: 100%;
-    min-height: 44px;
-  }
-
-  .filterNewBtn {
-    width: 100%;
-    justify-content: center;
     min-height: 44px;
   }
 
