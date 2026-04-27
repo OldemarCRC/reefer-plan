@@ -40,6 +40,7 @@ export default async function BookingsPage({ searchParams }: { searchParams?: Pr
     requestedQuantity: b.requestedQuantity || 0,
     confirmedQuantity: b.confirmedQuantity || 0,
     standbyQuantity: b.standbyQuantity || 0,
+    rejectedQuantity: b.rejectedQuantity || 0,
     polCode: b.polCode || b.pol?.portCode || '—',
     podCode: b.podCode || b.pod?.portCode || '—',
     status: b.status || 'PENDING',

@@ -55,8 +55,19 @@ const CreateBookingFromContractSchema = z.object({
 });
 
 const ApproveBookingSchema = z.object({
-  bookingId: z.string().min(1),
+  bookingId:         z.string().min(1),
   confirmedQuantity: z.number().int().min(0),
+  standbyQuantity:   z.number().int().min(0),
+  rejectedQuantity:  z.number().int().min(0),
+}).refine(
+  data => data.confirmedQuantity + data.standbyQuantity + data.rejectedQuantity > 0,
+  { message: 'At least one quantity must be greater than zero' }
+);
+
+const ResolveStandbySchema = z.object({
+  bookingId: z.string().min(1),
+  action:    z.enum(['CONFIRM', 'REJECT']),
+  quantity:  z.number().int().min(1).optional(),
 });
 
 const RejectBookingSchema = z.object({
@@ -462,22 +473,30 @@ export async function approveBooking(data: unknown) {
 
     const requested = booking.requestedQuantity;
     const confirmed = validated.confirmedQuantity;
+    const standby   = validated.standbyQuantity;
+    const rejected  = validated.rejectedQuantity;
+
+    if (confirmed + standby + rejected !== requested) {
+      return {
+        success: false,
+        error: `Quantities must sum to ${requested} (requested). Got ${confirmed + standby + rejected}.`,
+      };
+    }
 
     let status: BookingStatus;
-    let standby = 0;
-
-    if (confirmed === 0) {
-      status = 'STANDBY';
-      standby = requested;
-    } else if (confirmed < requested) {
-      status = 'PARTIAL';
-      standby = requested - confirmed;
-    } else {
+    if (confirmed === requested) {
       status = 'CONFIRMED';
+    } else if (confirmed > 0) {
+      status = 'PARTIAL';
+    } else if (standby > 0) {
+      status = 'STANDBY';
+    } else {
+      status = 'REJECTED';
     }
 
     booking.confirmedQuantity = confirmed;
-    booking.standbyQuantity = standby;
+    booking.standbyQuantity   = standby;
+    booking.rejectedQuantity  = rejected;
     booking.status = status;
     booking.confirmedDate = new Date();
     booking.approvedBy = session.user.name ?? (session.user as any).email ?? 'system';
@@ -513,6 +532,7 @@ export async function approveBooking(data: unknown) {
           requestedQuantity: requested,
           confirmedQuantity: confirmed,
           standbyQuantity: standby,
+          rejectedQuantity: rejected,
           newStatus: status,
         }
       ).catch(err => console.error('[email] sendBookingStatusChanged failed:', err.message));
@@ -520,14 +540,15 @@ export async function approveBooking(data: unknown) {
       console.warn('[email] no shipper user found for booking', booking.bookingNumber, '— shipperId:', booking.shipperId);
     }
 
+    const parts: string[] = [];
+    if (confirmed > 0) parts.push(`${confirmed} confirmed`);
+    if (standby > 0)   parts.push(`${standby} on standby`);
+    if (rejected > 0)  parts.push(`${rejected} rejected`);
+
     return {
       success: true,
       data: JSON.parse(JSON.stringify(booking)),
-      message: status === 'PARTIAL'
-        ? `Partially confirmed: ${confirmed}/${requested} pallets. ${standby} on standby.`
-        : status === 'STANDBY'
-          ? `All ${requested} pallets placed on standby.`
-          : `Fully confirmed: ${confirmed} pallets.`,
+      message: `${requested} pallets processed: ${parts.join(', ')}.`,
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -535,6 +556,108 @@ export async function approveBooking(data: unknown) {
     }
     console.error('Error approving booking:', error);
     return { success: false, error: 'Failed to approve booking' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// RESOLVE STANDBY — move standby pallets to confirmed or rejected
+// ----------------------------------------------------------------------------
+
+export async function resolveStandby(data: unknown) {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role;
+    if (role !== 'ADMIN' && role !== 'SHIPPING_PLANNER') return { success: false, error: 'Forbidden' };
+
+    const validated = ResolveStandbySchema.parse(data);
+    await connectDB();
+
+    const booking = await BookingModel.findById(validated.bookingId);
+    if (!booking) return { success: false, error: 'Booking not found' };
+
+    if (!['STANDBY', 'PARTIAL'].includes(booking.status)) {
+      return { success: false, error: 'Booking must be in STANDBY or PARTIAL status' };
+    }
+    const currentStandby = booking.standbyQuantity ?? 0;
+    if (currentStandby <= 0) {
+      return { success: false, error: 'No standby quantity to resolve' };
+    }
+
+    const qty = validated.quantity ?? currentStandby;
+    if (qty > currentStandby) {
+      return { success: false, error: `Cannot resolve ${qty} — only ${currentStandby} on standby` };
+    }
+
+    const changedBy = session.user.name ?? (session.user as any).email ?? 'system';
+    const now = new Date();
+
+    if (validated.action === 'CONFIRM') {
+      booking.confirmedQuantity = (booking.confirmedQuantity ?? 0) + qty;
+      booking.standbyQuantity   = currentStandby - qty;
+      booking.status = booking.standbyQuantity === 0 && (booking.rejectedQuantity ?? 0) === 0
+        ? 'CONFIRMED'
+        : 'PARTIAL';
+    } else {
+      booking.rejectedQuantity = (booking.rejectedQuantity ?? 0) + qty;
+      booking.standbyQuantity  = currentStandby - qty;
+      booking.status = (booking.confirmedQuantity ?? 0) === 0 && booking.standbyQuantity === 0
+        ? 'REJECTED'
+        : 'PARTIAL';
+    }
+
+    if (!(booking as any).changelog) (booking as any).changelog = [];
+    (booking as any).changelog.push({
+      changedAt: now,
+      changedBy,
+      field: 'standbyQuantity',
+      fromValue: String(qty),
+      toValue: validated.action === 'CONFIRM' ? 'CONFIRMED' : 'REJECTED',
+    });
+
+    await booking.save();
+
+    let resolvedVesselName = booking.vesselName ?? '';
+    if (!resolvedVesselName && booking.voyageId) {
+      const voy = await VoyageModel.findById(booking.voyageId).select('vesselName vesselId').lean();
+      resolvedVesselName = (voy as any)?.vesselName ?? '';
+      if (!resolvedVesselName && (voy as any)?.vesselId) {
+        const ves = await VesselModel.findById((voy as any).vesselId).select('name').lean();
+        resolvedVesselName = (ves as any)?.name ?? '';
+      }
+    }
+
+    const shipperUser = await UserModel.findOne({ shipperId: booking.shipperId }).select('email').lean() as any;
+    if (shipperUser?.email) {
+      sendBookingStatusChanged(
+        { email: shipperUser.email },
+        {
+          bookingId: booking._id.toString(),
+          bookingNumber: booking.bookingNumber,
+          voyageNumber: booking.voyageNumber ?? '',
+          vesselName: resolvedVesselName,
+          serviceCode: booking.serviceCode ?? '',
+          polPortName: (booking.pol as any)?.portName ?? (booking.pol as any)?.portCode ?? '',
+          podPortName: (booking.pod as any)?.portName ?? (booking.pod as any)?.portCode ?? '',
+          cargoType: booking.cargoType,
+          requestedQuantity: booking.requestedQuantity,
+          confirmedQuantity: booking.confirmedQuantity,
+          standbyQuantity: booking.standbyQuantity,
+          rejectedQuantity: booking.rejectedQuantity,
+          newStatus: booking.status as 'CONFIRMED' | 'PARTIAL' | 'REJECTED' | 'STANDBY',
+        }
+      ).catch(err => console.error('[email] resolveStandby email failed:', err.message));
+    } else {
+      console.warn('[email] no shipper user found for booking', booking.bookingNumber, '— skipping standby resolve email');
+    }
+
+    return { success: true, data: JSON.parse(JSON.stringify(booking)) };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: `Validation error: ${error.issues[0].message}` };
+    }
+    console.error('Error resolving standby:', error);
+    return { success: false, error: 'Failed to resolve standby' };
   }
 }
 

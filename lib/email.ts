@@ -329,6 +329,7 @@ export interface BookingStatusEmailData {
   requestedQuantity: number;
   confirmedQuantity?: number;
   standbyQuantity?: number;
+  rejectedQuantity?: number;
   newStatus: 'CONFIRMED' | 'PARTIAL' | 'REJECTED' | 'STANDBY';
   rejectionReason?: string;
 }

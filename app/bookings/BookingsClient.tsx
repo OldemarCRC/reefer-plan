@@ -3,7 +3,7 @@
 import { useState, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './page.module.css';
-import { createBookingFromContract, approveBooking, rejectBooking, updateBookingQuantity } from '@/app/actions/booking';
+import { createBookingFromContract, approveBooking, rejectBooking, updateBookingQuantity, resolveStandby } from '@/app/actions/booking';
 import ContractSelect from '@/components/ui/ContractSelect';
 import type { ContractSelectItem } from '@/components/ui/ContractSelect';
 import type { CargoType } from '@/types/models';
@@ -74,6 +74,7 @@ export interface DisplayBooking {
   requestedQuantity: number;
   confirmedQuantity: number;
   standbyQuantity: number;
+  rejectedQuantity?: number;
   polCode: string;
   podCode: string;
   status: string;
@@ -187,6 +188,10 @@ export default function BookingsClient({
   const [approveTarget, setApproveTarget] = useState<DisplayBooking | null>(null);
   const [rejectTarget, setRejectTarget] = useState<DisplayBooking | null>(null);
   const [editTarget, setEditTarget] = useState<DisplayBooking | null>(null);
+  const [resolveStandbyTarget, setResolveStandbyTarget] = useState<{
+    booking: DisplayBooking;
+    action: 'CONFIRM' | 'REJECT';
+  } | null>(null);
 
   const filtered = useMemo(() => {
     return bookings.filter((b) => {
@@ -426,6 +431,22 @@ export default function BookingsClient({
                             </button>
                           </>
                         )}
+                        {(b.status === 'STANDBY' || b.status === 'PARTIAL') && (b.standbyQuantity ?? 0) > 0 && (
+                          <>
+                            <button
+                              className={styles.btnStandbyConfirm}
+                              onClick={() => setResolveStandbyTarget({ booking: b, action: 'CONFIRM' })}
+                            >
+                              Confirm Stby
+                            </button>
+                            <button
+                              className={styles.btnStandbyReject}
+                              onClick={() => setResolveStandbyTarget({ booking: b, action: 'REJECT' })}
+                            >
+                              Reject Stby
+                            </button>
+                          </>
+                        )}
                         {b.status !== 'CANCELLED' && (
                           <button
                             className={styles.btnEdit}
@@ -468,6 +489,13 @@ export default function BookingsClient({
         <EditModal
           booking={editTarget}
           onClose={() => setEditTarget(null)}
+        />
+      )}
+      {resolveStandbyTarget && (
+        <StandbyResolveModal
+          booking={resolveStandbyTarget.booking}
+          action={resolveStandbyTarget.action}
+          onClose={() => setResolveStandbyTarget(null)}
         />
       )}
     </>
@@ -933,7 +961,7 @@ function CreateBookingModal({
 }
 
 // ---------------------------------------------------------------------------
-// Approve Modal
+// Approve Modal — 3-bucket allocation
 // ---------------------------------------------------------------------------
 
 function ApproveModal({
@@ -945,20 +973,42 @@ function ApproveModal({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [confirmedQty, setConfirmedQty] = useState(booking.requestedQuantity);
+  const requested = booking.requestedQuantity;
+  const [confirmedQty, setConfirmedQty] = useState(requested);
+  const [standbyQty,   setStandbyQty]   = useState(0);
+  const [rejectedQty,  setRejectedQty]  = useState(0);
   const [error, setError] = useState('');
 
-  const standby = Math.max(0, booking.requestedQuantity - confirmedQty);
-  const resultStatus = confirmedQty === 0 ? 'STANDBY' : confirmedQty < booking.requestedQuantity ? 'PARTIAL' : 'CONFIRMED';
+  const total = confirmedQty + standbyQty + rejectedQty;
+  const isBalanced = total === requested;
+
+  const resultStatus: string = (() => {
+    if (!isBalanced)               return '';
+    if (confirmedQty === requested) return 'CONFIRMED';
+    if (confirmedQty > 0)           return 'PARTIAL';
+    if (standbyQty > 0)             return 'STANDBY';
+    return 'REJECTED';
+  })();
+
+  const totalBarClass = isBalanced
+    ? styles.totalBarOk
+    : total > requested
+      ? styles.totalBarOver
+      : styles.totalBarUnder;
 
   function handleApprove() {
+    if (!isBalanced) {
+      setError(`All ${requested} pallets must be assigned. Currently ${total}.`);
+      return;
+    }
     setError('');
     startTransition(async () => {
       try {
         const result = await approveBooking({
-          bookingId: booking._id,
+          bookingId:         booking._id,
           confirmedQuantity: confirmedQty,
-          approvedBy: 'system',
+          standbyQuantity:   standbyQty,
+          rejectedQuantity:  rejectedQty,
         });
         if (!result.success) {
           setError(result.error || 'Failed to approve');
@@ -989,45 +1039,74 @@ function ApproveModal({
         )}
 
         <div className={styles.modalBody}>
-          <div className={styles.formRow}>
-            <label className={styles.formLabel}>
-              Confirmed Quantity (max: {booking.requestedQuantity})
-            </label>
-            <input
-              type="number"
-              className={styles.formInput}
-              min={0}
-              max={booking.requestedQuantity}
-              value={confirmedQty}
-              onChange={(e) => setConfirmedQty(Math.min(parseInt(e.target.value) || 0, booking.requestedQuantity))}
-            />
+          <p className={styles.approveRequested}>
+            Requested: <strong>{requested}</strong> pallets — assign all {requested} across the three buckets below.
+          </p>
+
+          {/* Quick-fill shortcuts */}
+          <div className={styles.quickFill}>
+            <button type="button" className={styles.btnQuickFill}
+              onClick={() => { setConfirmedQty(requested); setStandbyQty(0); setRejectedQty(0); }}>
+              Confirm all
+            </button>
+            <button type="button" className={styles.btnQuickFill}
+              onClick={() => { setConfirmedQty(0); setStandbyQty(requested); setRejectedQty(0); }}>
+              All standby
+            </button>
+            <button type="button" className={styles.btnQuickFill}
+              onClick={() => { setConfirmedQty(0); setStandbyQty(0); setRejectedQty(requested); }}>
+              Reject all
+            </button>
           </div>
-          <div className={styles.approvePreview}>
-            <div className={styles.previewItem}>
-              <span className={styles.fieldLabel}>Requested</span>
-              <span>{booking.requestedQuantity}</span>
+
+          {/* Three quantity inputs */}
+          <div className={styles.approveQtyGrid}>
+            <div className={styles.approveQtyGroup}>
+              <label className={styles.formLabel}>Confirmed pallets</label>
+              <input
+                type="number"
+                className={styles.formInput}
+                min={0}
+                max={requested}
+                value={confirmedQty}
+                onChange={(e) => setConfirmedQty(Math.max(0, parseInt(e.target.value) || 0))}
+              />
             </div>
-            <div className={styles.previewItem}>
-              <span className={styles.fieldLabel}>Confirmed</span>
-              <span className={styles.cellConfirmed}>{confirmedQty}</span>
+            <div className={styles.approveQtyGroup}>
+              <label className={styles.formLabel}>Standby pallets</label>
+              <input
+                type="number"
+                className={styles.formInput}
+                min={0}
+                max={requested}
+                value={standbyQty}
+                onChange={(e) => setStandbyQty(Math.max(0, parseInt(e.target.value) || 0))}
+              />
             </div>
-            <div className={styles.previewItem}>
-              <span className={styles.fieldLabel}>Standby</span>
-              <span className={standby > 0 ? styles.cellStandby : styles.cellZero}>
-                {standby > 0 ? standby : '—'}
-              </span>
+            <div className={styles.approveQtyGroup}>
+              <label className={styles.formLabel}>Rejected pallets</label>
+              <input
+                type="number"
+                className={styles.formInput}
+                min={0}
+                max={requested}
+                value={rejectedQty}
+                onChange={(e) => setRejectedQty(Math.max(0, parseInt(e.target.value) || 0))}
+              />
             </div>
-            <div className={styles.previewItem}>
-              <span className={styles.fieldLabel}>Result</span>
-              <StatusBadge status={resultStatus} />
-            </div>
+          </div>
+
+          {/* Live running total */}
+          <div className={`${styles.totalBar} ${totalBarClass}`}>
+            <span>Total assigned: {total} / {requested}</span>
+            {isBalanced && resultStatus && <StatusBadge status={resultStatus} />}
           </div>
 
           <div className={styles.modalActions}>
             <button className={styles.btnModalCancel} onClick={onClose}>Cancel</button>
             <button
               className={styles.btnApproveAction}
-              disabled={isPending}
+              disabled={isPending || !isBalanced}
               onClick={handleApprove}
             >
               {isPending ? 'Approving...' : 'Confirm Approval'}
@@ -1224,6 +1303,88 @@ function EditModal({
               onClick={handleSave}
             >
               {isPending ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Standby Resolve Modal
+// ---------------------------------------------------------------------------
+
+function StandbyResolveModal({
+  booking,
+  action,
+  onClose,
+}: {
+  booking: DisplayBooking;
+  action: 'CONFIRM' | 'REJECT';
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState('');
+
+  const standbyQty = booking.standbyQuantity ?? 0;
+  const isConfirm  = action === 'CONFIRM';
+
+  function handleResolve() {
+    setError('');
+    startTransition(async () => {
+      try {
+        const result = await resolveStandby({ bookingId: booking._id, action });
+        if (!result.success) {
+          setError(result.error || 'Failed to resolve standby');
+          return;
+        }
+        router.refresh();
+        onClose();
+      } catch (e: any) {
+        setError(e.message || 'Failed to resolve standby');
+      }
+    });
+  }
+
+  return (
+    <div className={styles.overlay} onClick={onClose}>
+      <div
+        className={styles.modal}
+        style={{ maxWidth: 420, minHeight: 'auto' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className={styles.modalTitle}>
+          {isConfirm ? 'Confirm Standby Pallets' : 'Reject Standby Pallets'}
+        </h2>
+        <div className={styles.approveInfo}>
+          <span className={styles.cellMono}>{booking.bookingNumber}</span>
+          <span>{booking.clientName} · {formatCargo(booking.cargoType)}</span>
+        </div>
+
+        {error && <div className={styles.modalError}>{error}</div>}
+
+        <div className={styles.modalBody}>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
+            {isConfirm
+              ? `Move all ${standbyQty} standby pallets to confirmed?`
+              : `Reject all ${standbyQty} standby pallets?`}
+          </p>
+          <div className={styles.modalActions}>
+            <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>
+              Cancel
+            </button>
+            <button
+              className={isConfirm ? styles.btnApproveAction : styles.btnRejectAction}
+              disabled={isPending}
+              onClick={handleResolve}
+            >
+              {isPending
+                ? 'Processing...'
+                : isConfirm
+                  ? `Confirm ${standbyQty} pallets`
+                  : `Reject ${standbyQty} pallets`}
             </button>
           </div>
         </div>
