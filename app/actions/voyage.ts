@@ -951,14 +951,28 @@ export async function getVoyages() {
     }
 
     const voyages = await VoyageModel.find(voyageQuery)
-      .populate('vesselId', 'name imoNumber')
+      .populate('vesselId', 'name imoNumber capacity')
       .populate('serviceId', 'serviceCode serviceName')
       .sort({ weekNumber: 1, departureDate: 1 })
       .lean();
 
+    const ids = voyages.map((v: any) => v._id);
+    const bookingAgg = await BookingModel.aggregate([
+      { $match: { voyageId: { $in: ids }, status: { $in: ['CONFIRMED', 'PARTIAL', 'PENDING'] } } },
+      { $group: { _id: '$voyageId', confirmedPallets: { $sum: '$confirmedQuantity' }, bookingCount: { $sum: 1 } } },
+    ]);
+    const bookingMap = Object.fromEntries(bookingAgg.map((r: any) => [r._id.toString(), r]));
+
+    const enriched = voyages.map((v: any) => ({
+      ...v,
+      palletsBooked:  bookingMap[v._id.toString()]?.confirmedPallets ?? 0,
+      palletsCapacity: (v.vesselId as any)?.capacity?.totalPallets ?? 0,
+      bookingsCount:  bookingMap[v._id.toString()]?.bookingCount ?? 0,
+    }));
+
     return {
       success: true,
-      data: JSON.parse(JSON.stringify(voyages)),
+      data: JSON.parse(JSON.stringify(enriched)),
     };
   } catch (error) {
     console.error('Error fetching voyages:', error);
@@ -1313,32 +1327,34 @@ export async function getAdminVoyages() {
     await connectDB();
 
     const voyages = await VoyageModel.find()
-      .populate('vesselId', 'name imoNumber')
+      .populate('vesselId', 'name imoNumber capacity')
       .populate('serviceId', 'serviceCode serviceName')
       .sort({ weekNumber: 1, departureDate: 1 })
       .lean();
 
-    // Fetch plan + booking counts for all voyages in parallel
+    // Fetch plan counts and booking pallet sums for all voyages in parallel
     const ids = voyages.map((v: any) => v._id);
-    const [planCounts, bookingCounts] = await Promise.all([
+    const [planCounts, bookingAgg] = await Promise.all([
       StowagePlanModel.aggregate([
         { $match: { voyageId: { $in: ids } } },
         { $group: { _id: '$voyageId', count: { $sum: 1 } } },
       ]),
       BookingModel.aggregate([
-        { $match: { voyageId: { $in: ids } } },
-        { $group: { _id: '$voyageId', count: { $sum: 1 } } },
+        { $match: { voyageId: { $in: ids }, status: { $in: ['CONFIRMED', 'PARTIAL', 'PENDING'] } } },
+        { $group: { _id: '$voyageId', confirmedPallets: { $sum: '$confirmedQuantity' }, count: { $sum: 1 } } },
       ]),
     ]);
 
-    const planMap = Object.fromEntries(planCounts.map((r: any) => [r._id.toString(), r.count]));
-    const bookingMap = Object.fromEntries(bookingCounts.map((r: any) => [r._id.toString(), r.count]));
+    const planMap    = Object.fromEntries(planCounts.map((r: any) => [r._id.toString(), r.count]));
+    const bookingMap = Object.fromEntries(bookingAgg.map((r: any) => [r._id.toString(), r]));
 
     const data = voyages.map((v: any) => ({
       ...v,
-      _id: v._id.toString(),
-      planCount: planMap[v._id.toString()] ?? 0,
-      bookingCount: bookingMap[v._id.toString()] ?? 0,
+      _id:             v._id.toString(),
+      planCount:       planMap[v._id.toString()] ?? 0,
+      bookingCount:    bookingMap[v._id.toString()]?.count ?? 0,
+      palletsBooked:   bookingMap[v._id.toString()]?.confirmedPallets ?? 0,
+      palletsCapacity: (v.vesselId as any)?.capacity?.totalPallets ?? 0,
     }));
 
     return { success: true, data: JSON.parse(JSON.stringify(data)) };

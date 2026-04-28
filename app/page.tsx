@@ -84,26 +84,41 @@ export default async function DashboardPage() {
   ).length;
 
   // Transform data for display
+  // Per-voyage confirmed pallet sum (CONFIRMED + PARTIAL) for the stowage plan LOADED bar
+  const voyageConfirmedPalletsMap = new Map<string, number>();
+  for (const b of bookings as any[]) {
+    if (b.status === 'CONFIRMED' || b.status === 'PARTIAL') {
+      const vid = (b.voyageId?._id ?? b.voyageId)?.toString() ?? '';
+      if (vid) voyageConfirmedPalletsMap.set(vid, (voyageConfirmedPalletsMap.get(vid) ?? 0) + (b.confirmedQuantity ?? 0));
+    }
+  }
+  const voyageCapacityMap = new Map<string, number>(
+    (voyages as any[]).map((v: any) => [v._id.toString(), v.palletsCapacity ?? 0])
+  );
+
   const recentVoyages = voyages.slice(0, 5).map((v: any) => ({
     _id: v._id,
     voyageNumber: v.voyageNumber,
     status: v.status || 'PLANNED',
     vesselName: v.vesselName,
     serviceCode: v.serviceId?.serviceCode || 'N/A',
-    palletsBooked: 0, // TODO: calculate from bookings
-    palletsCapacity: 1800, // TODO: fetch from vessel
+    palletsBooked:  v.palletsBooked ?? 0,
+    palletsCapacity: v.palletsCapacity ?? 0,
   }));
 
-  const recentPlans = plans.slice(0, 5).map((p: any) => ({
-    _id: p._id,
-    planNumber: p.planNumber || `PLAN-${p._id.toString().slice(-6)}`,
-    voyageNumber: p.voyageId?.voyageNumber || 'N/A',
-    status: p.status || 'DRAFT',
-    palletsAssigned: p.cargoPositions?.length || 0,
-    palletsTotal: 1800, // TODO: fetch from vessel capacity
-    overstowViolations: p.validation?.overstowViolations?.length || 0,
-    temperatureConflicts: p.validation?.temperatureConflicts?.length || 0,
-  }));
+  const recentPlans = plans.slice(0, 5).map((p: any) => {
+    const planVoyageId = (p.voyageId?._id ?? p.voyageId)?.toString() ?? '';
+    return {
+      _id: p._id,
+      planNumber: p.planNumber || `PLAN-${p._id.toString().slice(-6)}`,
+      voyageNumber: p.voyageId?.voyageNumber || 'N/A',
+      status: p.status || 'DRAFT',
+      palletsAssigned: voyageConfirmedPalletsMap.get(planVoyageId) ?? 0,
+      palletsTotal:    voyageCapacityMap.get(planVoyageId) ?? 0,
+      overstowViolations: p.validation?.overstowViolations?.length || 0,
+      temperatureConflicts: p.validation?.temperatureConflicts?.length || 0,
+    };
+  });
 
   const pendingBookings = bookings
     .filter((b: any) => b.status === 'PENDING' || b.status === 'STANDBY' || b.status === 'PARTIAL')
