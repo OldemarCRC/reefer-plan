@@ -847,6 +847,7 @@ function CreateBookingModal({
             </div>
             <div className={styles.modalActions}>
               <button className={styles.btnModalCancel} onClick={() => setStep(1)}>Back</button>
+              <button className={styles.btnModalCancel} onClick={onClose}>Cancel</button>
               <button
                 className={styles.btnPrimary}
                 disabled={!selectedVoyageId}
@@ -950,6 +951,7 @@ function CreateBookingModal({
             </div>
             <div className={styles.modalActions}>
               <button className={styles.btnModalCancel} onClick={() => setStep(2)}>Back</button>
+              <button className={styles.btnModalCancel} onClick={onClose}>Cancel</button>
               <button
                 className={styles.btnPrimary}
                 disabled={isPending || bookingRows.length === 0}
