@@ -307,6 +307,7 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
             {error && <div className={styles.errorMsg}>{error}</div>}
 
             <div className={styles.wizardActions}>
+              <button className={styles.btnSecondary} onClick={() => router.push('/shipper/bookings')}>Cancel</button>
               <button
                 className={styles.btnPrimary}
                 onClick={handleStep1Next}
@@ -364,6 +365,7 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
 
             <div className={styles.wizardActions}>
               <button className={styles.btnSecondary} onClick={() => setStep(1)}>← Back</button>
+              <button className={styles.btnSecondary} onClick={() => router.push('/shipper/bookings')}>Cancel</button>
               <button
                 className={styles.btnPrimary}
                 onClick={handleStep2Next}
@@ -448,6 +450,7 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
 
             <div className={styles.wizardActions}>
               <button className={styles.btnSecondary} onClick={() => setStep(2)} disabled={isPending}>← Back</button>
+              <button className={styles.btnSecondary} onClick={() => router.push('/shipper/bookings')} disabled={isPending}>Cancel</button>
               <button
                 className={styles.btnPrimary}
                 onClick={handleSubmit}
