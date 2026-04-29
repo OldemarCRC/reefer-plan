@@ -18,6 +18,7 @@ import CountrySelect from '@/components/ui/CountrySelect';
 import ContractsClient from '@/app/contracts/ContractsClient';
 import type { DisplayContract } from '@/app/contracts/ContractsClient';
 import styles from './page.module.css';
+import TabBar from './TabBar';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -3937,17 +3938,7 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
       </div>
 
       {/* Tab bar */}
-      <div className={styles.tabBar}>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            className={`${styles.tabBtn} ${activeTab === t.id ? styles['tabBtn--active'] : ''}`}
-            onClick={() => handleTabChange(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <TabBar tabs={TABS} activeTab={activeTab} onTabChange={(id) => handleTabChange(id as Tab)} />
 
       {/* Tab content */}
       {activeTab === 'voyages'   && <VoyagesTab initialVoyages={voyages} />}

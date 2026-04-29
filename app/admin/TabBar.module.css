@@ -1,0 +1,73 @@
+.wrapper {
+  position: relative;
+}
+
+.scroll {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  gap: 2px;
+  border-bottom: var(--border-subtle);
+}
+
+.scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.arrow {
+  position: absolute;
+  top: 0;
+  bottom: 4px;
+  width: 32px;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.arrow:hover {
+  color: var(--color-text-primary);
+}
+
+.arrowLeft {
+  left: 0;
+  background: linear-gradient(to right, var(--color-bg-primary) 60%, transparent);
+}
+
+.arrowRight {
+  right: 0;
+  background: linear-gradient(to left, var(--color-bg-primary) 60%, transparent);
+}
+
+/* Copied exactly from page.module.css .tabBtn / .tabBtn--active */
+
+.tabBtn {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+
+.tabBtn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.tabBtn--active {
+  color: var(--color-blue-light);
+  border-bottom-color: var(--color-blue);
+}
