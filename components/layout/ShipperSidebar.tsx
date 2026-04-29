@@ -36,6 +36,13 @@ const icons = {
       <path d="M12 5v6" />
     </svg>
   ),
+  forecasts: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="12" width="4" height="9" rx="1" />
+      <rect x="10" y="7" width="4" height="14" rx="1" />
+      <rect x="17" y="3" width="4" height="18" rx="1" />
+    </svg>
+  ),
   request: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 5v14" />
@@ -56,11 +63,12 @@ const icons = {
 };
 
 const navItems = [
-  { id: 'overview',  label: 'Overview',     href: '/shipper',           icon: 'overview'  as const },
-  { id: 'bookings',  label: 'My Bookings',  href: '/shipper/bookings',  icon: 'bookings'  as const },
-  { id: 'schedules', label: 'Schedules',    href: '/shipper/schedules', icon: 'schedules' as const },
-  { id: 'request',   label: 'New Request',  href: '/shipper/request',   icon: 'request'   as const },
-  { id: 'account',   label: 'My Account',   href: '/shipper/account',   icon: 'account'   as const },
+  { id: 'overview',   label: 'Overview',     href: '/shipper',              icon: 'overview'   as const },
+  { id: 'bookings',   label: 'My Bookings',  href: '/shipper/bookings',     icon: 'bookings'   as const },
+  { id: 'forecasts',  label: 'Forecasts',    href: '/shipper/forecasts',    icon: 'forecasts'  as const },
+  { id: 'schedules',  label: 'Schedules',    href: '/shipper/schedules',    icon: 'schedules'  as const },
+  { id: 'request',    label: 'New Request',  href: '/shipper/request',      icon: 'request'    as const },
+  { id: 'account',    label: 'My Account',   href: '/shipper/account',      icon: 'account'    as const },
 ];
 
 interface ShipperSidebarProps {

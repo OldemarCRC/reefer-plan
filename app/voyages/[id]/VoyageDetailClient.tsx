@@ -1254,10 +1254,19 @@ export function ChangeDestinationButton({
 }
 
 // ---------------------------------------------------------------------------
-// Space Forecasts Panel
+// Unified Contracts & Space Panel
 // ---------------------------------------------------------------------------
 
-interface ForecastRow {
+const BOOKING_STATUS_STYLES: Record<string, { bg: string; color: string }> = {
+  CONFIRMED: { bg: 'var(--color-success-muted)', color: 'var(--color-success)'        },
+  PENDING:   { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)'        },
+  PARTIAL:   { bg: 'var(--color-blue-muted)',    color: 'var(--color-blue-light)'     },
+  STANDBY:   { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)'        },
+  REJECTED:  { bg: 'var(--color-danger-muted)',  color: 'var(--color-danger)'         },
+  CANCELLED: { bg: 'var(--color-bg-tertiary)',   color: 'var(--color-text-tertiary)'  },
+};
+
+interface ContractRow {
   rowId: string;
   contractId: string;
   contractNumber: string;
@@ -1266,29 +1275,48 @@ interface ForecastRow {
   shipperId: string;
   shipperCode: string;
   shipperName: string;
+  booking: any | null;
   forecast: any | null;
 }
 
-interface SpaceForecastsPanelProps {
+interface UnifiedContractsPanelProps {
   voyageId: string;
   voyageStatus: string;
-  spaceForecasts: any[];
   activeContracts: any[];
+  bookings: any[];
+  spaceForecasts: any[];
+  canEdit: boolean;
+  dischargePorts: { portCode: string; portName: string }[];
 }
 
-function buildRows(activeContracts: any[], allForecasts: any[]): ForecastRow[] {
-  const rows: ForecastRow[] = [];
+function buildContractRows(
+  activeContracts: any[],
+  bookings: any[],
+  allForecasts: any[],
+): ContractRow[] {
+  const rows: ContractRow[] = [];
   for (const contract of activeContracts) {
     const counterparties: any[] = contract.counterparties ?? [];
     const activeCPs = counterparties.filter((cp: any) => cp.active !== false);
-    for (const cp of activeCPs) {
-      const cpId = cp.shipperId?.toString() || cp.shipperCode || '';
+    const cps = activeCPs.length > 0 ? activeCPs : [{
+      shipperId:     null,
+      shipperCode:   '',
+      shipperName:   contract.client?.name ?? '',
+      weeklyEstimate: contract.weeklyPallets ?? 0,
+    }];
+    for (const cp of cps) {
+      const cpId  = cp.shipperId?.toString() || cp.shipperCode || '';
       const rowId = `${contract._id?.toString()}-${cpId}`;
-      const forecast = allForecasts.find(
-        (f: any) =>
-          f.contractId?.toString() === contract._id?.toString() &&
-          (f.shipperId?.toString() === cp.shipperId?.toString() ||
-           f.shipperCode === cp.shipperCode)
+      const booking = bookings.find((b: any) =>
+        b.contractId?.toString() === contract._id?.toString() &&
+        (b.shipper?.code === (cp.shipperCode || cp.code) ||
+         (cp.shipperId && b.shipperId?.toString() === cp.shipperId?.toString()))
+      ) ?? null;
+      const forecast = allForecasts.find((f: any) =>
+        f.contractId?.toString() === contract._id?.toString() &&
+        (cp.shipperId
+          ? f.shipperId?.toString() === cp.shipperId?.toString()
+          : f.shipperCode === (cp.shipperCode || cp.code))
       ) ?? null;
       rows.push({
         rowId,
@@ -1298,7 +1326,8 @@ function buildRows(activeContracts: any[], allForecasts: any[]): ForecastRow[] {
         weeklyPallets:  contract.weeklyPallets ?? cp.weeklyEstimate ?? 0,
         shipperId:      cp.shipperId?.toString() ?? '',
         shipperCode:    cp.shipperCode ?? cp.code ?? '',
-        shipperName:    cp.shipperName ?? cp.name ?? '',
+        shipperName:    cp.shipperName ?? cp.name ?? contract.client?.name ?? '',
+        booking,
         forecast,
       });
     }
@@ -1306,38 +1335,43 @@ function buildRows(activeContracts: any[], allForecasts: any[]): ForecastRow[] {
   return rows;
 }
 
-export function SpaceForecastsPanel({
+export function UnifiedContractsPanel({
   voyageId,
-  spaceForecasts,
+  voyageStatus,
   activeContracts,
-}: SpaceForecastsPanelProps) {
+  bookings,
+  spaceForecasts,
+  canEdit,
+  dischargePorts,
+}: UnifiedContractsPanelProps) {
   const router = useRouter();
   const [allForecasts, setAllForecasts] = useState(spaceForecasts);
-  const [isOpen, setIsOpen] = useState(true);
-  const [openRowId, setOpenRowId] = useState<string | null>(null);
+  const [openRowId, setOpenRowId]       = useState<string | null>(null);
   const [estimateValue, setEstimateValue] = useState('');
-  const [isPending, startTransition] = useTransition();
-  const [rowError, setRowError] = useState<string | null>(null);
+  const [isPending, startTransition]    = useTransition();
+  const [rowError, setRowError]         = useState<string | null>(null);
 
-  // Sync allForecasts when the server re-sends fresh spaceForecasts (after router.refresh)
   useEffect(() => {
     setAllForecasts(spaceForecasts);
   }, [spaceForecasts]);
 
-  const rows = buildRows(activeContracts, allForecasts);
-  if (rows.length === 0) return null;
-
-  const estimateCount = rows.filter(
-    r => r.forecast && r.forecast.planImpact !== 'REPLACED_BY_BOOKING'
+  const rows          = buildContractRows(activeContracts, bookings, allForecasts);
+  const bookingCount  = bookings.filter((b: any) => !['CANCELLED', 'REJECTED'].includes(b.status)).length;
+  const estimateCount = rows.filter(r =>
+    r.forecast &&
+    r.forecast.planImpact !== 'REPLACED_BY_BOOKING' &&
+    !r.booking
   ).length;
 
-  const handleUseContract = (row: ForecastRow) => {
+  const canEnterForecasts = canEdit && ['PLANNED', 'IN_PROGRESS'].includes(voyageStatus);
+
+  const handleUseContractEst = (contractId: string) => {
     startTransition(async () => {
-      const result = await createContractDefaultForecasts(voyageId, row.contractId);
+      const result = await createContractDefaultForecasts(voyageId, contractId);
       if (result.success) {
         router.refresh();
       } else {
-        setRowError((result as any).error ?? 'Failed to create contract default forecast');
+        setRowError((result as any).error ?? 'Failed to create contract default forecasts');
       }
     });
   };
@@ -1350,20 +1384,14 @@ export function SpaceForecastsPanel({
       const result = await createSpaceForecast({
         voyageId,
         contractId:       row.contractId,
-        shipperId:        row.shipperId,
-        shipperCode:      row.shipperCode,
-        shipperName:      row.shipperName,
-        consigneeCode:    'N/A',
         estimatedPallets: parseInt(estimateValue, 10),
         source:           'PLANNER_ENTRY',
       });
       if (result.success) {
         setAllForecasts(prev => {
-          const filtered = prev.filter(
-            f =>
-              !(f.contractId?.toString() === row.contractId &&
-                (f.shipperId?.toString() === row.shipperId ||
-                 f.shipperCode === row.shipperCode))
+          const filtered = prev.filter((f: any) =>
+            !(f.contractId?.toString() === row.contractId &&
+              f.shipperId?.toString() === row.shipperId)
           );
           return [...filtered, result.data];
         });
@@ -1379,30 +1407,18 @@ export function SpaceForecastsPanel({
     <div className={clientStyles.forecastSection}>
       <div className={clientStyles.forecastHeader}>
         <div>
-          <h2 className={clientStyles.forecastTitle}>Space Forecasts</h2>
-          {!isOpen && (
-            <span className={clientStyles.forecastSubtitle}>
-              {estimateCount}/{rows.length} with estimates
-            </span>
-          )}
+          <h2 className={clientStyles.forecastTitle}>Contracts &amp; Space</h2>
+          <span className={clientStyles.forecastSubtitle}>
+            {bookingCount} booking{bookingCount !== 1 ? 's' : ''} · {estimateCount} estimate{estimateCount !== 1 ? 's' : ''}
+          </span>
         </div>
-        <button
-          className={clientStyles.forecastToggleBtn}
-          onClick={() => setIsOpen(o => !o)}
-        >
-          <svg
-            className={`${clientStyles.forecastChevron} ${isOpen ? clientStyles['forecastChevron--open'] : ''}`}
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M4 6l4 4 4-4" />
-          </svg>
-        </button>
       </div>
 
-      {isOpen && (
+      {activeContracts.length === 0 ? (
+        <p style={{ padding: 'var(--space-4) var(--space-5)', color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)', margin: 0 }}>
+          No active contracts found for this service.
+        </p>
+      ) : (
         <div className={clientStyles.forecastTableWrap}>
           <table className={clientStyles.forecastTable}>
             <thead>
@@ -1411,29 +1427,36 @@ export function SpaceForecastsPanel({
                 <th>Contract</th>
                 <th>Cargo</th>
                 <th className={clientStyles.thNum}>Weekly Est.</th>
+                <th>Booking</th>
                 <th>Forecast</th>
-                <th>Actions</th>
+                {canEnterForecasts && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
               {rows.map(row => {
                 const f = row.forecast;
-                type RowState = 'none' | 'default' | 'entry' | 'booking';
+                const b = row.booking;
+                const isActiveBooking = b && !['CANCELLED', 'REJECTED'].includes(b.status);
+                type RowState = 'booking' | 'replaced' | 'none' | 'default' | 'entry';
                 const state: RowState =
-                  !f                                     ? 'none'    :
-                  f.planImpact === 'REPLACED_BY_BOOKING' ? 'booking' :
-                  f.source    === 'CONTRACT_DEFAULT'     ? 'default' :
-                                                          'entry';
+                  f?.planImpact === 'REPLACED_BY_BOOKING'                         ? 'replaced' :
+                  isActiveBooking                                                   ? 'booking'  :
+                  f?.source === 'CONTRACT_DEFAULT'                                  ? 'default'  :
+                  f && ['PLANNER_ENTRY', 'SHIPPER_PORTAL'].includes(f.source)      ? 'entry'    :
+                                                                                     'none';
+                const bsStyle = b ? (BOOKING_STATUS_STYLES[b.status] ?? BOOKING_STATUS_STYLES.CANCELLED) : null;
 
                 return (
                   <React.Fragment key={row.rowId}>
                     <tr>
                       {/* Shipper */}
                       <td>
-                        <div style={{ fontWeight: 600 }}>{row.shipperName}</div>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--color-text-muted)' }}>
-                          {row.shipperCode}
-                        </div>
+                        <div style={{ fontWeight: 600 }}>{row.shipperName || '—'}</div>
+                        {row.shipperCode && (
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--color-text-muted)' }}>
+                            {row.shipperCode}
+                          </div>
+                        )}
                       </td>
 
                       {/* Contract */}
@@ -1451,18 +1474,43 @@ export function SpaceForecastsPanel({
                         {row.weeklyPallets > 0 ? `${row.weeklyPallets} plt` : '—'}
                       </td>
 
-                      {/* Forecast badges */}
+                      {/* Booking */}
+                      <td>
+                        {state === 'booking' && b && bsStyle && (
+                          <div>
+                            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-blue-light)', marginBottom: 4 }}>
+                              {b.bookingNumber}
+                            </div>
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                              <span style={{ display: 'inline-block', fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: 100, background: bsStyle.bg, color: bsStyle.color }}>
+                                {b.status}
+                              </span>
+                              <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
+                                {b.confirmedQuantity ?? '—'}/{b.requestedQuantity} plt
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        {state === 'replaced' && (
+                          <span className={clientStyles.badgeBooking}>Booking confirmed</span>
+                        )}
+                        {(state === 'none' || state === 'default' || state === 'entry') && (
+                          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>—</span>
+                        )}
+                      </td>
+
+                      {/* Forecast */}
                       <td>
                         {state === 'none' && (
                           <span className={clientStyles.badgeNoEst}>No Estimate</span>
                         )}
-                        {state === 'default' && (
+                        {state === 'default' && f && (
                           <span className={clientStyles.badgeContractEst}>
                             Contract Est. · {f.estimatedPallets} plt
                           </span>
                         )}
-                        {state === 'entry' && (
-                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {state === 'entry' && f && (
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
                             <span className={f.source === 'PLANNER_ENTRY' ? clientStyles.badgePlanner : clientStyles.badgeShipper}>
                               {f.source === 'PLANNER_ENTRY' ? 'Planner' : 'Shipper Portal'}
                             </span>
@@ -1474,59 +1522,73 @@ export function SpaceForecastsPanel({
                             </span>
                           </div>
                         )}
-                        {state === 'booking' && (
-                          <span className={clientStyles.badgeBooking}>Booking confirmed</span>
+                        {(state === 'booking' || state === 'replaced') && (
+                          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>—</span>
                         )}
                       </td>
 
                       {/* Actions */}
-                      <td>
-                        {state !== 'booking' && (
+                      {canEnterForecasts && (
+                        <td>
                           <div className={clientStyles.forecastRowActions}>
-                            {state === 'none' && (
-                              <button
-                                className={clientStyles.btnUseContract}
-                                onClick={() => handleUseContract(row)}
-                                disabled={isPending || row.weeklyPallets === 0}
-                                title={row.weeklyPallets === 0 ? 'No weekly estimate on contract' : undefined}
-                              >
-                                Use Contract Est.
-                              </button>
+                            {(state === 'none' || state === 'default' || state === 'entry') && (
+                              <>
+                                {state === 'none' && (
+                                  <button
+                                    className={clientStyles.btnUseContract}
+                                    onClick={() => handleUseContractEst(row.contractId)}
+                                    disabled={isPending || row.weeklyPallets === 0}
+                                    title={row.weeklyPallets === 0 ? 'No weekly estimate on contract' : undefined}
+                                  >
+                                    Use Contract Est.
+                                  </button>
+                                )}
+                                {(state === 'none' || state === 'default') && (
+                                  <button
+                                    className={clientStyles.btnEnterEst}
+                                    onClick={() => {
+                                      setOpenRowId(row.rowId);
+                                      setEstimateValue('');
+                                      setRowError(null);
+                                    }}
+                                    disabled={isPending}
+                                  >
+                                    Enter Estimate
+                                  </button>
+                                )}
+                                {state === 'entry' && f && (
+                                  <button
+                                    className={clientStyles.btnEditEst}
+                                    onClick={() => {
+                                      setOpenRowId(row.rowId);
+                                      setEstimateValue(String(f.estimatedPallets ?? ''));
+                                      setRowError(null);
+                                    }}
+                                    disabled={isPending}
+                                  >
+                                    Edit
+                                  </button>
+                                )}
+                              </>
                             )}
-                            {(state === 'none' || state === 'default') && (
-                              <button
-                                className={clientStyles.btnEnterEst}
-                                onClick={() => {
-                                  setOpenRowId(row.rowId);
-                                  setEstimateValue('');
-                                  setRowError(null);
-                                }}
-                                disabled={isPending}
-                              >
-                                Enter Estimate
-                              </button>
-                            )}
-                            {state === 'entry' && (
-                              <button
-                                className={clientStyles.btnEditEst}
-                                onClick={() => {
-                                  setOpenRowId(row.rowId);
-                                  setEstimateValue(String(f.estimatedPallets ?? ''));
-                                  setRowError(null);
-                                }}
-                                disabled={isPending}
-                              >
-                                Edit
-                              </button>
+                            {state === 'booking' && b && voyageStatus === 'IN_PROGRESS' && (
+                              <ChangeDestinationButton
+                                bookingId={b._id}
+                                bookingNumber={b.bookingNumber}
+                                currentPodCode={b.pod?.portCode ?? ''}
+                                currentPodName={b.pod?.portName ?? ''}
+                                currentConsigneeName={b.consignee?.name ?? ''}
+                                dischargePorts={dischargePorts}
+                              />
                             )}
                           </div>
-                        )}
-                      </td>
+                        </td>
+                      )}
                     </tr>
 
                     {openRowId === row.rowId && (
                       <tr>
-                        <td colSpan={6}>
+                        <td colSpan={canEnterForecasts ? 7 : 6}>
                           <div className={clientStyles.inlineForm}>
                             <input
                               type="number"

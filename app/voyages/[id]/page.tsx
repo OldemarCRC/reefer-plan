@@ -7,7 +7,7 @@ import { getSpaceForecasts } from '@/app/actions/space-forecast';
 import { auth } from '@/auth';
 import Link from 'next/link';
 import styles from './page.module.css';
-import { PortCallsEditor, DeletePlanButton, CloseVoyageButton, ChangeDestinationButton, SpaceForecastsPanel } from './VoyageDetailClient';
+import { PortCallsEditor, DeletePlanButton, CloseVoyageButton, UnifiedContractsPanel } from './VoyageDetailClient';
 
 const statusStyles: Record<string, { bg: string; color: string }> = {
   PLANNED:     { bg: 'var(--color-blue-muted)',     color: 'var(--color-blue-light)'    },
@@ -191,61 +191,6 @@ export default async function VoyageDetailPage({
           )}
         </div>
 
-        {/* Bookings Section */}
-        <div className={styles.card}>
-          <div className={styles.cardHeader}>
-            <h2 className={styles.cardTitle}>Bookings</h2>
-            <span className={styles.cardCount}>{bookings.length} bookings</span>
-          </div>
-          {bookings.length === 0 ? (
-            <p className={styles.cellMuted}>No bookings for this voyage yet.</p>
-          ) : (
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Booking #</th>
-                    <th>Client</th>
-                    <th>Cargo</th>
-                    <th>POD</th>
-                    <th>Requested</th>
-                    <th>Confirmed</th>
-                    <th>Status</th>
-                    {voyage.status === 'IN_PROGRESS' && canEdit && <th />}
-                  </tr>
-                </thead>
-                <tbody>
-                  {bookings.map((b: any) => (
-                    <tr key={b._id}>
-                      <td className={styles.cellMono}>{b.bookingNumber}</td>
-                      <td>{b.client?.name || b.clientName || '—'}</td>
-                      <td>{b.cargoType ? b.cargoType.replace(/_/g, ' ') : '—'}</td>
-                      <td className={styles.cellMono}>{b.pod?.portCode ?? '—'}</td>
-                      <td className={styles.cellRight}>{b.requestedQuantity ?? '—'} plt</td>
-                      <td className={styles.cellRight}>{b.confirmedQuantity ?? '—'} plt</td>
-                      <td>
-                        <StatusBadge status={b.status || 'PENDING'} />
-                      </td>
-                      {voyage.status === 'IN_PROGRESS' && canEdit && (
-                        <td>
-                          <ChangeDestinationButton
-                            bookingId={b._id}
-                            bookingNumber={b.bookingNumber}
-                            currentPodCode={b.pod?.portCode ?? ''}
-                            currentPodName={b.pod?.portName ?? ''}
-                            currentConsigneeName={b.consignee?.name ?? ''}
-                            dischargePorts={dischargePorts}
-                          />
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
         {/* Stowage Plans Section */}
         <div className={styles.card}>
           <div className={styles.cardHeader}>
@@ -290,15 +235,16 @@ export default async function VoyageDetailPage({
           )}
         </div>
 
-        {/* Space Forecasts Panel — planners only, open voyages, when contracts exist */}
-        {['PLANNED', 'IN_PROGRESS'].includes(voyage.status || '') && canEdit && (
-          <SpaceForecastsPanel
-            voyageId={id}
-            voyageStatus={voyage.status || 'PLANNED'}
-            spaceForecasts={spaceForecasts}
-            activeContracts={activeContracts}
-          />
-        )}
+        {/* Contracts & Space — unified booking + forecast panel */}
+        <UnifiedContractsPanel
+          voyageId={id}
+          voyageStatus={voyage.status || 'PLANNED'}
+          activeContracts={activeContracts}
+          bookings={bookings}
+          spaceForecasts={spaceForecasts}
+          canEdit={canEdit}
+          dischargePorts={dischargePorts}
+        />
       </div>
     </AppShell>
   );
