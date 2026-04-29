@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react';
 import { deleteVoyage, updatePortRotation, resequencePortCallsByEta, closeVoyage } from '@/app/actions/voyage';
 import { updateBookingDestination } from '@/app/actions/booking';
 import { deleteStowagePlan, markCaptainResponse } from '@/app/actions/stowage-plan';
-import { createSpaceForecast, createContractDefaultForecasts } from '@/app/actions/space-forecast';
+import { createSpaceForecast, createContractDefaultForecasts, markForecastIncorporated } from '@/app/actions/space-forecast';
 import styles from './page.module.css';
 import clientStyles from './VoyageDetailClient.module.css';
 
@@ -1412,6 +1412,21 @@ export function UnifiedContractsPanel({
     });
   };
 
+  const handleConfirmEstimate = (forecastId: string) => {
+    startTransition(async () => {
+      const result = await markForecastIncorporated(forecastId, '');
+      if (result.success) {
+        setAllForecasts(prev =>
+          prev.map((f: any) =>
+            f._id?.toString() === forecastId
+              ? { ...f, planImpact: 'INCORPORATED' }
+              : f
+          )
+        );
+      }
+    });
+  };
+
   const handleSaveEstimate = () => {
     const row = rows.find(r => r.rowId === openRowId);
     if (!row || !estimateValue) return;
@@ -1635,6 +1650,17 @@ export function UnifiedContractsPanel({
                                     disabled={isPending}
                                   >
                                     Edit
+                                  </button>
+                                )}
+                                {state === 'entry' && f?.source === 'SHIPPER_PORTAL' &&
+                                 f?.planImpact === 'PENDING_REVIEW' && (
+                                  <button
+                                    className={clientStyles.btnConfirmEst}
+                                    onClick={() => handleConfirmEstimate(f._id?.toString() ?? '')}
+                                    disabled={isPending}
+                                    title="Mark shipper estimate as confirmed"
+                                  >
+                                    ✓ Confirm
                                   </button>
                                 )}
                               </>

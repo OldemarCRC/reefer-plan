@@ -20,6 +20,8 @@ interface Contract {
   serviceId: ServiceInfo | string | null;
   originPort?: { portCode: string; portName: string };
   destinationPort?: { portCode: string; portName: string };
+  client?: { name: string; type: string; code?: string };
+  consigneeName?: string;
 }
 
 interface PortCall {
@@ -60,6 +62,11 @@ function getServiceId(contract: Contract): string {
 function getServiceCode(contract: Contract): string {
   if (!contract.serviceId || typeof contract.serviceId === 'string') return '';
   return (contract.serviceId as ServiceInfo).serviceCode ?? '';
+}
+
+function getConsigneeName(contract: Contract): string {
+  if (contract.client?.type === 'CONSIGNEE') return contract.client.name ?? '';
+  return contract.consigneeName ?? '';
 }
 
 export default function ForecastWizard({
@@ -165,9 +172,6 @@ export default function ForecastWizard({
               {contracts.map(c => {
                 const isSelected = c._id === selectedId;
                 const svcCode    = getServiceCode(c);
-                const route = (c.originPort?.portCode && c.destinationPort?.portCode)
-                  ? `${c.originPort.portCode} → ${c.destinationPort.portCode}`
-                  : svcCode || '—';
                 return (
                   <div
                     key={c._id}
@@ -182,15 +186,40 @@ export default function ForecastWizard({
                       {isSelected && <div className={styles.contractRadioDot} />}
                     </div>
                     <div className={styles.contractInfo}>
-                      <div className={styles.contractNumber}>{c.contractNumber}</div>
-                      <div className={styles.contractTitle}>
-                        {c.cargoType ? c.cargoType.replace(/_/g, ' ') : 'Cargo'}
+                      {/* Row 1: contract number + service badge */}
+                      <div className={styles.contractTopRow}>
+                        <span className={styles.contractNumber}>{c.contractNumber}</span>
+                        {svcCode && (
+                          <span className={styles.contractServiceBadge}>{svcCode}</span>
+                        )}
                       </div>
-                      <div className={styles.contractMeta}>{route}</div>
+                      {/* Row 2: cargo type */}
+                      <div className={styles.contractTitle}>
+                        {c.cargoType ? c.cargoType.replace(/_/g, ' ') : 'General Cargo'}
+                      </div>
+                      {/* Row 3: route with port names */}
+                      <div className={styles.contractMeta}>
+                        {c.originPort?.portCode
+                          ? `${c.originPort.portCode}${c.originPort.portName ? ` · ${c.originPort.portName}` : ''}`
+                          : '—'}
+                        {' → '}
+                        {c.destinationPort?.portCode
+                          ? `${c.destinationPort.portCode}${c.destinationPort.portName ? ` · ${c.destinationPort.portName}` : ''}`
+                          : '—'}
+                      </div>
+                      {/* Row 4: consignee */}
+                      {getConsigneeName(c) && (
+                        <div className={styles.contractConsignee}>
+                          <span className={styles.contractConsigneeLabel}>Consignee: </span>
+                          {getConsigneeName(c)}
+                        </div>
+                      )}
                     </div>
+                    {/* Weekly pallets — right side */}
                     {(c.weeklyPallets ?? 0) > 0 && (
                       <div className={styles.contractWeekly}>
-                        ~{c.weeklyPallets} plt/week
+                        <span className={styles.contractWeeklyNum}>{c.weeklyPallets}</span>
+                        <span className={styles.contractWeeklyLabel}>plt/week</span>
                       </div>
                     )}
                   </div>
@@ -266,20 +295,31 @@ export default function ForecastWizard({
                               Booking confirmed
                             </span>
                           ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <input
-                                type="number"
-                                min={1}
-                                max={9999}
-                                className={styles.estimateInput}
-                                placeholder={prefilled ? String(prefilled) : '—'}
-                                value={currentVal}
-                                onChange={e => handleEstimateChange(v._id, e.target.value)}
-                                disabled={isPending}
-                              />
-                              {isUpdated && (
-                                <span className={`${styles.badge} ${styles.badgeUpdated}`}>
-                                  UPDATED
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={9999}
+                                  className={styles.estimateInput}
+                                  placeholder={prefilled ? String(prefilled) : '—'}
+                                  value={currentVal}
+                                  onChange={e => handleEstimateChange(v._id, e.target.value)}
+                                  disabled={isPending}
+                                />
+                                {isUpdated && (
+                                  <span className={`${styles.badge} ${styles.badgeUpdated}`}>
+                                    UPDATED
+                                  </span>
+                                )}
+                              </div>
+                              {(selectedContract.weeklyPallets ?? 0) > 0 && (
+                                <span style={{
+                                  fontSize: '10px',
+                                  color: 'var(--color-text-muted)',
+                                  fontFamily: 'var(--font-mono)',
+                                }}>
+                                  ref: {selectedContract.weeklyPallets} plt/wk
                                 </span>
                               )}
                             </div>
