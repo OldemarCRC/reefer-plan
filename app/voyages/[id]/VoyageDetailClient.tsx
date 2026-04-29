@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { deleteVoyage, updatePortRotation, resequencePortCallsByEta, closeVoyage } from '@/app/actions/voyage';
@@ -1255,18 +1255,17 @@ export function ChangeDestinationButton({
 
 // ---------------------------------------------------------------------------
 // Space Forecasts Panel
-// Shows one row per active counterparty across all active contracts, with
-// per-row forecast state and inline entry form.
 // ---------------------------------------------------------------------------
 
 interface ForecastRow {
+  rowId: string;
   contractId: string;
   contractNumber: string;
+  cargoType: string;
+  weeklyPallets: number;
   shipperId: string;
   shipperCode: string;
   shipperName: string;
-  cargoType: string;
-  weeklyPallets: number;
   forecast: any | null;
 }
 
@@ -1277,60 +1276,60 @@ interface SpaceForecastsPanelProps {
   activeContracts: any[];
 }
 
+function buildRows(activeContracts: any[], allForecasts: any[]): ForecastRow[] {
+  const rows: ForecastRow[] = [];
+  for (const contract of activeContracts) {
+    const counterparties: any[] = contract.counterparties ?? [];
+    const activeCPs = counterparties.filter((cp: any) => cp.active !== false);
+    for (const cp of activeCPs) {
+      const cpId = cp.shipperId?.toString() || cp.shipperCode || '';
+      const rowId = `${contract._id?.toString()}-${cpId}`;
+      const forecast = allForecasts.find(
+        (f: any) =>
+          f.contractId?.toString() === contract._id?.toString() &&
+          (f.shipperId?.toString() === cp.shipperId?.toString() ||
+           f.shipperCode === cp.shipperCode)
+      ) ?? null;
+      rows.push({
+        rowId,
+        contractId:     contract._id?.toString() ?? '',
+        contractNumber: contract.contractNumber ?? '',
+        cargoType:      (contract.cargoType ?? '').replace(/_/g, ' '),
+        weeklyPallets:  contract.weeklyPallets ?? cp.weeklyEstimate ?? 0,
+        shipperId:      cp.shipperId?.toString() ?? '',
+        shipperCode:    cp.shipperCode ?? cp.code ?? '',
+        shipperName:    cp.shipperName ?? cp.name ?? '',
+        forecast,
+      });
+    }
+  }
+  return rows;
+}
+
 export function SpaceForecastsPanel({
   voyageId,
   spaceForecasts,
   activeContracts,
 }: SpaceForecastsPanelProps) {
   const router = useRouter();
-  const [isOpen, setIsOpen] = useState(false);
-  const [editingRowKey, setEditingRowKey] = useState<string | null>(null);
+  const [allForecasts, setAllForecasts] = useState(spaceForecasts);
+  const [isOpen, setIsOpen] = useState(true);
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
   const [estimateValue, setEstimateValue] = useState('');
   const [isPending, startTransition] = useTransition();
   const [rowError, setRowError] = useState<string | null>(null);
 
-  // Build one row per active counterparty per contract
-  const rows: ForecastRow[] = [];
-  for (const contract of activeContracts) {
-    const counterparties: any[] = contract.counterparties ?? [];
-    const activeCPs = counterparties.filter((cp: any) => cp.active !== false);
-    for (const cp of activeCPs) {
-      const forecast = spaceForecasts.find(
-        (f: any) =>
-          f.shipperId?.toString() === cp.shipperId?.toString() &&
-          f.contractId?.toString() === contract._id?.toString()
-      ) ?? null;
-      rows.push({
-        contractId:     contract._id?.toString() ?? '',
-        contractNumber: contract.contractNumber ?? '',
-        shipperId:      cp.shipperId?.toString() ?? '',
-        shipperCode:    cp.shipperCode ?? '',
-        shipperName:    cp.shipperName ?? '',
-        cargoType:      (cp.cargoTypes?.[0] ?? contract.cargoType ?? 'OTHER_CHILLED').replace(/_/g, ' '),
-        weeklyPallets:  cp.weeklyEstimate ?? 0,
-        forecast,
-      });
-    }
-  }
+  // Sync allForecasts when the server re-sends fresh spaceForecasts (after router.refresh)
+  useEffect(() => {
+    setAllForecasts(spaceForecasts);
+  }, [spaceForecasts]);
 
-  const activeCount = rows.filter(r => r.forecast !== null).length;
-  const rowKey = (r: ForecastRow) => `${r.contractId}-${r.shipperId}`;
+  const rows = buildRows(activeContracts, allForecasts);
+  if (rows.length === 0) return null;
 
-  const openEdit = (row: ForecastRow) => {
-    setEditingRowKey(rowKey(row));
-    setEstimateValue(
-      row.forecast?.estimatedPallets != null
-        ? String(row.forecast.estimatedPallets)
-        : row.weeklyPallets > 0 ? String(row.weeklyPallets) : ''
-    );
-    setRowError(null);
-  };
-
-  const closeEdit = () => {
-    setEditingRowKey(null);
-    setEstimateValue('');
-    setRowError(null);
-  };
+  const estimateCount = rows.filter(
+    r => r.forecast && r.forecast.planImpact !== 'REPLACED_BY_BOOKING'
+  ).length;
 
   const handleUseContract = (row: ForecastRow) => {
     startTransition(async () => {
@@ -1343,30 +1342,38 @@ export function SpaceForecastsPanel({
     });
   };
 
-  const handleSaveEstimate = (row: ForecastRow) => {
-    const qty = parseInt(estimateValue, 10);
-    if (!qty || qty < 1) {
-      setRowError('Enter a valid quantity (min 1)');
-      return;
-    }
+  const handleSaveEstimate = () => {
+    const row = rows.find(r => r.rowId === openRowId);
+    if (!row || !estimateValue) return;
     setRowError(null);
     startTransition(async () => {
       const result = await createSpaceForecast({
         voyageId,
         contractId:       row.contractId,
-        estimatedPallets: qty,
+        shipperId:        row.shipperId,
+        shipperCode:      row.shipperCode,
+        shipperName:      row.shipperName,
+        consigneeCode:    'N/A',
+        estimatedPallets: parseInt(estimateValue, 10),
         source:           'PLANNER_ENTRY',
       });
       if (result.success) {
-        closeEdit();
-        router.refresh();
+        setAllForecasts(prev => {
+          const filtered = prev.filter(
+            f =>
+              !(f.contractId?.toString() === row.contractId &&
+                (f.shipperId?.toString() === row.shipperId ||
+                 f.shipperCode === row.shipperCode))
+          );
+          return [...filtered, result.data];
+        });
+        setOpenRowId(null);
+        setEstimateValue('');
       } else {
         setRowError((result as any).error ?? 'Failed to save estimate');
       }
     });
   };
-
-  if (rows.length === 0) return null;
 
   return (
     <div className={clientStyles.forecastSection}>
@@ -1374,69 +1381,56 @@ export function SpaceForecastsPanel({
         <div>
           <h2 className={clientStyles.forecastTitle}>Space Forecasts</h2>
           {!isOpen && (
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-              {activeCount} of {rows.length} counterpart{rows.length === 1 ? 'y' : 'ies'} with active estimates
+            <span className={clientStyles.forecastSubtitle}>
+              {estimateCount}/{rows.length} with estimates
             </span>
           )}
         </div>
         <button
           className={clientStyles.forecastToggleBtn}
           onClick={() => setIsOpen(o => !o)}
-          aria-expanded={isOpen}
-          title={isOpen ? 'Collapse' : 'Expand'}
         >
-          <span className={`${clientStyles.forecastChevron} ${isOpen ? clientStyles['forecastChevron--open'] : ''}`}>
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"
-              strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
-              <path d="M4 6l4 4 4-4" />
-            </svg>
-          </span>
+          <svg
+            className={`${clientStyles.forecastChevron} ${isOpen ? clientStyles['forecastChevron--open'] : ''}`}
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M4 6l4 4 4-4" />
+          </svg>
         </button>
       </div>
 
       {isOpen && (
-        <>
-          {rowError && (
-            <div style={{
-              padding: '0.5rem 0.75rem',
-              background: 'var(--color-danger-muted)',
-              color: 'var(--color-danger)',
-              fontSize: 'var(--text-xs)',
-              borderRadius: 'var(--radius-sm)',
-            }}>
-              {rowError}
-            </div>
-          )}
-          <div className={clientStyles.forecastTableWrap}>
-            <table className={clientStyles.forecastTable}>
-              <thead>
-                <tr>
-                  <th>Shipper / Consignee</th>
-                  <th>Contract</th>
-                  <th>Cargo</th>
-                  <th style={{ textAlign: 'right' }}>Weekly Est.</th>
-                  <th>Forecast</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(row => {
-                  const key = rowKey(row);
-                  const isEditing = editingRowKey === key;
-                  const f = row.forecast;
+        <div className={clientStyles.forecastTableWrap}>
+          <table className={clientStyles.forecastTable}>
+            <thead>
+              <tr>
+                <th>Shipper / Consignee</th>
+                <th>Contract</th>
+                <th>Cargo</th>
+                <th className={clientStyles.thNum}>Weekly Est.</th>
+                <th>Forecast</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(row => {
+                const f = row.forecast;
+                type RowState = 'none' | 'default' | 'entry' | 'booking';
+                const state: RowState =
+                  !f                                     ? 'none'    :
+                  f.planImpact === 'REPLACED_BY_BOOKING' ? 'booking' :
+                  f.source    === 'CONTRACT_DEFAULT'     ? 'default' :
+                                                          'entry';
 
-                  type RowState = 'none' | 'default' | 'entry' | 'booking';
-                  const state: RowState =
-                    !f                                    ? 'none'    :
-                    f.planImpact === 'REPLACED_BY_BOOKING' ? 'booking' :
-                    f.source === 'CONTRACT_DEFAULT'        ? 'default' :
-                                                            'entry';
-
-                  return (
-                    <tr key={key}>
+                return (
+                  <React.Fragment key={row.rowId}>
+                    <tr>
                       {/* Shipper */}
                       <td>
-                        <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{row.shipperName}</div>
+                        <div style={{ fontWeight: 600 }}>{row.shipperName}</div>
                         <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--color-text-muted)' }}>
                           {row.shipperCode}
                         </div>
@@ -1449,15 +1443,15 @@ export function SpaceForecastsPanel({
 
                       {/* Cargo */}
                       <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                        {row.cargoType}
+                        {row.cargoType || '—'}
                       </td>
 
-                      {/* Weekly estimate from contract */}
-                      <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
+                      {/* Weekly estimate */}
+                      <td className={clientStyles.cellNum}>
                         {row.weeklyPallets > 0 ? `${row.weeklyPallets} plt` : '—'}
                       </td>
 
-                      {/* Forecast state badges */}
+                      {/* Forecast badges */}
                       <td>
                         {state === 'none' && (
                           <span className={clientStyles.badgeNoEst}>No Estimate</span>
@@ -1485,76 +1479,91 @@ export function SpaceForecastsPanel({
                         )}
                       </td>
 
-                      {/* Per-row actions */}
+                      {/* Actions */}
                       <td>
                         {state !== 'booking' && (
-                          isEditing ? (
-                            <div className={clientStyles.inlineForm}>
-                              <input
-                                type="number"
-                                className={clientStyles.estimateInput}
-                                value={estimateValue}
-                                min={1}
-                                onChange={e => setEstimateValue(e.target.value)}
-                                disabled={isPending}
-                                autoFocus
-                              />
+                          <div className={clientStyles.forecastRowActions}>
+                            {state === 'none' && (
                               <button
-                                className={clientStyles.btnSaveEst}
-                                onClick={() => handleSaveEstimate(row)}
-                                disabled={isPending || !estimateValue}
+                                className={clientStyles.btnUseContract}
+                                onClick={() => handleUseContract(row)}
+                                disabled={isPending || row.weeklyPallets === 0}
+                                title={row.weeklyPallets === 0 ? 'No weekly estimate on contract' : undefined}
                               >
-                                {isPending ? '…' : 'Save'}
+                                Use Contract Est.
                               </button>
+                            )}
+                            {(state === 'none' || state === 'default') && (
                               <button
-                                className={clientStyles.btnCancelEst}
-                                onClick={closeEdit}
+                                className={clientStyles.btnEnterEst}
+                                onClick={() => {
+                                  setOpenRowId(row.rowId);
+                                  setEstimateValue('');
+                                  setRowError(null);
+                                }}
                                 disabled={isPending}
                               >
-                                ×
+                                Enter Estimate
                               </button>
-                            </div>
-                          ) : (
-                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                              {state === 'none' && (
-                                <button
-                                  className={clientStyles.btnUseContract}
-                                  onClick={() => handleUseContract(row)}
-                                  disabled={isPending || row.weeklyPallets === 0}
-                                  title={row.weeklyPallets === 0 ? 'No weekly estimate on contract' : undefined}
-                                >
-                                  Use Contract Est.
-                                </button>
-                              )}
-                              {(state === 'none' || state === 'default') && (
-                                <button
-                                  className={clientStyles.btnEnterEst}
-                                  onClick={() => openEdit(row)}
-                                  disabled={isPending}
-                                >
-                                  Enter Estimate
-                                </button>
-                              )}
-                              {state === 'entry' && (
-                                <button
-                                  className={clientStyles.btnEditEst}
-                                  onClick={() => openEdit(row)}
-                                  disabled={isPending}
-                                >
-                                  Edit
-                                </button>
-                              )}
-                            </div>
-                          )
+                            )}
+                            {state === 'entry' && (
+                              <button
+                                className={clientStyles.btnEditEst}
+                                onClick={() => {
+                                  setOpenRowId(row.rowId);
+                                  setEstimateValue(String(f.estimatedPallets ?? ''));
+                                  setRowError(null);
+                                }}
+                                disabled={isPending}
+                              >
+                                Edit
+                              </button>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
+
+                    {openRowId === row.rowId && (
+                      <tr>
+                        <td colSpan={6}>
+                          <div className={clientStyles.inlineForm}>
+                            <input
+                              type="number"
+                              min={1}
+                              max={9999}
+                              className={clientStyles.estimateInput}
+                              value={estimateValue}
+                              onChange={e => setEstimateValue(e.target.value)}
+                              disabled={isPending}
+                              autoFocus
+                            />
+                            <button
+                              className={clientStyles.btnSaveEst}
+                              onClick={handleSaveEstimate}
+                              disabled={isPending || !estimateValue}
+                            >
+                              {isPending ? 'Saving…' : 'Save'}
+                            </button>
+                            <button
+                              className={clientStyles.btnCancelEst}
+                              onClick={() => { setOpenRowId(null); setRowError(null); }}
+                            >
+                              Cancel
+                            </button>
+                            {rowError && (
+                              <span className={clientStyles.inlineError}>{rowError}</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

@@ -677,55 +677,53 @@
   border-color: var(--color-cyan);
 }
 
-/* ============================================================================
-   SPACE FORECASTS PANEL
-   ============================================================================ */
+/* ── SpaceForecastsPanel ─────────────────────────────── */
 
 .forecastSection {
-  background: var(--color-surface);
+  /* same visual style as the cards in page.module.css */
+  background: var(--color-bg-secondary);
   border: var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: var(--space-5);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+  overflow: hidden;
 }
 
 .forecastHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: var(--border-subtle);
 }
 
 .forecastTitle {
-  font-family: var(--font-heading);
-  font-size: var(--text-md);
+  font-size: var(--text-base);
   font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
   margin: 0;
 }
 
+.forecastSubtitle {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 2px;
+  display: block;
+}
+
 .forecastToggleBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background: transparent;
   border: none;
   cursor: pointer;
   padding: var(--space-1);
   color: var(--color-text-secondary);
-  border-radius: var(--radius-sm);
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.forecastToggleBtn:hover {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
 }
 
 .forecastChevron {
-  display: flex;
-  align-items: center;
+  width: 16px;
+  height: 16px;
   transition: transform 0.2s ease;
+  transform: rotate(0deg);
 }
 
 .forecastChevron--open {
@@ -739,159 +737,133 @@
 .forecastTable {
   width: 100%;
   border-collapse: collapse;
+  font-size: var(--text-sm);
 }
 
-.forecastTable thead th {
+.forecastTable th {
+  padding: var(--space-2) var(--space-4);
+  text-align: left;
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  text-align: left;
-  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-tertiary);
   border-bottom: var(--border-subtle);
   white-space: nowrap;
 }
 
-.forecastTable tbody tr {
-  transition: background var(--transition-fast);
-}
-
-.forecastTable tbody tr:hover {
-  background: var(--color-bg-hover);
-}
-
-.forecastTable tbody td {
-  font-size: var(--text-sm);
+.forecastTable td {
+  padding: var(--space-3) var(--space-4);
   color: var(--color-text-primary);
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-  white-space: nowrap;
+  border-bottom: var(--border-subtle);
   vertical-align: middle;
 }
 
-/* --- Row state badges --- */
+.forecastTable tr:last-child td { border-bottom: none; }
 
+/* Badges */
 .badgeNoEst {
   display: inline-block;
-  font-size: 10px;
-  font-weight: var(--weight-semibold);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   padding: 2px 8px;
-  border-radius: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  border-radius: 100px;
   background: var(--color-bg-tertiary);
   color: var(--color-text-muted);
 }
 
 .badgeContractEst {
   display: inline-block;
-  font-size: 10px;
-  font-weight: var(--weight-semibold);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   padding: 2px 8px;
-  border-radius: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  border-radius: 100px;
   background: var(--color-bg-tertiary);
   color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
 }
 
 .badgePlanner {
   display: inline-block;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   padding: 2px 8px;
-  border-radius: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  border-radius: 100px;
   background: var(--color-blue-muted);
   color: var(--color-blue-light);
 }
 
 .badgeShipper {
   display: inline-block;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   padding: 2px 8px;
-  border-radius: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  background: rgba(6, 182, 212, 0.1);
+  border-radius: 100px;
+  background: rgba(6, 182, 212, 0.12);
   color: var(--color-cyan-light);
 }
 
 .badgePending {
   display: inline-block;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   padding: 2px 8px;
-  border-radius: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  border-radius: 100px;
   background: var(--color-warning-muted);
   color: var(--color-warning);
 }
 
 .badgeIncorporated {
   display: inline-block;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   padding: 2px 8px;
-  border-radius: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  border-radius: 100px;
   background: var(--color-success-muted);
   color: var(--color-success);
 }
 
 .badgeBooking {
   display: inline-block;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   padding: 2px 8px;
-  border-radius: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  border-radius: 100px;
   background: var(--color-success-muted);
   color: var(--color-success);
-  border: 1px solid var(--color-success);
 }
 
-/* --- Inline estimate form --- */
-
+/* Inline form */
 .inlineForm {
   display: flex;
-  gap: var(--space-2);
   align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
 }
 
 .estimateInput {
   width: 80px;
-  padding: 3px 6px;
+  padding: 4px 8px;
   background: var(--color-bg-primary);
   border: 1px solid var(--color-cyan);
   border-radius: var(--radius-sm);
   color: var(--color-text-primary);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-family: var(--font-mono);
 }
 
-.estimateInput:focus {
-  outline: none;
-}
+.estimateInput:focus { outline: none; }
 
 .btnSaveEst {
   padding: 3px 10px;
   border-radius: var(--radius-sm);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   border: 1px solid var(--color-success);
   background: var(--color-success-muted);
   color: var(--color-success);
   transition: all var(--transition-fast);
-  white-space: nowrap;
 }
 
 .btnSaveEst:hover:not(:disabled) {
@@ -899,16 +871,13 @@
   color: white;
 }
 
-.btnSaveEst:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+.btnSaveEst:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .btnCancelEst {
-  padding: 3px 7px;
+  padding: 3px 8px;
   border-radius: var(--radius-sm);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   cursor: pointer;
   border: 1px solid var(--color-border);
   background: transparent;
@@ -916,80 +885,56 @@
   transition: all var(--transition-fast);
 }
 
-.btnCancelEst:hover:not(:disabled) {
-  color: var(--color-text-primary);
-}
+.btnCancelEst:hover { color: var(--color-text-primary); }
 
-.btnCancelEst:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* --- Per-row action buttons --- */
-
+/* Action buttons */
 .btnUseContract {
-  padding: 3px 8px;
+  padding: 2px 8px;
   border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: var(--weight-medium);
   cursor: pointer;
   border: 1px solid var(--color-border);
-  background: var(--color-bg-tertiary);
+  background: transparent;
   color: var(--color-text-secondary);
   transition: all var(--transition-fast);
   white-space: nowrap;
 }
 
 .btnUseContract:hover:not(:disabled) {
-  background: var(--color-bg-hover);
+  background: var(--color-bg-tertiary);
   color: var(--color-text-primary);
 }
 
-.btnUseContract:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.btnEnterEst {
-  padding: 3px 8px;
-  border-radius: var(--radius-sm);
-  font-size: 11px;
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  border: 1px solid var(--color-blue);
-  background: transparent;
-  color: var(--color-blue-light);
-  transition: all var(--transition-fast);
-  white-space: nowrap;
-}
-
-.btnEnterEst:hover:not(:disabled) {
-  background: var(--color-blue-muted);
-}
-
-.btnEnterEst:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
+.btnEnterEst,
 .btnEditEst {
-  padding: 3px 8px;
+  padding: 2px 8px;
   border-radius: var(--radius-sm);
   font-size: 11px;
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   border: 1px solid var(--color-blue);
-  background: transparent;
+  background: var(--color-blue-muted);
   color: var(--color-blue-light);
   transition: all var(--transition-fast);
   white-space: nowrap;
 }
 
+.btnEnterEst:hover:not(:disabled),
 .btnEditEst:hover:not(:disabled) {
-  background: var(--color-blue-muted);
+  background: var(--color-blue);
+  color: white;
 }
 
-.btnEditEst:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
+.btnUseContract:disabled,
+.btnEnterEst:disabled,
+.btnEditEst:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.thNum { text-align: right; }
+.cellNum { text-align: right; font-variant-numeric: tabular-nums; }
+
+.forecastRowActions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
 }
