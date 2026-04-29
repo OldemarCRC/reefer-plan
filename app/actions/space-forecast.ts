@@ -68,7 +68,7 @@ async function _createForecastCore(
   const resolvedShipperId = counterparty.shipperId;
   const shipperName   = counterparty.shipperName;
   const consigneeName = contractDoc.consignee?.name ?? contractDoc.client?.name ?? '';
-  const consigneeCode = contractDoc.consignee?.code ?? '';
+  const consigneeCode = contractDoc.consignee?.code?.trim() || contractDoc.client?.code || 'N/A';
   const cargoType     = counterparty.cargoTypes?.[0] ?? contractDoc.cargoType ?? 'OTHER_CHILLED';
   const polPortCode   = contractDoc.originPort?.portCode ?? contractDoc.origin?.portCode ?? '';
   const podPortCode   = contractDoc.destinationPort?.portCode ?? contractDoc.destination?.portCode ?? '';
