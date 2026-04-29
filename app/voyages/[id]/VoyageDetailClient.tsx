@@ -1272,9 +1272,16 @@ interface ContractRow {
   contractNumber: string;
   cargoType: string;
   weeklyPallets: number;
-  shipperId: string;
+  // The counterparty (one row per active counterparty)
+  counterpartyId: string;
+  counterpartyCode: string;
+  counterpartyName: string;
+  // Explicit shipper and consignee for display and action calls
   shipperCode: string;
   shipperName: string;
+  consigneeCode: string;
+  consigneeName: string;
+  clientType: 'SHIPPER' | 'CONSIGNEE';
   originPort: string;
   originPortName: string;
   destinationPort: string;
@@ -1300,37 +1307,58 @@ function buildContractRows(
 ): ContractRow[] {
   const rows: ContractRow[] = [];
   for (const contract of activeContracts) {
+    const clientType: 'SHIPPER' | 'CONSIGNEE' =
+      contract.clientType ?? contract.client?.type ?? 'CONSIGNEE';
+    const clientCode = contract.client?.code ?? '';
+    const clientName = contract.client?.name ?? '';
+
     const counterparties: any[] = contract.counterparties ?? [];
     const activeCPs = counterparties.filter((cp: any) => cp.active !== false);
     const cps = activeCPs.length > 0 ? activeCPs : [{
       shipperId:     null,
       shipperCode:   '',
-      shipperName:   contract.client?.name ?? '',
+      shipperName:   clientName,
       weeklyEstimate: contract.weeklyPallets ?? 0,
     }];
     for (const cp of cps) {
-      const cpId  = cp.shipperId?.toString() || cp.shipperCode || '';
-      const rowId = `${contract._id?.toString()}-${cpId}`;
+      const cpCode = cp.shipperCode ?? cp.code ?? '';
+      const cpName = cp.shipperName ?? cp.name ?? '';
+      const cpId   = cp.shipperId?.toString() || cpCode || '';
+      const rowId  = `${contract._id?.toString()}-${cpId}`;
+
+      // Booking/forecast matching always uses counterparty data (unchanged logic)
       const booking = bookings.find((b: any) =>
         b.contractId?.toString() === contract._id?.toString() &&
-        (b.shipper?.code === (cp.shipperCode || cp.code) ||
+        (b.shipper?.code === cpCode ||
          (cp.shipperId && b.shipperId?.toString() === cp.shipperId?.toString()))
       ) ?? null;
       const forecast = allForecasts.find((f: any) =>
         f.contractId?.toString() === contract._id?.toString() &&
         (cp.shipperId
           ? f.shipperId?.toString() === cp.shipperId?.toString()
-          : f.shipperCode === (cp.shipperCode || cp.code))
+          : f.shipperCode === cpCode)
       ) ?? null;
+
+      // Resolve explicit shipper and consignee based on which side the client is
+      const shipperCode   = clientType === 'SHIPPER'   ? clientCode : cpCode;
+      const shipperName   = clientType === 'SHIPPER'   ? clientName : cpName;
+      const consigneeCode = clientType === 'CONSIGNEE' ? clientCode : cpCode;
+      const consigneeName = clientType === 'CONSIGNEE' ? clientName : cpName;
+
       rows.push({
         rowId,
         contractId:          contract._id?.toString() ?? '',
         contractNumber:      contract.contractNumber ?? '',
         cargoType:           (contract.cargoType ?? '').replace(/_/g, ' '),
         weeklyPallets:       contract.weeklyPallets ?? cp.weeklyEstimate ?? 0,
-        shipperId:           cp.shipperId?.toString() ?? '',
-        shipperCode:         cp.shipperCode ?? cp.code ?? '',
-        shipperName:         cp.shipperName ?? cp.name ?? contract.client?.name ?? '',
+        counterpartyId:      cp.shipperId?.toString() ?? '',
+        counterpartyCode:    cpCode,
+        counterpartyName:    cpName,
+        shipperCode,
+        shipperName,
+        consigneeCode,
+        consigneeName,
+        clientType,
         originPort:          contract.originPort?.portCode || contract.originPortCode || '—',
         originPortName:      contract.originPort?.portName || '',
         destinationPort:     contract.destinationPort?.portCode || contract.destinationPortCode || '—',
@@ -1394,12 +1422,16 @@ export function UnifiedContractsPanel({
         contractId:       row.contractId,
         estimatedPallets: parseInt(estimateValue, 10),
         source:           'PLANNER_ENTRY',
+        shipperId:        row.counterpartyId,
+        shipperCode:      row.shipperCode,
+        shipperName:      row.shipperName,
+        consigneeCode:    row.consigneeCode || 'N/A',
       });
       if (result.success) {
         setAllForecasts(prev => {
           const filtered = prev.filter((f: any) =>
             !(f.contractId?.toString() === row.contractId &&
-              f.shipperId?.toString() === row.shipperId)
+              f.shipperId?.toString() === row.counterpartyId)
           );
           return [...filtered, result.data];
         });
@@ -1431,7 +1463,8 @@ export function UnifiedContractsPanel({
           <table className={clientStyles.forecastTable}>
             <thead>
               <tr>
-                <th>Shipper / Consignee</th>
+                <th>Shipper</th>
+                <th>Consignee</th>
                 <th>Contract</th>
                 <th>Route</th>
                 <th>Cargo</th>
@@ -1460,10 +1493,24 @@ export function UnifiedContractsPanel({
                     <tr>
                       {/* Shipper */}
                       <td>
-                        <div style={{ fontWeight: 600 }}>{row.shipperName || '—'}</div>
+                        <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>
+                          {row.shipperName || '—'}
+                        </div>
                         {row.shipperCode && (
                           <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--color-text-muted)' }}>
                             {row.shipperCode}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Consignee */}
+                      <td>
+                        <div style={{ fontWeight: 500, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                          {row.consigneeName || '—'}
+                        </div>
+                        {row.consigneeCode && (
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--color-text-muted)' }}>
+                            {row.consigneeCode}
                           </div>
                         )}
                       </td>
@@ -1609,7 +1656,7 @@ export function UnifiedContractsPanel({
 
                     {openRowId === row.rowId && (
                       <tr>
-                        <td colSpan={canEnterForecasts ? 8 : 7}>
+                        <td colSpan={canEnterForecasts ? 9 : 8}>
                           <div className={clientStyles.inlineForm}>
                             <input
                               type="number"
