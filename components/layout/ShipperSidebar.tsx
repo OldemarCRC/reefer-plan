@@ -60,7 +60,7 @@ const navItems = [
   { id: 'bookings',  label: 'My Bookings',  href: '/shipper/bookings',  icon: 'bookings'  as const },
   { id: 'schedules', label: 'Schedules',    href: '/shipper/schedules', icon: 'schedules' as const },
   { id: 'request',   label: 'New Request',  href: '/shipper/request',   icon: 'request'   as const },
-  { id: 'account',   label: 'My Account',   href: '/account',           icon: 'account'   as const },
+  { id: 'account',   label: 'My Account',   href: '/shipper/account',   icon: 'account'   as const },
 ];
 
 interface ShipperSidebarProps {
