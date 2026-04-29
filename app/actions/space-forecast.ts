@@ -89,12 +89,13 @@ async function _createForecastCore(
   }).sort({ submittedAt: -1 }).lean();
 
   let newPlanImpact: SpaceForecastPlanImpact;
-  if (existingForecast) {
-    newPlanImpact = (existingForecast as any).estimatedPallets === estimatedPallets
-      ? 'NO_CHANGE'
-      : 'PENDING_REVIEW';
-  } else {
+  if (existingForecast && (existingForecast as any).estimatedPallets === estimatedPallets) {
+    newPlanImpact = 'NO_CHANGE';
+  } else if (source === 'SHIPPER_PORTAL') {
     newPlanImpact = 'PENDING_REVIEW';
+  } else {
+    // PLANNER_ENTRY and CONTRACT_DEFAULT are authoritative — mark incorporated immediately
+    newPlanImpact = 'INCORPORATED';
   }
 
   // Generate forecast number
