@@ -2,10 +2,12 @@ import AppShell from '@/components/layout/AppShell';
 import { getVoyageById } from '@/app/actions/voyage';
 import { getStowagePlansByVoyage } from '@/app/actions/stowage-plan';
 import { getBookingsByVoyage } from '@/app/actions/booking';
+import { getContractsByService } from '@/app/actions/contract';
+import { getSpaceForecasts } from '@/app/actions/space-forecast';
 import { auth } from '@/auth';
 import Link from 'next/link';
 import styles from './page.module.css';
-import { PortCallsEditor, DeletePlanButton, CloseVoyageButton, ChangeDestinationButton } from './VoyageDetailClient';
+import { PortCallsEditor, DeletePlanButton, CloseVoyageButton, ChangeDestinationButton, SpaceForecastsPanel } from './VoyageDetailClient';
 
 const statusStyles: Record<string, { bg: string; color: string }> = {
   PLANNED:     { bg: 'var(--color-blue-muted)',     color: 'var(--color-blue-light)'    },
@@ -63,13 +65,18 @@ export default async function VoyageDetailPage({
     return ta - tb;
   });
   // Parallel fetches
-  const [plansResult, bookingsResult] = await Promise.all([
+  const serviceIdStr = String((voyage.serviceId as any)?._id ?? '');
+  const [plansResult, bookingsResult, forecastsResult, contractsResult] = await Promise.all([
     getStowagePlansByVoyage(id),
     getBookingsByVoyage(id),
+    getSpaceForecasts(id),
+    serviceIdStr ? getContractsByService(serviceIdStr) : Promise.resolve({ success: false as const, data: [] as any[], error: '' }),
   ]);
 
-  const plans = plansResult.success ? plansResult.data : [];
-  const bookings = bookingsResult.success ? bookingsResult.data : [];
+  const plans          = plansResult.success    ? plansResult.data    : [];
+  const bookings       = bookingsResult.success  ? bookingsResult.data  : [];
+  const spaceForecasts = forecastsResult.success ? forecastsResult.data : [];
+  const activeContracts = (contractsResult.success ? contractsResult.data : []).filter((c: any) => c.active);
 
   const role = (session?.user as any)?.role as string | undefined;
   const canEdit = role === 'ADMIN' || role === 'SHIPPING_PLANNER';
@@ -282,6 +289,16 @@ export default async function VoyageDetailPage({
             </div>
           )}
         </div>
+
+        {/* Space Forecasts Panel — planners only, open voyages, when contracts exist */}
+        {['PLANNED', 'IN_PROGRESS'].includes(voyage.status || '') && canEdit && (
+          <SpaceForecastsPanel
+            voyageId={id}
+            voyageStatus={voyage.status || 'PLANNED'}
+            spaceForecasts={spaceForecasts}
+            activeContracts={activeContracts}
+          />
+        )}
       </div>
     </AppShell>
   );
