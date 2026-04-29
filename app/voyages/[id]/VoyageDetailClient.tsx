@@ -1275,6 +1275,10 @@ interface ContractRow {
   shipperId: string;
   shipperCode: string;
   shipperName: string;
+  originPort: string;
+  originPortName: string;
+  destinationPort: string;
+  destinationPortName: string;
   booking: any | null;
   forecast: any | null;
 }
@@ -1320,13 +1324,17 @@ function buildContractRows(
       ) ?? null;
       rows.push({
         rowId,
-        contractId:     contract._id?.toString() ?? '',
-        contractNumber: contract.contractNumber ?? '',
-        cargoType:      (contract.cargoType ?? '').replace(/_/g, ' '),
-        weeklyPallets:  contract.weeklyPallets ?? cp.weeklyEstimate ?? 0,
-        shipperId:      cp.shipperId?.toString() ?? '',
-        shipperCode:    cp.shipperCode ?? cp.code ?? '',
-        shipperName:    cp.shipperName ?? cp.name ?? contract.client?.name ?? '',
+        contractId:          contract._id?.toString() ?? '',
+        contractNumber:      contract.contractNumber ?? '',
+        cargoType:           (contract.cargoType ?? '').replace(/_/g, ' '),
+        weeklyPallets:       contract.weeklyPallets ?? cp.weeklyEstimate ?? 0,
+        shipperId:           cp.shipperId?.toString() ?? '',
+        shipperCode:         cp.shipperCode ?? cp.code ?? '',
+        shipperName:         cp.shipperName ?? cp.name ?? contract.client?.name ?? '',
+        originPort:          contract.originPort?.portCode || contract.originPortCode || '—',
+        originPortName:      contract.originPort?.portName || '',
+        destinationPort:     contract.destinationPort?.portCode || contract.destinationPortCode || '—',
+        destinationPortName: contract.destinationPort?.portName || '',
         booking,
         forecast,
       });
@@ -1425,6 +1433,7 @@ export function UnifiedContractsPanel({
               <tr>
                 <th>Shipper / Consignee</th>
                 <th>Contract</th>
+                <th>Route</th>
                 <th>Cargo</th>
                 <th className={clientStyles.thNum}>Weekly Est.</th>
                 <th>Booking</th>
@@ -1462,6 +1471,18 @@ export function UnifiedContractsPanel({
                       {/* Contract */}
                       <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
                         {row.contractNumber}
+                      </td>
+
+                      {/* Route */}
+                      <td>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                          {row.originPort} → {row.destinationPort}
+                        </div>
+                        {(row.originPortName || row.destinationPortName) && (
+                          <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                            {row.originPortName} → {row.destinationPortName}
+                          </div>
+                        )}
                       </td>
 
                       {/* Cargo */}
@@ -1588,7 +1609,7 @@ export function UnifiedContractsPanel({
 
                     {openRowId === row.rowId && (
                       <tr>
-                        <td colSpan={canEnterForecasts ? 7 : 6}>
+                        <td colSpan={canEnterForecasts ? 8 : 7}>
                           <div className={clientStyles.inlineForm}>
                             <input
                               type="number"
