@@ -352,7 +352,7 @@ export async function createContractDefaultForecasts(
 
 export async function markForecastIncorporated(
   forecastId: string,
-  planId: string
+  planId?: string
 ): Promise<{ success: true } | { success: false; error: string }> {
   try {
     const session = await auth();
@@ -370,16 +370,20 @@ export async function markForecastIncorporated(
       return { success: false, error: 'Cannot modify a superseded forecast' };
     }
 
-    await SpaceForecastModel.findByIdAndUpdate(forecastId, {
+    const update: any = {
       planImpact: 'INCORPORATED',
-      incorporatedInPlanId: planId,
       reviewedBy: (session.user as any).email ?? session.user.name,
       reviewedAt: new Date(),
-    });
+    };
+    if (planId) update.incorporatedInPlanId = planId;
 
-    await StowagePlanModel.findByIdAndUpdate(planId, {
-      $pull: { pendingForecastUpdates: forecastId },
-    });
+    await SpaceForecastModel.findByIdAndUpdate(forecastId, update);
+
+    if (planId) {
+      await StowagePlanModel.findByIdAndUpdate(planId, {
+        $pull: { pendingForecastUpdates: forecastId },
+      });
+    }
 
     return { success: true };
   } catch (err: any) {
