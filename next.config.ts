@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ['192.168.10.45'],
   // instrumentation.ts is enabled by default in Next.js 15+
   async headers() {
     return [

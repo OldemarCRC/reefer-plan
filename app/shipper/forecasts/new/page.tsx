@@ -55,11 +55,16 @@ export default async function NewForecastPage() {
   const forecastsResult = await getMyForecasts();
   const existingForecasts = forecastsResult.success ? forecastsResult.data : [];
 
+  // Strip Mongoose document internals before crossing the Server→Client boundary
+  const safeContracts        = JSON.parse(JSON.stringify(contracts));
+  const safeVoyagesByService = JSON.parse(JSON.stringify(voyagesByServiceId));
+  const safeForecasts        = JSON.parse(JSON.stringify(existingForecasts));
+
   return (
     <ForecastWizard
-      contracts={contracts}
-      voyagesByServiceId={voyagesByServiceId}
-      existingForecasts={existingForecasts as any[]}
+      contracts={safeContracts}
+      voyagesByServiceId={safeVoyagesByService}
+      existingForecasts={safeForecasts}
     />
   );
 }
