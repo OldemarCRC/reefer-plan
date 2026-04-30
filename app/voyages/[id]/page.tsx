@@ -78,6 +78,11 @@ export default async function VoyageDetailPage({
   const spaceForecasts = forecastsResult.success ? forecastsResult.data : [];
   const activeContracts = (contractsResult.success ? contractsResult.data : []).filter((c: any) => c.active);
 
+  // Strip Mongoose document internals before crossing the Server→Client boundary
+  const safeForecasts  = JSON.parse(JSON.stringify(spaceForecasts));
+  const safeContracts  = JSON.parse(JSON.stringify(activeContracts));
+  const safeBookings   = JSON.parse(JSON.stringify(bookings));
+
   const role = (session?.user as any)?.role as string | undefined;
   const canEdit = role === 'ADMIN' || role === 'SHIPPING_PLANNER';
   const isClosed = voyage.status === 'CLOSED' || voyage.status === 'CANCELLED';
@@ -239,9 +244,9 @@ export default async function VoyageDetailPage({
         <UnifiedContractsPanel
           voyageId={id}
           voyageStatus={voyage.status || 'PLANNED'}
-          activeContracts={activeContracts}
-          bookings={bookings}
-          spaceForecasts={spaceForecasts}
+          activeContracts={safeContracts}
+          bookings={safeBookings}
+          spaceForecasts={safeForecasts}
           canEdit={canEdit}
           dischargePorts={dischargePorts}
         />
