@@ -1,6 +1,7 @@
 import AppShell from '@/components/layout/AppShell';
-import { getContractById } from '@/app/actions/contract';
+import { getContractById, getBookingCountsByContract } from '@/app/actions/contract';
 import { getActiveShippers } from '@/app/actions/shipper';
+import { auth } from '@/auth';
 import { notFound } from 'next/navigation';
 import styles from './page.module.css';
 import DeactivateButton from './DeactivateButton';
@@ -26,7 +27,8 @@ export default async function ContractDetailPage({
 }) {
   const { id } = await params;
 
-  const [contractResult, shippersResult] = await Promise.all([
+  const [session, contractResult, shippersResult] = await Promise.all([
+    auth(),
     getContractById(id),
     getActiveShippers(),
   ]);
@@ -37,6 +39,12 @@ export default async function ContractDetailPage({
 
   const c = contractResult.data as any;
   const clientType = c.client?.type || 'SHIPPER';
+
+  const role = (session?.user as any)?.role as string | undefined;
+  const canEdit = role === 'ADMIN' || role === 'SHIPPING_PLANNER';
+
+  const bookingCountsResult = await getBookingCountsByContract(c._id);
+  const bookingCounts = bookingCountsResult.success ? bookingCountsResult.data : {};
 
   // Legacy counterparties section (shippers[] or consignees[])
   const legacyCounterparties = clientType === 'SHIPPER' ? c.consignees : c.shippers;
@@ -192,6 +200,8 @@ export default async function ContractDetailPage({
             name: s.name,
             code: s.code,
           }))}
+          canEdit={canEdit}
+          bookingCounts={bookingCounts}
         />
 
         {/* Legacy counterparties — shown only if old data exists */}

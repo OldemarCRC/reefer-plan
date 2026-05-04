@@ -815,6 +815,8 @@ function EditContractModal({
               contractWeeklyPallets={parseInt(weeklyPallets) || contract.weeklyPallets}
               counterparties={counterparties}
               availableShippers={shippers.map(s => ({ id: s._id, name: s.name, code: s.code }))}
+              canEdit={true}
+              bookingCounts={{}}
             />
           </>
         )}

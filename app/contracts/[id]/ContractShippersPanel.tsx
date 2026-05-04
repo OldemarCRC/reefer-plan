@@ -6,6 +6,7 @@ import {
   addShipperToContract,
   toggleContractShipperActive,
   removeShipperFromContract,
+  updateCounterpartyWeeklyPallets,
 } from '@/app/actions/contract';
 import styles from './page.module.css';
 
@@ -30,6 +31,8 @@ interface ContractShippersPanelProps {
   contractWeeklyPallets?: number;
   counterparties: ContractCounterparty[];
   availableShippers: ShipperOption[];
+  canEdit: boolean;
+  bookingCounts: Record<string, number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,6 +85,8 @@ export default function ContractShippersPanel({
   contractWeeklyPallets = 0,
   counterparties,
   availableShippers,
+  canEdit,
+  bookingCounts,
 }: ContractShippersPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -92,6 +97,11 @@ export default function ContractShippersPanel({
   const [selShipperId, setSelShipperId] = useState('');
   const [weeklyEst, setWeeklyEst] = useState(0);
   const [addError, setAddError] = useState('');
+
+  // Inline edit state
+  const [editingCode, setEditingCode] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [editError, setEditError] = useState('');
 
   // Shippers not yet assigned (by id and code)
   const assignedIds = new Set(counterparties.map((cp) => cp.shipperId).filter(Boolean));
@@ -174,6 +184,43 @@ export default function ContractShippersPanel({
     });
   }
 
+  function startEdit(shipperCode: string, currentEstimate: number) {
+    setEditingCode(shipperCode);
+    setEditValue(String(currentEstimate));
+    setEditError('');
+    setActionMsg(null);
+  }
+
+  function cancelEdit() {
+    setEditingCode(null);
+    setEditValue('');
+    setEditError('');
+  }
+
+  function handleSaveEdit(shipperCode: string) {
+    const parsed = parseInt(editValue, 10);
+    if (isNaN(parsed) || parsed < 0) {
+      setEditError('Enter a valid number (0 or more)');
+      return;
+    }
+    if (parsed === 0) {
+      const ok = window.confirm('Setting weekly estimate to 0 means this shipper will not appear in voyage space forecasts. Continue?');
+      if (!ok) return;
+    }
+    setEditError('');
+    startTransition(async () => {
+      const res = await updateCounterpartyWeeklyPallets(contractId, shipperCode, parsed);
+      if (res.success) {
+        setEditingCode(null);
+        setEditValue('');
+        setActionMsg({ type: 'success', text: res.message ?? 'Weekly estimate updated' });
+        router.refresh();
+      } else {
+        setEditError(res.error ?? 'Failed to update');
+      }
+    });
+  }
+
   return (
     <div className={styles.card}>
       <div className={styles.panelHeader}>
@@ -219,34 +266,104 @@ export default function ContractShippersPanel({
             <tbody>
               {counterparties.map((cp) => {
                 const isActive = cp.active !== false;
+                const isEditingThis = editingCode === cp.shipperCode;
+                const bookingCount = bookingCounts[cp.shipperCode] ?? 0;
+
                 return (
                   <tr key={cp.shipperCode} className={isActive ? '' : styles.shipperInactive}>
-                    <td>{cp.shipperName}</td>
+                    {/* Name + optional booking count badge */}
+                    <td>
+                      <span>{cp.shipperName}</span>
+                      {bookingCount > 0 && (
+                        <span className={styles.bookingCount}>
+                          {bookingCount} booking{bookingCount !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </td>
+
                     <td className={styles.cellMono}>{cp.shipperCode}</td>
-                    <td className={styles.cellRight}>{cp.weeklyEstimate}</td>
+
+                    {/* Weekly Est — static or inline input */}
+                    <td className={styles.cellRight}>
+                      {isEditingThis ? (
+                        <div className={styles.inlineEditWrap}>
+                          <input
+                            type="number"
+                            className={styles.inlineEditInput}
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            min={0}
+                            autoFocus
+                            disabled={isPending}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveEdit(cp.shipperCode);
+                              if (e.key === 'Escape') cancelEdit();
+                            }}
+                          />
+                          {editError && (
+                            <span className={styles.inlineEditError}>{editError}</span>
+                          )}
+                        </div>
+                      ) : (
+                        cp.weeklyEstimate
+                      )}
+                    </td>
+
                     <td>
                       <span className={isActive ? styles.statusActive : styles.statusInactive}>
                         {isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
+
                     {contractActive && (
                       <td>
                         <div className={styles.rowActions}>
-                          <button
-                            className={`${styles.btnSmall} ${isActive ? styles.btnDeactivate : styles.btnReactivate}`}
-                            onClick={() => handleToggle(cp.shipperCode, isActive)}
-                            disabled={isPending}
-                          >
-                            {isActive ? 'Deactivate' : 'Reactivate'}
-                          </button>
-                          <button
-                            className={`${styles.btnSmall} ${styles.btnRemove}`}
-                            onClick={() => handleRemove(cp.shipperCode, cp.shipperName)}
-                            disabled={isPending}
-                            title="Remove only if no active bookings exist"
-                          >
-                            Remove
-                          </button>
+                          {isEditingThis ? (
+                            <>
+                              <button
+                                className={`${styles.btnSmall} ${styles.btnSaveEdit}`}
+                                onClick={() => handleSaveEdit(cp.shipperCode)}
+                                disabled={isPending}
+                              >
+                                Save
+                              </button>
+                              <button
+                                className={`${styles.btnSmall} ${styles.btnCancelEdit}`}
+                                onClick={cancelEdit}
+                                disabled={isPending}
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              {canEdit && (
+                                <button
+                                  className={`${styles.btnSmall} ${styles.btnEditEst}`}
+                                  onClick={() => startEdit(cp.shipperCode, cp.weeklyEstimate)}
+                                  disabled={isPending || !!editingCode}
+                                  title="Edit weekly estimate"
+                                >
+                                  ✎
+                                </button>
+                              )}
+                              <button
+                                className={`${styles.btnSmall} ${isActive ? styles.btnDeactivate : styles.btnReactivate}`}
+                                onClick={() => handleToggle(cp.shipperCode, isActive)}
+                                disabled={isPending || !!editingCode}
+                              >
+                                {isActive ? 'Deactivate' : 'Reactivate'}
+                              </button>
+                              <button
+                                className={`${styles.btnSmall} ${styles.btnRemove}`}
+                                onClick={() => handleRemove(cp.shipperCode, cp.shipperName)}
+                                disabled={isPending || !!editingCode}
+                                title="Remove only if no active bookings exist"
+                              >
+                                Remove
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     )}

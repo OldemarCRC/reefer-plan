@@ -612,3 +612,97 @@
 .weeklyCapExact {
   color: var(--color-success);
 }
+
+/* Booking count badge — informational only, shown next to shipper name */
+.bookingCount {
+  display: inline-block;
+  margin-left: var(--space-2);
+  font-size: 10px;
+  font-weight: var(--weight-medium);
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--color-blue-muted);
+  color: var(--color-blue-light);
+  white-space: nowrap;
+}
+
+/* Inline weekly estimate edit */
+.inlineEditWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.inlineEditInput {
+  width: 72px;
+  padding: 2px 6px;
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-cyan);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  text-align: right;
+}
+
+.inlineEditInput:focus {
+  outline: none;
+}
+
+.inlineEditError {
+  font-size: 10px;
+  color: var(--color-danger);
+  white-space: nowrap;
+}
+
+/* Edit estimate pencil button */
+.btnEditEst {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  min-width: 28px;
+}
+
+.btnEditEst:hover:not(:disabled) {
+  border-color: var(--color-cyan);
+  color: var(--color-cyan-light);
+  background: var(--color-blue-muted);
+}
+
+.btnEditEst:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Save / Cancel inline edit buttons */
+.btnSaveEdit {
+  border: 1px solid var(--color-success);
+  background: var(--color-success-muted);
+  color: var(--color-success);
+}
+
+.btnSaveEdit:hover:not(:disabled) {
+  background: var(--color-success);
+  color: white;
+}
+
+.btnSaveEdit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btnCancelEdit {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.btnCancelEdit:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+.btnCancelEdit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

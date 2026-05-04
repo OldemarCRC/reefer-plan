@@ -643,3 +643,80 @@ export async function removeShipperFromContract(contractId: unknown, shipperCode
     return { success: false, error: 'Failed to remove shipper from contract' };
   }
 }
+
+// ----------------------------------------------------------------------------
+// GET BOOKING COUNTS BY CONTRACT
+// Returns a map of { [shipperCode]: count } for active (non-cancelled,
+// non-rejected) bookings on a contract. Used by ContractShippersPanel to
+// show informational booking indicators per counterparty row.
+// ----------------------------------------------------------------------------
+
+export async function getBookingCountsByContract(
+  contractId: unknown
+): Promise<{ success: true; data: Record<string, number> } | { success: false; error: string }> {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+
+    const id = ContractIdSchema.parse(contractId);
+    await connectDB();
+
+    const bookings = await BookingModel.find({
+      contractId: id,
+      status: { $nin: ['CANCELLED', 'REJECTED'] },
+    }).select('shipper').lean();
+
+    const data: Record<string, number> = {};
+    for (const b of bookings as any[]) {
+      const code = b.shipper?.code;
+      if (code) data[code] = (data[code] ?? 0) + 1;
+    }
+
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error fetching booking counts by contract:', error);
+    return { success: false, error: 'Failed to fetch booking counts' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// UPDATE COUNTERPARTY WEEKLY PALLETS
+// Updates the weeklyEstimate field for a single counterparty subdocument
+// within contract.counterparties[]. Intentionally NOT blocked by bookings —
+// the estimate is forward-looking and must be correctable regardless of
+// whether the shipper has existing bookings.
+// ----------------------------------------------------------------------------
+
+export async function updateCounterpartyWeeklyPallets(
+  contractId: unknown,
+  shipperCode: unknown,
+  weeklyPallets: unknown
+): Promise<{ success: true; message: string } | { success: false; error: string }> {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
+    const id   = ContractIdSchema.parse(contractId);
+    const code = z.string().min(1).parse(shipperCode);
+    const qty  = z.number().int().min(0).parse(weeklyPallets);
+    await connectDB();
+
+    const updated = await ContractModel.findByIdAndUpdate(
+      id,
+      { $set: { 'counterparties.$[elem].weeklyEstimate': qty } },
+      { arrayFilters: [{ 'elem.shipperCode': code }], new: true }
+    );
+
+    if (!updated) return { success: false, error: 'Contract not found' };
+
+    return { success: true, message: `Weekly estimate updated to ${qty} pallets` };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: `Validation error: ${error.issues[0].message}` };
+    }
+    console.error('Error updating counterparty weekly pallets:', error);
+    return { success: false, error: 'Failed to update weekly estimate' };
+  }
+}
