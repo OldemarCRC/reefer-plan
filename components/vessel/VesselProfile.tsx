@@ -641,7 +641,7 @@ export default function VesselProfile({
                       fill="#070f1c" opacity={0.78} />
                     {/* Dividers at proportional positions */}
                     {(!editableZoneTemps || comp.assignment
-                      ? [0.12, 0.24, 0.36, 0.78]
+                      ? [0.12, 0.24, 0.36, 0.62]
                       : [0.12]
                     ).map(pos => (
                       <line key={`fd${pos}`}
@@ -681,18 +681,18 @@ export default function VesselProfile({
                       <>
                         {/* Zone label above the input — links sibling cells visually */}
                         <text
-                          x={comp.x + comp.w * 0.89}
+                          x={comp.x + comp.w * 0.81}
                           y={footerY - 3}
                           textAnchor="middle"
                           style={{ fontSize: '7px', fill: 'rgba(255,255,255,0.35)', fontFamily: 'monospace', pointerEvents: 'none' }}
                         >
                           {cellZoneId}
                         </text>
-                        {/* foreignObject spanning last 22% of cell, extending into body */}
+                        {/* foreignObject spanning last 38% of cell, extending into body */}
                         <foreignObject
-                          x={comp.x + comp.w * 0.78}
+                          x={comp.x + comp.w * 0.62}
                           y={footerY - 7}
-                          width={Math.max(1, comp.w * 0.22 - 2)}
+                          width={Math.max(1, comp.w * 0.38 - 2)}
                           height={22}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '2px', width: '100%', height: '100%', padding: '0 2px', boxSizing: 'border-box' }}>

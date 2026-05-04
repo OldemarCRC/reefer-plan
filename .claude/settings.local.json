@@ -8,7 +8,8 @@
       "Bash(npx tsx *)",
       "Bash(npx tsc *)",
       "Bash(node -e ' *)",
-      "Bash(npx ts-node *)"
+      "Bash(npx ts-node *)",
+      "Bash(git stash *)"
     ]
   }
 }

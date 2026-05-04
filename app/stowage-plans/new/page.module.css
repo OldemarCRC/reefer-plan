@@ -14,7 +14,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .titleRow h1 {
@@ -34,73 +34,41 @@
   font-size: 0.875rem;
   transition: all 0.2s;
 }
-
 .cancelBtn:hover {
   background: var(--surface-hover);
   color: var(--text-primary);
 }
 
-/* Progress Steps */
-.steps {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-}
+/* ── Step breadcrumb (teal active / green done / muted inactive) ──────────── */
 
-.step {
+.wizSteps {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  position: relative;
-}
-
-.stepNumber {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--surface-elevated);
-  border: 2px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  color: var(--text-secondary);
-  transition: all 0.3s;
-}
-
-.step.active .stepNumber {
-  background: var(--accent-primary);
-  border-color: var(--accent-primary);
-  color: white;
-}
-
-.step.completed .stepNumber {
-  background: var(--success);
-  border-color: var(--success);
-  color: white;
-}
-
-.stepLabel {
   font-size: 0.875rem;
-  color: var(--text-secondary);
+}
+
+.wizStepActive {
+  font-weight: 600;
+  color: #06b6d4;
+}
+
+.wizStepDone {
+  color: #22c55e;
   font-weight: 500;
 }
 
-.step.active .stepLabel {
-  color: var(--text-primary);
+.wizStepInactive {
+  color: rgba(255, 255, 255, 0.3);
 }
 
-.stepConnector {
-  width: 120px;
-  height: 2px;
-  background: var(--border-color);
-  margin: 0 1rem;
-  margin-bottom: 1.5rem;
+.wizStepArrow {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 1rem;
 }
 
-/* Content */
+/* ── Content shell ────────────────────────────────────────────────────────── */
+
 .content {
   background: var(--surface-elevated);
   border: 1px solid var(--border-color);
@@ -122,7 +90,8 @@
   line-height: 1.6;
 }
 
-/* Step 1: Voyage Selection */
+/* ── Step 1: Voyage Selection ─────────────────────────────────────────────── */
+
 .voyageGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
@@ -138,13 +107,11 @@
   cursor: pointer;
   transition: all 0.2s;
 }
-
 .voyageCard:hover {
   border-color: rgba(255, 255, 255, 0.25);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   transform: translateY(-2px);
 }
-
 .voyageCard.selected {
   border-color: #06b6d4;
   background: rgba(6, 182, 212, 0.08);
@@ -159,7 +126,6 @@
   padding-bottom: 1rem;
   border-bottom: 1px solid var(--border-color);
 }
-
 .voyageHeader h3 {
   font-size: 1.125rem;
   font-weight: 600;
@@ -175,12 +141,10 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-
 .statusBadge.confirmed {
   background: rgba(34, 197, 94, 0.1);
   color: var(--success);
 }
-
 .statusBadge.planned {
   background: rgba(234, 179, 8, 0.1);
   color: var(--warning);
@@ -196,20 +160,97 @@
   display: flex;
   gap: 0.5rem;
 }
-
 .detail .label {
   color: var(--text-secondary);
   font-size: 0.875rem;
   min-width: 90px;
 }
-
 .detail .value {
   color: var(--text-primary);
   font-size: 0.875rem;
   font-weight: 500;
 }
 
-/* Step 2: Temperature Table */
+.revisionBadge {
+  padding: 0.2rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(99, 102, 241, 0.12);
+  color: #818cf8;
+}
+
+/* ── Step 2: Temperature Config ───────────────────────────────────────────── */
+
+.svgWrap {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface-base);
+  margin-bottom: 1.25rem;
+}
+
+.bulkToolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.bulkInput {
+  width: 72px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(100, 160, 255, 0.4);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.875rem;
+  text-align: center;
+  padding: 0 4px;
+  outline: none;
+  font-family: 'Space Grotesk', monospace;
+  box-sizing: border-box;
+}
+.bulkInput:focus {
+  border-color: rgba(100, 160, 255, 0.9);
+}
+
+.bulkApply {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(100, 160, 255, 0.12);
+  border: 1px solid rgba(100, 160, 255, 0.3);
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.bulkApply:hover:not(:disabled) {
+  background: rgba(100, 160, 255, 0.22);
+  color: rgba(255, 255, 255, 0.9);
+}
+.bulkApply:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.bulkClear {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.35);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s;
+}
+.bulkClear:hover {
+  color: rgba(255, 255, 255, 0.65);
+}
+
 .tempTable {
   background: var(--surface-base);
   border: 1px solid var(--border-color);
@@ -220,164 +261,230 @@
 
 .tableHeader {
   display: grid;
-  grid-template-columns: 140px 1fr 140px;
+  grid-template-columns: 120px 1fr 190px;
   gap: 1rem;
-  padding: 1rem 1.5rem;
+  padding: 0.75rem 1.5rem;
   background: var(--surface-elevated);
   border-bottom: 1px solid var(--border-color);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .tableRow {
   display: grid;
-  grid-template-columns: 140px 1fr 140px;
+  grid-template-columns: 120px 1fr 190px;
   gap: 1rem;
-  padding: 1rem 1.5rem;
+  padding: 0.875rem 1.5rem;
   border-bottom: 1px solid var(--border-color);
   align-items: center;
 }
-
 .tableRow:last-child {
   border-bottom: none;
 }
-
 .tableRow:hover {
   background: var(--surface-hover);
 }
 
-.colSection strong {
+.colZone strong {
   color: var(--accent-primary);
   font-family: 'Space Grotesk', monospace;
+  font-size: 0.9375rem;
 }
 
-.colCompartments {
+.colSections {
   color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
+.colTemp {
+  display: flex;
+  align-items: center;
+}
 
 .tempInput {
-  width: 100%;
-  padding: 0.5rem;
+  width: 130px;
+  padding: 0.4rem 0.625rem;
   background: var(--surface-elevated);
   border: 1px solid var(--border-color);
   border-radius: 6px;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   text-align: center;
   font-family: 'Space Grotesk', monospace;
   font-weight: 600;
 }
-
 .tempInput:focus {
   outline: none;
   border-color: var(--accent-primary);
 }
 
-/* Step 3: Review */
-.reviewSection {
-  margin-bottom: 2rem;
-}
-
-.reviewSection h3 {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 1rem 0;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.reviewGrid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
-}
-
-.reviewItem {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.reviewItem .label {
+.tempReadOnly {
   font-size: 0.875rem;
+  font-weight: 600;
   color: var(--text-secondary);
+  font-family: var(--font-mono, monospace);
 }
 
-.reviewItem .value {
-  font-size: 1rem;
+/* ── Step 3: Maritime Review Card ─────────────────────────────────────────── */
+
+.maritimeCard {
+  background: linear-gradient(
+    135deg,
+    rgba(6, 182, 212, 0.07) 0%,
+    rgba(14, 165, 233, 0.04) 50%,
+    rgba(99, 102, 241, 0.05) 100%
+  );
+  border: 1px solid rgba(6, 182, 212, 0.28);
+  border-radius: 12px;
+  padding: 1.75rem;
+  margin-bottom: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+.maritimeCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #06b6d4, #6366f1);
+}
+
+.maritimeCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.maritimeVesselName {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.maritimeVoyageNum {
+  font-size: 0.875rem;
+  font-family: 'Space Grotesk', monospace;
+  color: #06b6d4;
+  margin-top: 0.25rem;
+  font-weight: 600;
+}
+
+.maritimeCardMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.maritimeDate {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  font-family: 'Space Grotesk', monospace;
+}
+
+.maritimeRoute {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  margin-bottom: 1.5rem;
+}
+
+.maritimeRouteItem {
+  display: flex;
+  align-items: center;
+}
+
+.maritimeRouteArrow {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 0.875rem;
+  margin: 0 0.4rem;
+}
+
+.maritimePort {
+  font-size: 0.875rem;
   color: var(--text-primary);
   font-weight: 500;
 }
 
-.tempSummary {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
+.maritimeTempSection {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: 1.25rem;
 }
 
-.holdColumn {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.holdLabel {
-  font-size: 0.75rem;
+.maritimeTempLabel {
+  font-size: 0.6875rem;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: rgba(255, 255, 255, 0.4);
   text-transform: uppercase;
-  letter-spacing: 1px;
-  text-align: center;
-  padding-bottom: 0.25rem;
-  border-bottom: 1px solid var(--border-color);
+  letter-spacing: 0.08em;
+  margin-bottom: 0.875rem;
 }
 
-/* Section card — colored border matching temperature */
-.sectionCard {
-  border: 3px solid;
-  border-radius: 8px;
-  padding: 0.75rem;
-  background: var(--surface-base);
+.maritimeTempGrid {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.maritimeHoldGroup {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-width: 110px;
 }
 
-.sectionHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+.maritimeHoldTitle {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-align: center;
+  padding-bottom: 0.375rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-.sectionName {
+.maritimeZoneChip {
+  border: 2px solid;
+  border-radius: 6px;
+  padding: 0.5rem 0.625rem;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.maritimeZoneId {
+  display: block;
   font-family: 'Space Grotesk', monospace;
-  font-weight: 700;
-  color: var(--accent-primary);
-  font-size: 0.875rem;
-}
-
-.sectionTemp {
-  font-family: 'Space Grotesk', monospace;
-  font-weight: 700;
-  font-size: 1.1rem;
-  color: var(--text-primary);
-}
-
-.tempBar {
-  height: 3px;
-  border-radius: 2px;
-  width: 100%;
-}
-
-.compartments {
   font-size: 0.75rem;
-  color: var(--text-secondary);
-  padding-top: 0.25rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.6);
 }
+
+.maritimeZoneTemp {
+  display: block;
+  font-family: 'Space Grotesk', monospace;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  margin-top: 0.125rem;
+}
+
+.maritimeZoneSections {
+  font-size: 0.6875rem;
+  color: rgba(255, 255, 255, 0.28);
+  margin-top: 0.25rem;
+}
+
+/* ── Info / Warning / Error boxes ─────────────────────────────────────────── */
 
 .infoBox {
   display: flex;
@@ -386,20 +493,43 @@
   background: rgba(14, 165, 233, 0.05);
   border: 1px solid rgba(14, 165, 233, 0.2);
   border-radius: 8px;
-  margin-top: 2rem;
+  margin-top: 1rem;
 }
-
 .infoBox svg {
   flex-shrink: 0;
   color: var(--accent-primary);
   margin-top: 0.125rem;
 }
-
 .infoBox p {
   margin: 0;
   font-size: 0.875rem;
   color: var(--text-secondary);
   line-height: 1.6;
+}
+
+.warningBox {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(234, 179, 8, 0.08);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  border-radius: 8px;
+  margin-top: 1rem;
+}
+.warningBox svg {
+  flex-shrink: 0;
+  color: #ca8a04;
+  margin-top: 0.125rem;
+}
+.warningBox p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.warningBox strong {
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
 }
 
 .errorBox {
@@ -412,56 +542,8 @@
   margin-top: 1rem;
 }
 
-/* --- Warning box (unsent previous plan notice) --- */
-.warningBox {
-  display: flex;
-  gap: 1rem;
-  padding: 1rem;
-  background: rgba(234, 179, 8, 0.08);
-  border: 1px solid rgba(234, 179, 8, 0.35);
-  border-radius: 8px;
-  margin-top: 2rem;
-}
+/* ── Actions row ──────────────────────────────────────────────────────────── */
 
-.warningBox svg {
-  flex-shrink: 0;
-  color: #ca8a04;
-  margin-top: 0.125rem;
-}
-
-.warningBox p {
-  margin: 0;
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-
-.warningBox strong {
-  color: var(--text-primary);
-  font-family: var(--font-mono, monospace);
-}
-
-/* --- Revision badge on voyage cards --- */
-.revisionBadge {
-  padding: 0.2rem 0.5rem;
-  border-radius: 10px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  background: rgba(99, 102, 241, 0.12);
-  color: #818cf8;
-}
-
-/* --- Read-only temperature display --- */
-.tempReadOnly {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  font-family: var(--font-mono, monospace);
-}
-
-/* Actions */
 .actions {
   display: flex;
   justify-content: flex-end;
@@ -487,7 +569,6 @@
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
 }
-
 .btnSecondary:hover {
   background: var(--surface-hover);
   color: var(--text-primary);
@@ -497,12 +578,10 @@
   background: var(--accent-primary);
   color: white;
 }
-
 .btnPrimary:hover {
   background: var(--accent-secondary);
   transform: translateY(-1px);
 }
-
 .btnPrimary:disabled {
   background: var(--surface-elevated);
   color: var(--text-secondary);

@@ -1,10 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import styles from './page.module.css';
 import { createStowagePlanFromWizard, copyStowagePlan } from '@/app/actions/stowage-plan';
+import VesselProfile from '@/components/vessel/VesselProfile';
+import { buildVesselLayout } from '@/lib/vessel-profile-data';
+import type { VesselLayout } from '@/lib/vessel-profile-data';
 
 type WizardStep = 'voyage' | 'temperature' | 'review';
 
@@ -17,7 +20,7 @@ interface TempAssignment {
 
 interface WizardVesselZone {
   zoneId: string;
-  coolingSections: { sectionId: string }[];
+  coolingSections: { sectionId: string; sqm?: number }[];
 }
 
 export interface WizardLatestPlan {
@@ -67,9 +70,7 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
   const [currentStep, setCurrentStep] = useState<WizardStep>(
     initialVoyageId ? 'temperature' : 'voyage'
   );
-  const [selectedVoyageId, setSelectedVoyageId] = useState<string>(
-    initialVoyageId ?? ''
-  );
+  const [selectedVoyageId, setSelectedVoyageId] = useState<string>(initialVoyageId ?? '');
   const [tempAssignments, setTempAssignments] = useState<TempAssignment[]>(
     initialVoyage
       ? initialVoyage.latestPlan
@@ -77,6 +78,7 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
         : makeDefaultAssignments(initialVoyage.vesselZones)
       : []
   );
+  const [bulkTemp, setBulkTemp] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -85,10 +87,28 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
   const isRevision = !!selectedVoyage?.latestPlan;
   const latestPlan = selectedVoyage?.latestPlan ?? null;
 
-  // Derive hold numbers from zone IDs (e.g. '1AB' → 1, '2UPDAB' → 2)
   const holdNums = [...new Set(vesselZones.map(z => parseInt(z.zoneId[0])))].sort(
     (a, b) => a - b
   );
+
+  // Derive vessel layout and editable zone temps from current selections
+  const vesselLayout: VesselLayout | undefined = selectedVoyage?.vesselZones?.length
+    ? buildVesselLayout(selectedVoyage.vesselZones)
+    : undefined;
+
+  // Convert TempAssignment[] → Record<zoneId, temp> for VesselProfile editable mode
+  const editableZoneTemps: Record<string, number> = Object.fromEntries(
+    tempAssignments
+      .filter(a => !isNaN(a.targetTemp))
+      .map(a => [a.coolingSectionId, a.targetTemp])
+  );
+
+  // Stable callback for VesselProfile's per-compartment inputs
+  const handleZoneTempChange = useCallback((zoneId: string, temp: number) => {
+    setTempAssignments(prev =>
+      prev.map(a => a.coolingSectionId === zoneId ? { ...a, targetTemp: temp } : a)
+    );
+  }, []);
 
   const handleVoyageSelect = (voyageId: string) => {
     const voyage = voyages.find(v => v._id === voyageId);
@@ -102,10 +122,19 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
 
   const handleTempChange = (sectionId: string, value: number) => {
     setTempAssignments(prev =>
-      prev.map(a =>
-        a.coolingSectionId === sectionId ? { ...a, targetTemp: value } : a
-      )
+      prev.map(a => a.coolingSectionId === sectionId ? { ...a, targetTemp: value } : a)
     );
+  };
+
+  const handleApplyAll = () => {
+    const num = parseFloat(bulkTemp);
+    if (isNaN(num) || num < -25 || num > 15) return;
+    setTempAssignments(prev => prev.map(a => ({ ...a, targetTemp: num })));
+  };
+
+  const handleClearAll = () => {
+    setTempAssignments(prev => prev.map(a => ({ ...a, targetTemp: 13 })));
+    setBulkTemp('');
   };
 
   const handleCreatePlan = async () => {
@@ -113,9 +142,7 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
     setSubmitError(null);
     try {
       let result: { success: boolean; planId?: string; error?: string };
-
       if (isRevision && latestPlan) {
-        // Revision: copy the latest plan (preserves cargo + temp config)
         result = await copyStowagePlan(latestPlan.planId);
       } else {
         result = await createStowagePlanFromWizard({
@@ -126,7 +153,6 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
           })),
         });
       }
-
       if (result.success && result.planId) {
         router.push(`/stowage-plans/${result.planId}`);
       } else {
@@ -139,13 +165,21 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
     }
   };
 
-  // When skipping Step 1, "Back" on Step 2 returns to the voyage list page
   const handleBackFromTemp = () => {
     if (initialVoyageId) {
       router.push('/stowage-plans/new');
     } else {
       setCurrentStep('voyage');
     }
+  };
+
+  const stepClass = (step: WizardStep) => {
+    const order: WizardStep[] = ['voyage', 'temperature', 'review'];
+    const curr = order.indexOf(currentStep);
+    const s = order.indexOf(step);
+    if (s === curr) return styles.wizStepActive;
+    if (s < curr) return styles.wizStepDone;
+    return styles.wizStepInactive;
   };
 
   return (
@@ -158,31 +192,18 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
           </Link>
         </div>
 
-        {/* Progress Steps */}
-        <div className={styles.steps}>
-          <div
-            className={`${styles.step} ${currentStep === 'voyage' ? styles.active : ''} ${selectedVoyageId ? styles.completed : ''}`}
-          >
-            <div className={styles.stepNumber}>1</div>
-            <div className={styles.stepLabel}>Select Voyage</div>
-          </div>
-          <div className={styles.stepConnector} />
-          <div
-            className={`${styles.step} ${currentStep === 'temperature' ? styles.active : ''} ${currentStep === 'review' ? styles.completed : ''}`}
-          >
-            <div className={styles.stepNumber}>2</div>
-            <div className={styles.stepLabel}>Temperature Zones</div>
-          </div>
-          <div className={styles.stepConnector} />
-          <div className={`${styles.step} ${currentStep === 'review' ? styles.active : ''}`}>
-            <div className={styles.stepNumber}>3</div>
-            <div className={styles.stepLabel}>Review & Create</div>
-          </div>
+        {/* Text-based step breadcrumb (teal active / green done / muted inactive) */}
+        <div className={styles.wizSteps}>
+          <span className={stepClass('voyage')}>1 · Select Voyage</span>
+          <span className={styles.wizStepArrow}>›</span>
+          <span className={stepClass('temperature')}>2 · Configure Temperatures</span>
+          <span className={styles.wizStepArrow}>›</span>
+          <span className={stepClass('review')}>3 · Review & Create</span>
         </div>
       </div>
 
       <div className={styles.content}>
-        {/* STEP 1: Select Voyage */}
+        {/* ── STEP 1: Select Voyage ─────────────────────────────────── */}
         {currentStep === 'voyage' && (
           <div className={styles.stepContent}>
             <h2>Select a Voyage</h2>
@@ -207,9 +228,7 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
                       <h3>{voyage.voyageNumber}</h3>
                       <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                         {voyage.latestPlan && (
-                          <span className={styles.revisionBadge}>
-                            Revision
-                          </span>
+                          <span className={styles.revisionBadge}>Revision</span>
                         )}
                         <span
                           className={`${styles.statusBadge} ${styles[voyage.status.toLowerCase()]}`}
@@ -257,78 +276,133 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
           </div>
         )}
 
-        {/* STEP 2: Temperature Zone Assignment */}
+        {/* ── STEP 2: Temperature Zone Assignment ───────────────────── */}
         {currentStep === 'temperature' && (
           <div className={styles.stepContent}>
             <h2>{isRevision ? 'Temperature Configuration (Read-only)' : 'Assign Temperature Zones'}</h2>
 
             {isRevision ? (
-              <div className={styles.infoBox}>
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <circle cx="10" cy="10" r="9" stroke="currentColor" strokeWidth="1.5" />
-                  <path d="M10 6v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-                <p>
-                  Temperature zones are inherited from{' '}
-                  <strong>{latestPlan?.planNumber}</strong>. To change zone temperatures,
-                  open the plan and use the Configure Zones option.
-                </p>
-              </div>
-            ) : (
-              <p className={styles.stepDescription}>
-                Configure temperature zones for each cooling section. Each section can be set to a
-                different temperature based on cargo requirements.
-              </p>
-            )}
+              // Revision: inherited temps — read-only info box + summary table
+              <>
+                <div className={styles.infoBox}>
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <circle cx="10" cy="10" r="9" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M10 6v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  <p>
+                    Temperature zones are inherited from{' '}
+                    <strong>{latestPlan?.planNumber}</strong>. To change zone temperatures,
+                    open the plan and use the Configure Zones option.
+                  </p>
+                </div>
 
-            {vesselZones.length === 0 ? (
+                {vesselZones.length > 0 && (
+                  <div className={styles.tempTable}>
+                    <div className={styles.tableHeader}>
+                      <div className={styles.colZone}>Zone</div>
+                      <div className={styles.colSections}>Cooling Sections</div>
+                      <div className={styles.colTemp}>Temperature</div>
+                    </div>
+                    {vesselZones.map(zone => {
+                      const a = tempAssignments.find(x => x.coolingSectionId === zone.zoneId);
+                      const temp = a?.targetTemp ?? 13;
+                      return (
+                        <div key={zone.zoneId} className={styles.tableRow}>
+                          <div className={styles.colZone}><strong>{zone.zoneId}</strong></div>
+                          <div className={styles.colSections}>
+                            {zone.coolingSections.map(s => s.sectionId).join(', ')}
+                          </div>
+                          <div className={styles.colTemp}>
+                            <span className={styles.tempReadOnly}>
+                              {temp > 0 ? '+' : ''}{temp}°C
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            ) : vesselZones.length === 0 ? (
               <p className={styles.stepDescription}>
                 No temperature zone data found for this vessel. Contact your administrator.
               </p>
             ) : (
-              <div className={styles.tempTable}>
-                <div className={styles.tableHeader}>
-                  <div className={styles.colSection}>Zone</div>
-                  <div className={styles.colCompartments}>Cooling Sections</div>
-                  <div className={styles.colTemp}>Target Temp (°C)</div>
+              // Normal: bulk toolbar → vessel diagram (per-compartment inputs) → read-only summary
+              <>
+                <p className={styles.stepDescription}>
+                  Set the target temperature for each cooling zone. Use "Apply to all" for a
+                  uniform temperature, or click individual compartments in the vessel diagram.
+                </p>
+
+                {/* Bulk Apply toolbar — sets all zones at once */}
+                <div className={styles.bulkToolbar}>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="-25"
+                    max="15"
+                    value={bulkTemp}
+                    onChange={e => setBulkTemp(e.target.value)}
+                    placeholder="°C"
+                    className={styles.bulkInput}
+                  />
+                  <button
+                    className={styles.bulkApply}
+                    onClick={handleApplyAll}
+                    disabled={
+                      bulkTemp === '' ||
+                      isNaN(parseFloat(bulkTemp)) ||
+                      parseFloat(bulkTemp) < -25 ||
+                      parseFloat(bulkTemp) > 15
+                    }
+                  >
+                    Apply to all zones
+                  </button>
+                  <button className={styles.bulkClear} onClick={handleClearAll}>
+                    Reset to default
+                  </button>
                 </div>
 
-                {vesselZones.map(zone => {
-                  const assignment = tempAssignments.find(
-                    a => a.coolingSectionId === zone.zoneId
-                  );
-                  return (
-                    <div key={zone.zoneId} className={styles.tableRow}>
-                      <div className={styles.colSection}>
-                        <strong>{zone.zoneId}</strong>
-                      </div>
-                      <div className={styles.colCompartments}>
-                        {zone.coolingSections.map(s => s.sectionId).join(', ')}
-                      </div>
-                      <div className={styles.colTemp}>
-                        {isRevision ? (
+                {/* Vessel diagram — per-compartment editable temperature inputs */}
+                <div className={styles.svgWrap}>
+                  <VesselProfile
+                    vesselName={selectedVoyage!.vesselName}
+                    voyageNumber={selectedVoyage!.voyageNumber}
+                    vesselLayout={vesselLayout}
+                    tempAssignments={[]}
+                    editableZoneTemps={editableZoneTemps}
+                    onZoneTempChange={handleZoneTempChange}
+                    showCompartmentTooltip={false}
+                  />
+                </div>
+
+                {/* Zone summary — read-only mirror of the compartment inputs */}
+                <div className={styles.tempTable}>
+                  <div className={styles.tableHeader}>
+                    <div className={styles.colZone}>Zone</div>
+                    <div className={styles.colSections}>Cooling Sections</div>
+                    <div className={styles.colTemp}>Temperature</div>
+                  </div>
+                  {vesselZones.map(zone => {
+                    const a = tempAssignments.find(x => x.coolingSectionId === zone.zoneId);
+                    const temp = a?.targetTemp ?? 13;
+                    return (
+                      <div key={zone.zoneId} className={styles.tableRow}>
+                        <div className={styles.colZone}><strong>{zone.zoneId}</strong></div>
+                        <div className={styles.colSections}>
+                          {zone.coolingSections.map(s => s.sectionId).join(', ')}
+                        </div>
+                        <div className={styles.colTemp}>
                           <span className={styles.tempReadOnly}>
-                            {(assignment?.targetTemp ?? 13) > 0 ? '+' : ''}
-                            {assignment?.targetTemp ?? 13}°C
+                            {temp > 0 ? '+' : ''}{temp}°C
                           </span>
-                        ) : (
-                          <input
-                            type="number"
-                            value={assignment?.targetTemp ?? 13}
-                            onChange={e =>
-                              handleTempChange(zone.zoneId, parseFloat(e.target.value))
-                            }
-                            min={-25}
-                            max={15}
-                            step={0.5}
-                            className={styles.tempInput}
-                          />
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
 
             <div className={styles.actions}>
@@ -346,84 +420,91 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
           </div>
         )}
 
-        {/* STEP 3: Review & Create */}
-        {currentStep === 'review' && (
+        {/* ── STEP 3: Review & Create ────────────────────────────────── */}
+        {currentStep === 'review' && selectedVoyage && (
           <div className={styles.stepContent}>
             <h2>Review {isRevision ? 'Revision' : 'Stowage Plan'}</h2>
             <p className={styles.stepDescription}>
-              Review the configuration before creating the stowage plan.
+              Review the configuration before creating the{' '}
+              {isRevision ? 'revision' : 'stowage plan'}.
             </p>
 
-            {selectedVoyage && (
-              <div className={styles.reviewSection}>
-                <h3>Voyage Information</h3>
-                <div className={styles.reviewGrid}>
-                  <div className={styles.reviewItem}>
-                    <span className={styles.label}>Voyage Number:</span>
-                    <span className={styles.value}>{selectedVoyage.voyageNumber}</span>
-                  </div>
-                  <div className={styles.reviewItem}>
-                    <span className={styles.label}>Vessel:</span>
-                    <span className={styles.value}>{selectedVoyage.vesselName}</span>
-                  </div>
-                  <div className={styles.reviewItem}>
-                    <span className={styles.label}>Departure Date:</span>
-                    <span className={styles.value}>{selectedVoyage.startDate}</span>
-                  </div>
-                  <div className={styles.reviewItem}>
-                    <span className={styles.label}>Status:</span>
-                    <span className={styles.value}>{selectedVoyage.status}</span>
-                  </div>
+            {/* Maritime summary card */}
+            <div className={styles.maritimeCard}>
+              <div className={styles.maritimeCardHeader}>
+                <div>
+                  <div className={styles.maritimeVesselName}>{selectedVoyage.vesselName}</div>
+                  <div className={styles.maritimeVoyageNum}>{selectedVoyage.voyageNumber}</div>
+                </div>
+                <div className={styles.maritimeCardMeta}>
                   {isRevision && latestPlan && (
-                    <div className={styles.reviewItem}>
-                      <span className={styles.label}>Copied from:</span>
-                      <span className={styles.value}>{latestPlan.planNumber}</span>
-                    </div>
+                    <span className={styles.revisionBadge}>
+                      Revision of {latestPlan.planNumber}
+                    </span>
                   )}
+                  <span
+                    className={`${styles.statusBadge} ${styles[selectedVoyage.status.toLowerCase()]}`}
+                  >
+                    {selectedVoyage.status}
+                  </span>
+                  <span className={styles.maritimeDate}>{selectedVoyage.startDate}</span>
                 </div>
               </div>
-            )}
 
-            <div className={styles.reviewSection}>
-              <h3>Temperature Configuration{isRevision ? ' (inherited)' : ''}</h3>
-              <div className={styles.tempSummary}>
-                {holdNums.map(holdNum => (
-                  <div key={holdNum} className={styles.holdColumn}>
-                    <div className={styles.holdLabel}>Hold {holdNum}</div>
-                    {vesselZones
-                      .filter(z => parseInt(z.zoneId[0]) === holdNum)
-                      .map(zone => {
-                        const assignment = tempAssignments.find(
-                          a => a.coolingSectionId === zone.zoneId
-                        );
-                        const temp = assignment?.targetTemp ?? 13;
-                        const color = tempToColor(temp);
-                        return (
-                          <div
-                            key={zone.zoneId}
-                            className={styles.sectionCard}
-                            style={{ borderColor: color }}
-                          >
-                            <div className={styles.sectionHeader}>
-                              <span className={styles.sectionName}>{zone.zoneId}</span>
-                              <span className={styles.sectionTemp}>
-                                {temp > 0 ? '+' : ''}
-                                {temp}°C
-                              </span>
-                            </div>
-                            <div
-                              className={styles.tempBar}
-                              style={{ backgroundColor: color }}
-                            />
-                            <div className={styles.compartments}>
-                              {zone.coolingSections.map(s => s.sectionId).join(', ')}
-                            </div>
-                          </div>
-                        );
-                      })}
+              {/* Route */}
+              {selectedVoyage.portCalls.length > 0 && (
+                <div className={styles.maritimeRoute}>
+                  {[...selectedVoyage.portCalls]
+                    .sort((a, b) => a.sequence - b.sequence)
+                    .map((pc, i) => (
+                      <span key={i} className={styles.maritimeRouteItem}>
+                        {i > 0 && <span className={styles.maritimeRouteArrow}>→</span>}
+                        <span className={styles.maritimePort}>{pc.portName}</span>
+                      </span>
+                    ))}
+                </div>
+              )}
+
+              {/* Temperature zones grouped by hold */}
+              {holdNums.length > 0 && (
+                <div className={styles.maritimeTempSection}>
+                  <div className={styles.maritimeTempLabel}>Temperature Configuration</div>
+                  <div className={styles.maritimeTempGrid}>
+                    {holdNums.map(holdNum => (
+                      <div key={holdNum} className={styles.maritimeHoldGroup}>
+                        <div className={styles.maritimeHoldTitle}>Hold {holdNum}</div>
+                        {vesselZones
+                          .filter(z => parseInt(z.zoneId[0]) === holdNum)
+                          .map(zone => {
+                            const a = tempAssignments.find(
+                              x => x.coolingSectionId === zone.zoneId
+                            );
+                            const temp = a?.targetTemp ?? 13;
+                            const color = tempToColor(temp);
+                            return (
+                              <div
+                                key={zone.zoneId}
+                                className={styles.maritimeZoneChip}
+                                style={{ borderColor: color }}
+                              >
+                                <span className={styles.maritimeZoneId}>{zone.zoneId}</span>
+                                <span
+                                  className={styles.maritimeZoneTemp}
+                                  style={{ color }}
+                                >
+                                  {temp > 0 ? '+' : ''}{temp}°C
+                                </span>
+                                <div className={styles.maritimeZoneSections}>
+                                  {zone.coolingSections.map(s => s.sectionId).join(', ')}
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </div>
 
             {/* Warning: previous plan is unsent */}
@@ -436,12 +517,17 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
                     strokeWidth="1.5"
                     strokeLinejoin="round"
                   />
-                  <path d="M10 8v4m0 3h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path
+                    d="M10 8v4m0 3h.01"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
                 </svg>
                 <p>
                   The previous plan <strong>{latestPlan.planNumber}</strong> has not been sent
-                  to the captain yet (status: {latestPlan.status}). A new revision will be created
-                  alongside it. The previous plan will remain accessible.
+                  to the captain yet (status: {latestPlan.status}). A new revision will be
+                  created alongside it.
                 </p>
               </div>
             )}
@@ -458,8 +544,8 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
                   />
                 </svg>
                 <p>
-                  After creating this plan, you&apos;ll be able to add cargo manually or use the
-                  auto-stow algorithm to automatically place bookings based on temperature
+                  After creating this plan, you&apos;ll be able to add cargo manually or use
+                  the auto-stow algorithm to automatically place bookings based on temperature
                   requirements and vessel stability.
                 </p>
               </div>

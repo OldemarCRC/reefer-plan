@@ -41,6 +41,7 @@ export default async function NewStowagePlanPage({
         zoneId: z.zoneId,
         coolingSections: (z.coolingSections ?? []).map((s: any) => ({
           sectionId: s.sectionId,
+          sqm: s.sqm ?? 0,
         })),
       })),
       latestPlan: lp
