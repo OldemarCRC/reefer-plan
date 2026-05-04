@@ -626,6 +626,18 @@
   white-space: nowrap;
 }
 
+/* Weekly Est. cell — clickable affordance for canEdit users */
+.cellEditableValue {
+  cursor: pointer;
+}
+
+.cellEditableValue:hover {
+  color: var(--color-blue-light);
+  text-decoration: underline;
+  text-decoration-style: dashed;
+  text-underline-offset: 3px;
+}
+
 /* Inline weekly estimate edit */
 .inlineEditWrap {
   display: flex;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   addShipperToContract,
@@ -92,6 +92,11 @@ export default function ContractShippersPanel({
   const [isPending, startTransition] = useTransition();
   const [actionMsg, setActionMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
+  // Local copy of counterparties — enables optimistic weeklyEstimate updates
+  // without a server round-trip. Synced from props whenever the server refreshes.
+  const [localCPs, setLocalCPs] = useState<ContractCounterparty[]>(counterparties);
+  useEffect(() => { setLocalCPs(counterparties); }, [counterparties]);
+
   // Add form state
   const [addOpen, setAddOpen] = useState(false);
   const [selShipperId, setSelShipperId] = useState('');
@@ -103,19 +108,17 @@ export default function ContractShippersPanel({
   const [editValue, setEditValue] = useState('');
   const [editError, setEditError] = useState('');
 
-  // Shippers not yet assigned (by id and code)
-  const assignedIds = new Set(counterparties.map((cp) => cp.shipperId).filter(Boolean));
-  const assignedCodes = new Set(counterparties.map((cp) => cp.shipperCode));
-  const unassigned = availableShippers.filter(
+  // Derived from localCPs so the bar and unassigned list reflect optimistic updates
+  const assignedIds   = new Set(localCPs.map((cp) => cp.shipperId).filter(Boolean));
+  const assignedCodes = new Set(localCPs.map((cp) => cp.shipperCode));
+  const unassigned    = availableShippers.filter(
     (s) => !assignedIds.has(s.id) && !assignedCodes.has(s.code)
   );
 
-  // Active weekly total (for bar)
-  const activeWeeklyTotal = counterparties
+  const activeWeeklyTotal = localCPs
     .filter((cp) => cp.active !== false)
     .reduce((s, cp) => s + (cp.weeklyEstimate || 0), 0);
 
-  // Projected total if we add the new entry
   const projectedTotal = activeWeeklyTotal + weeklyEst;
 
   function handleAdd() {
@@ -124,7 +127,6 @@ export default function ContractShippersPanel({
       return;
     }
 
-    // Soft warnings — never block
     if (contractWeeklyPallets > 0 && projectedTotal > contractWeeklyPallets) {
       const confirmed = window.confirm(
         `Warning: Adding this shipper would bring the total to ${projectedTotal} pallets/week, ` +
@@ -204,22 +206,34 @@ export default function ContractShippersPanel({
       return;
     }
     if (parsed === 0) {
-      const ok = window.confirm('Setting weekly estimate to 0 means this shipper will not appear in voyage space forecasts. Continue?');
+      const ok = window.confirm(
+        'Setting weekly estimate to 0 means this shipper will not appear in voyage space forecasts. Continue?'
+      );
       if (!ok) return;
     }
     setEditError('');
     startTransition(async () => {
       const res = await updateCounterpartyWeeklyPallets(contractId, shipperCode, parsed);
       if (res.success) {
+        // Optimistic local update — cell reflects the new value immediately,
+        // no server round-trip needed. localCPs will re-sync from props the
+        // next time any other action triggers router.refresh().
+        setLocalCPs((prev) =>
+          prev.map((cp) =>
+            cp.shipperCode === shipperCode ? { ...cp, weeklyEstimate: parsed } : cp
+          )
+        );
         setEditingCode(null);
         setEditValue('');
         setActionMsg({ type: 'success', text: res.message ?? 'Weekly estimate updated' });
-        router.refresh();
       } else {
         setEditError(res.error ?? 'Failed to update');
       }
     });
   }
+
+  // Whether clicking the Weekly Est. cell opens edit mode for a given row
+  const cellClickable = contractActive && canEdit && !editingCode;
 
   return (
     <div className={styles.card}>
@@ -247,7 +261,7 @@ export default function ContractShippersPanel({
         </p>
       )}
 
-      {counterparties.length === 0 ? (
+      {localCPs.length === 0 ? (
         <p className={styles.emptyText}>
           No shippers assigned yet. Shippers are added after the consignee confirms them.
         </p>
@@ -264,10 +278,10 @@ export default function ContractShippersPanel({
               </tr>
             </thead>
             <tbody>
-              {counterparties.map((cp) => {
-                const isActive = cp.active !== false;
+              {localCPs.map((cp) => {
+                const isActive      = cp.active !== false;
                 const isEditingThis = editingCode === cp.shipperCode;
-                const bookingCount = bookingCounts[cp.shipperCode] ?? 0;
+                const bookingCount  = bookingCounts[cp.shipperCode] ?? 0;
 
                 return (
                   <tr key={cp.shipperCode} className={isActive ? '' : styles.shipperInactive}>
@@ -283,8 +297,17 @@ export default function ContractShippersPanel({
 
                     <td className={styles.cellMono}>{cp.shipperCode}</td>
 
-                    {/* Weekly Est — static or inline input */}
-                    <td className={styles.cellRight}>
+                    {/* Weekly Est — click-to-edit when canEdit, inline input when editing */}
+                    <td
+                      className={
+                        `${styles.cellRight}` +
+                        (cellClickable && !isEditingThis ? ` ${styles.cellEditableValue}` : '')
+                      }
+                      onClick={cellClickable && !isEditingThis
+                        ? () => startEdit(cp.shipperCode, cp.weeklyEstimate)
+                        : undefined}
+                      title={cellClickable && !isEditingThis ? 'Click to edit weekly estimate' : undefined}
+                    >
                       {isEditingThis ? (
                         <div className={styles.inlineEditWrap}>
                           <input
@@ -296,7 +319,7 @@ export default function ContractShippersPanel({
                             autoFocus
                             disabled={isPending}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveEdit(cp.shipperCode);
+                              if (e.key === 'Enter')  handleSaveEdit(cp.shipperCode);
                               if (e.key === 'Escape') cancelEdit();
                             }}
                           />
@@ -337,16 +360,6 @@ export default function ContractShippersPanel({
                             </>
                           ) : (
                             <>
-                              {canEdit && (
-                                <button
-                                  className={`${styles.btnSmall} ${styles.btnEditEst}`}
-                                  onClick={() => startEdit(cp.shipperCode, cp.weeklyEstimate)}
-                                  disabled={isPending || !!editingCode}
-                                  title="Edit weekly estimate"
-                                >
-                                  ✎
-                                </button>
-                              )}
                               <button
                                 className={`${styles.btnSmall} ${isActive ? styles.btnDeactivate : styles.btnReactivate}`}
                                 onClick={() => handleToggle(cp.shipperCode, isActive)}
@@ -383,7 +396,6 @@ export default function ContractShippersPanel({
             Only shippers confirmed by the consignee should be added here.
           </p>
 
-          {/* Live capacity preview */}
           {contractWeeklyPallets > 0 && selShipperId && (
             <WeeklyCapacityBar used={projectedTotal} total={contractWeeklyPallets} />
           )}
