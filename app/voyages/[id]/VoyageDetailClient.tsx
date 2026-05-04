@@ -1271,21 +1271,17 @@ interface ContractRow {
   contractId: string;
   contractNumber: string;
   cargoType: string;
-  weeklyPallets: number;
-  // The counterparty (one row per active counterparty)
+  counterpartyWeeklyEstimate: number;
   counterpartyId: string;
   counterpartyCode: string;
   counterpartyName: string;
-  // Explicit shipper and consignee for display and action calls
   shipperCode: string;
   shipperName: string;
   consigneeCode: string;
   consigneeName: string;
   clientType: 'SHIPPER' | 'CONSIGNEE';
   originPort: string;
-  originPortName: string;
   destinationPort: string;
-  destinationPortName: string;
   booking: any | null;
   forecast: any | null;
 }
@@ -1347,22 +1343,20 @@ function buildContractRows(
 
       rows.push({
         rowId,
-        contractId:          contract._id?.toString() ?? '',
-        contractNumber:      contract.contractNumber ?? '',
-        cargoType:           (contract.cargoType ?? '').replace(/_/g, ' '),
-        weeklyPallets:       contract.weeklyPallets ?? cp.weeklyEstimate ?? 0,
-        counterpartyId:      cp.shipperId?.toString() ?? '',
-        counterpartyCode:    cpCode,
-        counterpartyName:    cpName,
+        contractId:                 contract._id?.toString() ?? '',
+        contractNumber:             contract.contractNumber ?? '',
+        cargoType:                  (contract.cargoType ?? '').replace(/_/g, ' '),
+        counterpartyWeeklyEstimate: cp.weeklyEstimate ?? 0,
+        counterpartyId:             cp.shipperId?.toString() ?? '',
+        counterpartyCode:           cpCode,
+        counterpartyName:           cpName,
         shipperCode,
         shipperName,
         consigneeCode,
         consigneeName,
         clientType,
-        originPort:          contract.originPort?.portCode || contract.originPortCode || '—',
-        originPortName:      contract.originPort?.portName || '',
-        destinationPort:     contract.destinationPort?.portCode || contract.destinationPortCode || '—',
-        destinationPortName: contract.destinationPort?.portName || '',
+        originPort:      contract.originPort?.portCode || contract.originPortCode || '—',
+        destinationPort: contract.destinationPort?.portCode || contract.destinationPortCode || '—',
         booking,
         forecast,
       });
@@ -1483,9 +1477,9 @@ export function UnifiedContractsPanel({
                 <th>Contract</th>
                 <th>Route</th>
                 <th>Cargo</th>
-                <th className={clientStyles.thNum}>Weekly Est.</th>
-                <th>Booking</th>
-                <th>Forecast</th>
+                <th className={clientStyles.thNum}>Booking / Weekly Est.</th>
+                <th>Booking Nr. / Forecast</th>
+                <th>Status</th>
                 {canEnterForecasts && <th>Actions</th>}
               </tr>
             </thead>
@@ -1503,19 +1497,25 @@ export function UnifiedContractsPanel({
                                                                                      'none';
                 const bsStyle = b ? (BOOKING_STATUS_STYLES[b.status] ?? BOOKING_STATUS_STYLES.CANCELLED) : null;
 
+                const qtyDisplay = (() => {
+                  if ((state === 'booking' || state === 'replaced') && b) {
+                    const qty = b.confirmedQuantity ?? b.requestedQuantity;
+                    return qty != null ? `${qty} plt` : '—';
+                  }
+                  if ((state === 'entry' || state === 'default') && f) {
+                    return `${f.estimatedPallets} plt`;
+                  }
+                  return row.counterpartyWeeklyEstimate > 0 ? `${row.counterpartyWeeklyEstimate} plt` : '—';
+                })();
+
                 return (
                   <React.Fragment key={row.rowId}>
                     <tr>
-                      {/* Shipper */}
+                      {/* Shipper — name only */}
                       <td>
                         <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>
                           {row.shipperName || '—'}
                         </div>
-                        {row.shipperCode && (
-                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--color-text-muted)' }}>
-                            {row.shipperCode}
-                          </div>
-                        )}
                       </td>
 
                       {/* Consignee */}
@@ -1535,16 +1535,11 @@ export function UnifiedContractsPanel({
                         {row.contractNumber}
                       </td>
 
-                      {/* Route */}
+                      {/* Route — port codes only */}
                       <td>
                         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
                           {row.originPort} → {row.destinationPort}
                         </div>
-                        {(row.originPortName || row.destinationPortName) && (
-                          <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
-                            {row.originPortName} → {row.destinationPortName}
-                          </div>
-                        )}
                       </td>
 
                       {/* Cargo */}
@@ -1552,61 +1547,43 @@ export function UnifiedContractsPanel({
                         {row.cargoType || '—'}
                       </td>
 
-                      {/* Weekly estimate */}
+                      {/* Booking / Weekly Est. */}
                       <td className={clientStyles.cellNum}>
-                        {row.weeklyPallets > 0 ? `${row.weeklyPallets} plt` : '—'}
+                        {qtyDisplay}
                       </td>
 
-                      {/* Booking */}
+                      {/* Booking Nr. / Forecast */}
                       <td>
-                        {state === 'booking' && b && bsStyle && (
-                          <div>
-                            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-blue-light)', marginBottom: 4 }}>
-                              {b.bookingNumber}
-                            </div>
-                            <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-                              <span style={{ display: 'inline-block', fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: 100, background: bsStyle.bg, color: bsStyle.color }}>
-                                {b.status}
-                              </span>
-                              <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
-                                {b.confirmedQuantity ?? '—'}/{b.requestedQuantity} plt
-                              </span>
-                            </div>
+                        {(state === 'booking' || state === 'replaced') && b && (
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-blue-light)' }}>
+                            {b.bookingNumber}
                           </div>
                         )}
-                        {state === 'replaced' && (
-                          <span className={clientStyles.badgeBooking}>Booking confirmed</span>
+                        {state === 'entry' && f?.source === 'PLANNER_ENTRY' && (
+                          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Planner Est.</span>
                         )}
-                        {(state === 'none' || state === 'default' || state === 'entry') && (
-                          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>—</span>
+                        {state === 'entry' && f?.source === 'SHIPPER_PORTAL' && (
+                          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-cyan-light)' }}>Shipper Est.</span>
                         )}
                       </td>
 
-                      {/* Forecast */}
+                      {/* Status */}
                       <td>
+                        {(state === 'booking' || state === 'replaced') && b && bsStyle && (
+                          <span style={{ display: 'inline-block', fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: 100, background: bsStyle.bg, color: bsStyle.color }}>
+                            {b.status}
+                          </span>
+                        )}
                         {state === 'none' && (
                           <span className={clientStyles.badgeNoEst}>No Estimate</span>
                         )}
-                        {state === 'default' && f && (
-                          <span className={clientStyles.badgeContractEst}>
-                            Contract Est. · {f.estimatedPallets} plt
-                          </span>
+                        {state === 'default' && (
+                          <span className={clientStyles.badgeContractEst}>Contract Est.</span>
                         )}
                         {state === 'entry' && f && (
-                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-                            <span className={f.source === 'PLANNER_ENTRY' ? clientStyles.badgePlanner : clientStyles.badgeShipper}>
-                              {f.source === 'PLANNER_ENTRY' ? 'Planner' : 'Shipper Portal'}
-                            </span>
-                            <span className={f.planImpact === 'INCORPORATED' ? clientStyles.badgeIncorporated : clientStyles.badgePending}>
-                              {f.planImpact === 'INCORPORATED' ? 'Incorporated' : 'Pending Review'}
-                            </span>
-                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--color-text-muted)' }}>
-                              {f.estimatedPallets} plt
-                            </span>
-                          </div>
-                        )}
-                        {(state === 'booking' || state === 'replaced') && (
-                          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>—</span>
+                          <span className={f.planImpact === 'INCORPORATED' ? clientStyles.badgeIncorporated : clientStyles.badgePending}>
+                            {f.planImpact === 'INCORPORATED' ? 'Incorporated' : 'Pending Review'}
+                          </span>
                         )}
                       </td>
 
@@ -1620,8 +1597,8 @@ export function UnifiedContractsPanel({
                                   <button
                                     className={clientStyles.btnUseContract}
                                     onClick={() => handleUseContractEst(row.contractId)}
-                                    disabled={isPending || row.weeklyPallets === 0}
-                                    title={row.weeklyPallets === 0 ? 'No weekly estimate on contract' : undefined}
+                                    disabled={isPending || row.counterpartyWeeklyEstimate === 0}
+                                    title={row.counterpartyWeeklyEstimate === 0 ? 'No weekly estimate for this shipper on the contract' : undefined}
                                   >
                                     Use Contract Est.
                                   </button>
