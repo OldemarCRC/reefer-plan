@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import styles from './page.module.css';
-import { createStowagePlanFromWizard, copyStowagePlan } from '@/app/actions/stowage-plan';
+import { createStowagePlanFromWizard, copyStowagePlan, autoGenerateSinglePlan } from '@/app/actions/stowage-plan';
 import VesselProfile from '@/components/vessel/VesselProfile';
 import { buildVesselLayout } from '@/lib/vessel-profile-data';
 import type { VesselLayout } from '@/lib/vessel-profile-data';
@@ -44,6 +44,7 @@ export interface WizardVoyage {
 interface Props {
   voyages: WizardVoyage[];
   initialVoyageId: string | null;
+  mode?: 'auto' | 'manual';
 }
 
 function makeDefaultAssignments(zones: WizardVesselZone[]): TempAssignment[] {
@@ -62,7 +63,7 @@ function tempToColor(temp: number) {
   return `hsl(${hue}, 70%, 50%)`;
 }
 
-export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
+export default function StowagePlanWizard({ voyages, initialVoyageId, mode = 'manual' }: Props) {
   const router = useRouter();
 
   const initialVoyage = voyages.find(v => v._id === initialVoyageId) ?? null;
@@ -144,6 +145,11 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
       let result: { success: boolean; planId?: string; error?: string };
       if (isRevision && latestPlan) {
         result = await copyStowagePlan(latestPlan.planId);
+      } else if (mode === 'auto') {
+        const zoneTemperatures: Record<string, number> = Object.fromEntries(
+          tempAssignments.map(a => [a.coolingSectionId, a.targetTemp])
+        );
+        result = await autoGenerateSinglePlan(selectedVoyageId, zoneTemperatures);
       } else {
         result = await createStowagePlanFromWizard({
           voyageId: selectedVoyageId,
@@ -544,9 +550,9 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
                   />
                 </svg>
                 <p>
-                  After creating this plan, you&apos;ll be able to add cargo manually or use
-                  the auto-stow algorithm to automatically place bookings based on temperature
-                  requirements and vessel stability.
+                  {mode === 'auto'
+                    ? 'The stowage engine will automatically place bookings and contract estimates into the configured temperature zones.'
+                    : "After creating this plan, you'll be able to add cargo manually or use the auto-stow algorithm to automatically place bookings based on temperature requirements and vessel stability."}
                 </p>
               </div>
             )}
@@ -570,6 +576,8 @@ export default function StowagePlanWizard({ voyages, initialVoyageId }: Props) {
                   ? 'Creating…'
                   : isRevision
                   ? 'Create Revision'
+                  : mode === 'auto'
+                  ? '⚡ Auto-Generate Plan'
                   : 'Create Stowage Plan'}
               </button>
             </div>

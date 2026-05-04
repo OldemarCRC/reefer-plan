@@ -6,9 +6,9 @@ import type { WizardVoyage } from './StowagePlanWizard';
 export default async function NewStowagePlanPage({
   searchParams,
 }: {
-  searchParams: Promise<{ voyageId?: string }>;
+  searchParams: Promise<{ voyageId?: string; mode?: string }>;
 }) {
-  const { voyageId } = await searchParams;
+  const { voyageId, mode } = await searchParams;
 
   const result = await getVoyagesForPlanWizard();
   const raw = result.success ? result.data : [];
@@ -62,6 +62,7 @@ export default async function NewStowagePlanPage({
     <StowagePlanWizard
       voyages={voyages}
       initialVoyageId={voyageId ?? null}
+      mode={mode === 'auto' ? 'auto' : 'manual'}
     />
   );
 }

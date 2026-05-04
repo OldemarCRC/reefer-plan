@@ -8,8 +8,8 @@ export default function AutoGenerateButton() {
   return (
     <button
       className={styles.btnAutoGen}
-      onClick={() => router.push('/stowage-plans/new')}
-      title="Create a stowage plan — select voyage and configure zone temperatures"
+      onClick={() => router.push('/stowage-plans/new?mode=auto')}
+      title="Create a draft stowage plan — select voyage and configure zone temperatures"
     >
       ⚡ Auto-Generate Plan
     </button>
