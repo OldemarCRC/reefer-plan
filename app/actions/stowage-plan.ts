@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { StowagePlanModel, VesselModel, VoyageModel, BookingModel, ContractModel, ServiceModel } from '@/lib/db/schemas';
+import { StowagePlanModel, VesselModel, VoyageModel, BookingModel, ContractModel, ServiceModel, SpaceForecastModel } from '@/lib/db/schemas';
 import type { StowagePlan, StowagePlanStatus } from '@/types/models';
 import { sendPlanNotification } from '@/lib/email';
 import { generatePlanPdf } from '@/lib/generate-plan-pdf';
@@ -2084,92 +2084,239 @@ export async function autoGenerateSinglePlan(
 
     const planAction = existingPlan ? 'UPDATED' : 'CREATED';
 
-    // Real bookings
+    // ── Step 1: Real bookings ─────────────────────────────────────────────────
     const bookings: any[] = await BookingModel.find({
       voyageId: voyage._id,
       status: { $in: ['CONFIRMED', 'PARTIAL', 'PENDING'] },
     }).lean();
 
-    // Contract estimates
-    const contractEstimates: EngineBooking[] = [];
+    // ── Step 2: SpaceForecasts for this voyage (PENDING_REVIEW or INCORPORATED)
+    const activeForecasts = await SpaceForecastModel.find({
+      voyageId: voyage._id,
+      planImpact: { $in: ['PENDING_REVIEW', 'INCORPORATED'] },
+    }).lean();
+
+    // Map: `${shipperId}:${contractId}` → forecast doc (at most one active per pair)
+    const forecastByPair = new Map<string, any>();
+    for (const fc of activeForecasts as any[]) {
+      const key = `${fc.shipperId?.toString() ?? ''}:${fc.contractId?.toString() ?? ''}`;
+      forecastByPair.set(key, fc);
+    }
+
+    // ── Step 3: Resolve per-counterparty cargo source with forecast priority ──
+    // forecastBookings: SHIPPER_PORTAL / PLANNER_ENTRY → confidence ESTIMATED
+    // contractDefaultEstimates: CONTRACT_DEFAULT → confidence CONTRACT_ESTIMATE
+    const forecastBookings: EngineBooking[] = [];
+    const contractDefaultEstimates: EngineBooking[] = [];
+    type SnapshotEntry = {
+      shipperId: string; shipperName: string; contractId: string;
+      polPortCode: string; podPortCode: string; pallets: number;
+      source: string; sourceId: string; snapshotAt: Date;
+    };
+    const cargoSnapshot: SnapshotEntry[] = [];
+
     if (voyage.serviceId) {
       const portCallMap = new Map<string, number>(
         (voyage.portCalls ?? []).map((pc: any) => [pc.portCode as string, pc.sequence as number]),
       );
-      const coveredContractIds = new Set(
-        bookings.map((b: any) => b.contractId?.toString()).filter(Boolean),
-      );
+
+      // Build per-contract coverage from bookings.
+      // contractCoverageMap[contractId] = Set<shipperId> (specific shippers covered)
+      //                                 | 'ALL' (if a booking has no shipperId — whole contract covered)
+      const contractCoverageMap = new Map<string, Set<string> | 'ALL'>();
+      for (const b of bookings) {
+        const cid = b.contractId?.toString();
+        if (!cid) continue;
+        const sid = b.shipperId?.toString();
+        if (!sid) {
+          contractCoverageMap.set(cid, 'ALL');
+        } else if (contractCoverageMap.get(cid) !== 'ALL') {
+          if (!contractCoverageMap.has(cid)) contractCoverageMap.set(cid, new Set());
+          (contractCoverageMap.get(cid) as Set<string>).add(sid);
+        }
+      }
+
       const activeContracts = await ContractModel.find({
         serviceId: voyage.serviceId,
         active: true,
       }).lean();
 
       for (const contract of activeContracts as any[]) {
-        if (coveredContractIds.has(contract._id.toString())) continue;
+        const contractId = contract._id.toString();
         const polCode = contract.originPort?.portCode;
         const podCode = contract.destinationPort?.portCode;
         const polSeq = portCallMap.get(polCode);
         const podSeq = portCallMap.get(podCode);
         if (polSeq === undefined || podSeq === undefined) continue;
 
-        const contractId = contract._id.toString();
         const counterparties: any[] = contract.counterparties ?? [];
+
         if (counterparties.length > 0) {
           for (let i = 0; i < counterparties.length; i++) {
             const cp = counterparties[i];
-            if (!cp.active || !cp.weeklyEstimate) continue;
-            const cargoType = (cp.cargoTypes ?? [])[0] ?? contract.cargoType ?? 'OTHER_CHILLED';
+            if (!cp.active) continue;
+
+            const shipperId = cp.shipperId?.toString() ?? '';
+
+            // Priority 1: booking exists for this shipper+contract → skip
+            const coverage = contractCoverageMap.get(contractId);
+            if (coverage === 'ALL') continue;
+            if (coverage instanceof Set && coverage.has(shipperId)) continue;
+
+            const pairKey = `${shipperId}:${contractId}`;
+            const forecast = forecastByPair.get(pairKey);
+
+            // Priority 4: NO_CARGO forecast → skip engine, record snapshot
+            if (forecast?.source === 'NO_CARGO') {
+              cargoSnapshot.push({
+                shipperId,
+                shipperName: cp.shipperName ?? '',
+                contractId,
+                polPortCode: polCode ?? '',
+                podPortCode: podCode ?? '',
+                pallets: 0,
+                source: 'NO_CARGO',
+                sourceId: (forecast as any)._id.toString(),
+                snapshotAt: new Date(),
+              });
+              continue;
+            }
+
+            // Priority 2: SHIPPER_PORTAL or PLANNER_ENTRY forecast → use forecast pallets
+            if (forecast && (forecast.source === 'SHIPPER_PORTAL' || forecast.source === 'PLANNER_ENTRY')) {
+              const pallets: number = forecast.estimatedPallets;
+              const cargoType: string = forecast.cargoType ?? (cp.cargoTypes ?? [])[0] ?? contract.cargoType ?? 'OTHER_CHILLED';
+              const tempRange = getTempRange(cargoType);
+              const sourceId: string = (forecast as any)._id.toString();
+              forecastBookings.push({
+                bookingId:    `FORECAST-${sourceId}`,
+                cargoType,
+                tempMin:      tempRange.min,
+                tempMax:      tempRange.max,
+                pallets,
+                polPortCode:  polCode ?? '',
+                podPortCode:  podCode ?? '',
+                polSeq:       polSeq as number,
+                podSeq:       podSeq as number,
+                polSequence:  polSeq,
+                podSequence:  podSeq,
+                shipperId,
+                consigneeCode: '',
+                confidence:   'ESTIMATED' as const,
+                contractId,
+                shipperName:  cp.shipperName ?? '',
+                frozen:       false,
+              });
+              cargoSnapshot.push({
+                shipperId,
+                shipperName: cp.shipperName ?? '',
+                contractId,
+                polPortCode: polCode ?? '',
+                podPortCode: podCode ?? '',
+                pallets,
+                source: forecast.source as string,
+                sourceId,
+                snapshotAt: new Date(),
+              });
+              continue;
+            }
+
+            // Priority 3: CONTRACT_DEFAULT — use counterparty weeklyEstimate
+            const pallets: number = cp.weeklyEstimate;
+            if (!pallets || pallets <= 0) continue;
+            const cargoType: string = (cp.cargoTypes ?? [])[0] ?? contract.cargoType ?? 'OTHER_CHILLED';
             const tempRange = getTempRange(cargoType);
-            contractEstimates.push({
-              bookingId:     `CONTRACT-ESTIMATE-${contractId}-${i}`,
+            contractDefaultEstimates.push({
+              bookingId:    `CONTRACT-ESTIMATE-${contractId}-${i}`,
               cargoType,
-              tempMin:       tempRange.min,
-              tempMax:       tempRange.max,
-              pallets:       cp.weeklyEstimate,
-              polPortCode:   polCode ?? '',
-              podPortCode:   podCode ?? '',
-              polSeq:        polSeq as number,
-              podSeq:        podSeq as number,
-              polSequence:   polSeq,
-              podSequence:   podSeq,
-              shipperId:     '',
+              tempMin:      tempRange.min,
+              tempMax:      tempRange.max,
+              pallets,
+              polPortCode:  polCode ?? '',
+              podPortCode:  podCode ?? '',
+              polSeq:       polSeq as number,
+              podSeq:       podSeq as number,
+              polSequence:  polSeq,
+              podSequence:  podSeq,
+              shipperId,
               consigneeCode: '',
-              confidence:    'CONTRACT_ESTIMATE' as const,
-              frozen:        false,
+              confidence:   'CONTRACT_ESTIMATE' as const,
+              contractId,
+              shipperName:  cp.shipperName ?? '',
+              frozen:       false,
+            });
+            cargoSnapshot.push({
+              shipperId,
+              shipperName: cp.shipperName ?? '',
+              contractId,
+              polPortCode: polCode ?? '',
+              podPortCode: podCode ?? '',
+              pallets,
+              source: 'CONTRACT_DEFAULT',
+              sourceId: `${contractId}-${i}`,
+              snapshotAt: new Date(),
             });
           }
         } else {
+          // No counterparties — contract-level fallback, only if not already covered by any booking
+          if (contractCoverageMap.has(contractId)) continue;
           if (!contract.weeklyPallets) continue;
-          const cargoType = contract.cargoType ?? 'OTHER_CHILLED';
+          const cargoType: string = contract.cargoType ?? 'OTHER_CHILLED';
           const tempRange = getTempRange(cargoType);
-          contractEstimates.push({
-            bookingId:     `CONTRACT-ESTIMATE-${contractId}`,
+          contractDefaultEstimates.push({
+            bookingId:    `CONTRACT-ESTIMATE-${contractId}`,
             cargoType,
-            tempMin:       tempRange.min,
-            tempMax:       tempRange.max,
-            pallets:       contract.weeklyPallets,
-            polPortCode:   polCode ?? '',
-            podPortCode:   podCode ?? '',
-            polSeq:        polSeq as number,
-            podSeq:        podSeq as number,
-            polSequence:   polSeq,
-            podSequence:   podSeq,
-            shipperId:     '',
+            tempMin:      tempRange.min,
+            tempMax:      tempRange.max,
+            pallets:      contract.weeklyPallets,
+            polPortCode:  polCode ?? '',
+            podPortCode:  podCode ?? '',
+            polSeq:       polSeq as number,
+            podSeq:       podSeq as number,
+            polSequence:  polSeq,
+            podSequence:  podSeq,
+            shipperId:    '',
             consigneeCode: '',
-            confidence:    'CONTRACT_ESTIMATE' as const,
-            frozen:        false,
+            confidence:   'CONTRACT_ESTIMATE' as const,
+            frozen:       false,
+          });
+          cargoSnapshot.push({
+            shipperId: '',
+            shipperName: '',
+            contractId,
+            polPortCode: polCode ?? '',
+            podPortCode: podCode ?? '',
+            pallets: contract.weeklyPallets,
+            source: 'CONTRACT_DEFAULT',
+            sourceId: contractId,
+            snapshotAt: new Date(),
           });
         }
       }
     }
 
+    // ── Step 4: Add booking entries to snapshot ───────────────────────────────
+    for (const b of bookings) {
+      const pallets = (b.confirmedQuantity ?? 0) > 0 ? b.confirmedQuantity : (b.requestedQuantity ?? 0);
+      cargoSnapshot.push({
+        shipperId:   b.shipperId?.toString() ?? '',
+        shipperName: b.shipper?.name ?? '',
+        contractId:  b.contractId?.toString() ?? '',
+        polPortCode: b.pol?.portCode ?? '',
+        podPortCode: b.pod?.portCode ?? '',
+        pallets,
+        source: 'BOOKING',
+        sourceId: b._id.toString(),
+        snapshotAt: new Date(),
+      });
+    }
+
+    // ── Step 5: Build engine input ────────────────────────────────────────────
     const realEngineBookings = buildEngineBookings(bookings, voyage);
-    const allEngineBookings = [...realEngineBookings, ...contractEstimates];
 
     const vessel = await VesselModel.findById(voyage.vesselId).lean() as any;
     if (!vessel) return { success: false, error: 'Vessel not found' };
 
-    // Strip NaN values from planner temperatures
     const validZoneTemps: Record<string, number> = {};
     for (const [k, v] of Object.entries(zoneTemperatures)) {
       if (!isNaN(v)) validZoneTemps[k] = v;
@@ -2180,21 +2327,28 @@ export async function autoGenerateSinglePlan(
         sections: buildEngineSections(vessel),
         zones:    buildEngineZones(vessel),
       },
-      bookings:         allEngineBookings,
-      portCalls:        (voyage.portCalls ?? []).map((pc: any) => ({
+      bookings:          [...realEngineBookings, ...forecastBookings],
+      contractEstimates: contractDefaultEstimates,
+      portCalls:         (voyage.portCalls ?? []).map((pc: any) => ({
         sequence: pc.sequence as number,
         portCode: pc.portCode as string,
       })),
       previousZoneTemps: undefined,
       plannerOverrides:  Object.keys(validZoneTemps).length > 0 ? validZoneTemps : undefined,
       phase: bookings.some((b: any) => (b.confirmedQuantity ?? 0) > 0) ? 'CONFIRMED' : 'ESTIMATED',
-    } as any; // EngineInput type is ahead of the action layer — cast to avoid pre-existing TS errors
+    } as any; // portSequence is required by EngineInput but derived internally from portCalls
 
     const engineOutput = generateStowagePlan(engineInput as any);
 
     const allBookingMeta = [
       ...bookings,
-      ...contractEstimates.map(ce => ({
+      ...forecastBookings.map(fe => ({
+        _id: { toString: () => fe.bookingId },
+        cargoType: fe.cargoType,
+        polPortCode: fe.polPortCode,
+        podPortCode: fe.podPortCode,
+      })),
+      ...contractDefaultEstimates.map(ce => ({
         _id: { toString: () => ce.bookingId },
         cargoType: ce.cargoType,
         polPortCode: ce.polPortCode,
@@ -2213,6 +2367,7 @@ export async function autoGenerateSinglePlan(
         $set: {
           cargoPositions,
           coolingSectionStatus,
+          cargoSnapshot,
           conflicts:           engineOutput.conflicts,
           stabilityIndicators: engineOutput.stabilityByPort,
           generationMethod:    'AUTO',
@@ -2229,14 +2384,15 @@ export async function autoGenerateSinglePlan(
       );
       const newPlan = await StowagePlanModel.create({
         planNumber,
-        vesselId:    vessel._id,
-        vesselName:  vessel.name,
-        voyageId:    voyage._id,
+        vesselId:     vessel._id,
+        vesselName:   vessel.name,
+        voyageId:     voyage._id,
         voyageNumber: voyage.voyageNumber,
         generationMethod: 'AUTO',
-        status:      newStatus,
+        status:       newStatus,
         cargoPositions,
         coolingSectionStatus,
+        cargoSnapshot,
         conflicts:            engineOutput.conflicts,
         stabilityIndicators:  engineOutput.stabilityByPort,
         overstowViolations:   [],

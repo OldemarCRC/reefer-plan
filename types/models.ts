@@ -650,6 +650,7 @@ export interface StowagePlan {
     note?: string;
   }[];
 
+  cargoSnapshot?: CargoSnapshotEntry[];
   forecastSnapshot?: {
     takenAt: Date;
     forecastIds: string[];
@@ -665,8 +666,20 @@ export interface StowagePlan {
 // SPACE FORECAST
 // ----------------------------------------------------------------------------
 
-export type SpaceForecastSource = 'SHIPPER_PORTAL' | 'PLANNER_ENTRY' | 'CONTRACT_DEFAULT';
+export type SpaceForecastSource = 'SHIPPER_PORTAL' | 'PLANNER_ENTRY' | 'CONTRACT_DEFAULT' | 'NO_CARGO';
 export type SpaceForecastPlanImpact = 'PENDING_REVIEW' | 'INCORPORATED' | 'SUPERSEDED' | 'NO_CHANGE' | 'REPLACED_BY_BOOKING';
+
+export interface CargoSnapshotEntry {
+  shipperId: string;
+  shipperName: string;
+  contractId: string;
+  polPortCode: string;
+  podPortCode: string;
+  pallets: number;
+  source: 'BOOKING' | 'SHIPPER_PORTAL' | 'PLANNER_ENTRY' | 'CONTRACT_DEFAULT' | 'NO_CARGO';
+  sourceId: string;
+  snapshotAt: Date;
+}
 
 export interface SpaceForecast {
   _id: string;

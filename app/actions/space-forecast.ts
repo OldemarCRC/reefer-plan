@@ -23,8 +23,8 @@ import { auth } from '@/auth';
 const CreateSpaceForecastSchema = z.object({
   contractId:       z.string().min(1),
   voyageId:         z.string().min(1),
-  estimatedPallets: z.number().int().min(1),
-  source:           z.enum(['SHIPPER_PORTAL', 'PLANNER_ENTRY', 'CONTRACT_DEFAULT']),
+  estimatedPallets: z.number().int().min(0),
+  source:           z.enum(['SHIPPER_PORTAL', 'PLANNER_ENTRY', 'CONTRACT_DEFAULT', 'NO_CARGO']),
   notes:            z.string().optional(),
 });
 

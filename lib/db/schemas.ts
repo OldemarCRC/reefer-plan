@@ -677,6 +677,19 @@ const StowagePlanSchema = new Schema({
     portSequence:  { type: Number, required: true },
     portCode:      { type: String, required: true },
   }],
+  // Cargo snapshot — sources used at plan generation time (added v1.25.0)
+  cargoSnapshot: [{
+    shipperId:   { type: String, default: '' },
+    shipperName: { type: String, default: '' },
+    contractId:  { type: String, required: true },
+    polPortCode: { type: String, default: '' },
+    podPortCode: { type: String, default: '' },
+    pallets:     { type: Number, required: true },
+    source:      { type: String, required: true }, // 'BOOKING' | 'SHIPPER_PORTAL' | 'PLANNER_ENTRY' | 'CONTRACT_DEFAULT' | 'NO_CARGO'
+    sourceId:    { type: String, required: true },  // bookingId or forecastId
+    snapshotAt:  { type: Date,   required: true },
+    _id: false,
+  }],
   // Space forecast integration (added v1.24.0)
   forecastSnapshot: {
     takenAt:     { type: Date },
@@ -821,8 +834,8 @@ const SpaceForecastSchema = new Schema({
   ]},
   polPortCode:          { type: String, required: true, trim: true, uppercase: true },
   podPortCode:          { type: String, required: true, trim: true, uppercase: true },
-  estimatedPallets:     { type: Number, required: true, min: 1 },
-  source:               { type: String, required: true, enum: ['SHIPPER_PORTAL', 'PLANNER_ENTRY', 'CONTRACT_DEFAULT'] },
+  estimatedPallets:     { type: Number, required: true, min: 0 },
+  source:               { type: String, required: true, enum: ['SHIPPER_PORTAL', 'PLANNER_ENTRY', 'CONTRACT_DEFAULT', 'NO_CARGO'] },
   submittedBy:          { type: String, required: true, trim: true },
   submittedAt:          { type: Date, required: true, default: Date.now },
   planImpact:           { type: String, required: true, enum: ['PENDING_REVIEW', 'INCORPORATED', 'SUPERSEDED', 'NO_CHANGE', 'REPLACED_BY_BOOKING'], default: 'PENDING_REVIEW' },
