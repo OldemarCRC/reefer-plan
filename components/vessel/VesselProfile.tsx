@@ -765,15 +765,15 @@ export default function VesselProfile({
                   </>
                 )}
 
-                {/* Pallet count (when hovered or selected) — center area */}
-                {(isHovered || isSelected) && comp.assignment && (
+                {/* Pallet count — center area, always visible when capacity known */}
+                {comp.assignment && preferredCap > 0 && (
                   <text
                     x={comp.x + comp.w / 2}
                     y={centerY + centerH / 2 + (comp.assignment.cargoShortLabel ? 9 : 0)}
                     textAnchor="middle"
                     className={styles.compCount}
                   >
-                    {loaded}/{displayCapacity}
+                    {loaded}/{preferredCap}
                   </text>
                 )}
               </g>
