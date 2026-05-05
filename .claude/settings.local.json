@@ -9,7 +9,12 @@
       "Bash(npx tsc *)",
       "Bash(node -e ' *)",
       "Bash(npx ts-node *)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(npx next *)",
+      "Bash(curl -s http://localhost:3001/api/health)",
+      "Bash(node scripts/trace-voyage.mjs AC26020)",
+      "Bash(del *)",
+      "Bash(findstr /i MONGODB)"
     ]
   }
 }

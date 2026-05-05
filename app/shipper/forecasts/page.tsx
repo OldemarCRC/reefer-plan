@@ -84,7 +84,16 @@ export default async function ShipperForecastsPage({
                       {f.cargoType ? (f.cargoType as string).replace(/_/g, ' ') : '—'}
                     </td>
                     <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', fontVariantNumeric: 'tabular-nums' }}>
-                      {f.estimatedPallets ?? '—'} plt
+                      {f.source === 'NO_CARGO' ? (
+                        <span
+                          className={styles.badge}
+                          style={{ background: 'var(--color-bg-tertiary)', color: 'var(--color-text-muted)' }}
+                        >
+                          No Cargo Declared
+                        </span>
+                      ) : (
+                        `${f.estimatedPallets ?? '—'} plt`
+                      )}
                     </td>
                     <td>
                       <span

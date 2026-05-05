@@ -78,6 +78,7 @@ export default function ForecastWizard({
   const [step, setStep]               = useState<1 | 2>(1);
   const [selectedId, setSelectedId]   = useState<string | null>(null);
   const [estimates, setEstimates]     = useState<Record<string, string>>({});
+  const [noCargo, setNoCargo]         = useState<Record<string, boolean>>({});
   const [isPending, startTransition]  = useTransition();
   const [error, setError]             = useState<string | null>(null);
 
@@ -96,15 +97,22 @@ export default function ForecastWizard({
     return f?.planImpact === 'REPLACED_BY_BOOKING';
   };
 
-  const hasAnyInput = Object.values(estimates).some(v => v && parseInt(v, 10) > 0);
+  const hasAnyInput =
+    Object.values(estimates).some(v => v && parseInt(v, 10) > 0) ||
+    Object.values(noCargo).some(v => v === true);
 
   const handleEstimateChange = (voyageId: string, value: string) => {
     setEstimates(prev => ({ ...prev, [voyageId]: value }));
   };
 
+  const handleNoCargoToggle = (voyageId: string, checked: boolean) => {
+    setNoCargo(prev => ({ ...prev, [voyageId]: checked }));
+  };
+
   const handleNext = () => {
     if (!selectedId) return;
     setEstimates({});
+    setNoCargo({});
     setError(null);
     setStep(2);
   };
@@ -116,9 +124,10 @@ export default function ForecastWizard({
 
   const handleSubmit = () => {
     setError(null);
-    const entries = Object.entries(estimates).filter(([, v]) => v && parseInt(v, 10) > 0);
-    if (entries.length === 0) {
-      setError('Please enter at least one estimate before submitting.');
+    const entries        = Object.entries(estimates).filter(([, v]) => v && parseInt(v, 10) > 0);
+    const noCargoEntries = Object.entries(noCargo).filter(([, v]) => v === true);
+    if (entries.length === 0 && noCargoEntries.length === 0) {
+      setError('Please enter at least one estimate or no-cargo declaration before submitting.');
       return;
     }
     startTransition(async () => {
@@ -132,6 +141,19 @@ export default function ForecastWizard({
         });
         if (!result.success) {
           setError((result as any).error ?? 'Failed to submit estimate. Please try again.');
+          return;
+        }
+        successCount++;
+      }
+      for (const [voyageId] of noCargoEntries) {
+        const result = await createSpaceForecast({
+          contractId:       selectedId!,
+          voyageId,
+          estimatedPallets: 0,
+          source:           'NO_CARGO',
+        });
+        if (!result.success) {
+          setError((result as any).error ?? 'Failed to submit no-cargo declaration. Please try again.');
           return;
         }
         successCount++;
@@ -283,6 +305,9 @@ export default function ForecastWizard({
                       ? `${loadPorts} → ${dischPorts}`
                       : loadPorts || dischPorts || '—';
 
+                    const isNoCargoChecked    = !!noCargo[v._id];
+                    const isNoCargoExisting   = existing?.source === 'NO_CARGO';
+
                     return (
                       <tr key={v._id}>
                         <td className={styles.mono}>{v.voyageNumber}</td>
@@ -296,24 +321,46 @@ export default function ForecastWizard({
                             </span>
                           ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              {/* Quantity input — hidden when no-cargo checkbox is checked */}
+                              {!isNoCargoChecked && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  {/* If existing is NO_CARGO and user hasn't entered a number, show badge */}
+                                  {isNoCargoExisting && !currentVal ? (
+                                    <span className={`${styles.badge} ${styles.badgeNoCargo}`}>
+                                      No Cargo Declared
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <input
+                                        type="number"
+                                        min={1}
+                                        max={9999}
+                                        className={styles.estimateInput}
+                                        placeholder={prefilled && prefilled > 0 ? String(prefilled) : '—'}
+                                        value={currentVal}
+                                        onChange={e => handleEstimateChange(v._id, e.target.value)}
+                                        disabled={isPending}
+                                      />
+                                      {isUpdated && (
+                                        <span className={`${styles.badge} ${styles.badgeUpdated}`}>
+                                          UPDATED
+                                        </span>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                              {/* No cargo checkbox */}
+                              <label className={styles.noCargoLabel}>
                                 <input
-                                  type="number"
-                                  min={1}
-                                  max={9999}
-                                  className={styles.estimateInput}
-                                  placeholder={prefilled ? String(prefilled) : '—'}
-                                  value={currentVal}
-                                  onChange={e => handleEstimateChange(v._id, e.target.value)}
+                                  type="checkbox"
+                                  checked={isNoCargoChecked}
+                                  onChange={e => handleNoCargoToggle(v._id, e.target.checked)}
                                   disabled={isPending}
                                 />
-                                {isUpdated && (
-                                  <span className={`${styles.badge} ${styles.badgeUpdated}`}>
-                                    UPDATED
-                                  </span>
-                                )}
-                              </div>
-                              {(selectedContract.weeklyPallets ?? 0) > 0 && (
+                                No cargo this voyage
+                              </label>
+                              {(selectedContract.weeklyPallets ?? 0) > 0 && !isNoCargoChecked && (
                                 <span style={{
                                   fontSize: '10px',
                                   color: 'var(--color-text-muted)',

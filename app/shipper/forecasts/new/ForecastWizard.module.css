@@ -245,6 +245,29 @@
   color: var(--color-success);
 }
 
+.badgeNoCargo {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+}
+
+.noCargoLabel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  user-select: none;
+  margin-top: 3px;
+}
+
+.noCargoLabel input[type='checkbox'] {
+  cursor: pointer;
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
 /* --- Footer actions --- */
 
 .footer {

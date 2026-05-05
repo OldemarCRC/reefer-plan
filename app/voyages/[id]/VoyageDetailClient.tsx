@@ -1421,6 +1421,29 @@ export function UnifiedContractsPanel({
     });
   };
 
+  const handleNoCargoDeclaration = (contractId: string, counterpartyId: string) => {
+    setRowError(null);
+    startTransition(async () => {
+      const result = await createSpaceForecast({
+        voyageId,
+        contractId,
+        estimatedPallets: 0,
+        source: 'NO_CARGO',
+      });
+      if (result.success) {
+        setAllForecasts(prev => {
+          const filtered = prev.filter((f: any) =>
+            !(f.contractId?.toString() === contractId &&
+              f.shipperId?.toString() === counterpartyId)
+          );
+          return [...filtered, result.data];
+        });
+      } else {
+        setRowError((result as any).error ?? 'Failed to declare no cargo');
+      }
+    });
+  };
+
   const handleSaveEstimate = () => {
     const row = rows.find(r => r.rowId === openRowId);
     if (!row || !estimateValue) return;
@@ -1488,12 +1511,13 @@ export function UnifiedContractsPanel({
                 const f = row.forecast;
                 const b = row.booking;
                 const isActiveBooking = b && !['CANCELLED', 'REJECTED'].includes(b.status);
-                type RowState = 'booking' | 'replaced' | 'none' | 'default' | 'entry';
+                type RowState = 'booking' | 'replaced' | 'none' | 'default' | 'entry' | 'no_cargo';
                 const state: RowState =
-                  f?.planImpact === 'REPLACED_BY_BOOKING'                         ? 'replaced' :
-                  isActiveBooking                                                   ? 'booking'  :
-                  f?.source === 'CONTRACT_DEFAULT'                                  ? 'default'  :
-                  f && ['PLANNER_ENTRY', 'SHIPPER_PORTAL'].includes(f.source)      ? 'entry'    :
+                  f?.planImpact === 'REPLACED_BY_BOOKING'                         ? 'replaced'  :
+                  isActiveBooking                                                   ? 'booking'   :
+                  f?.source === 'NO_CARGO'                                          ? 'no_cargo'  :
+                  f?.source === 'CONTRACT_DEFAULT'                                  ? 'default'   :
+                  f && ['PLANNER_ENTRY', 'SHIPPER_PORTAL'].includes(f.source)      ? 'entry'     :
                                                                                      'none';
                 const bsStyle = b ? (BOOKING_STATUS_STYLES[b.status] ?? BOOKING_STATUS_STYLES.CANCELLED) : null;
 
@@ -1505,6 +1529,7 @@ export function UnifiedContractsPanel({
                   if ((state === 'entry' || state === 'default') && f) {
                     return `${f.estimatedPallets} plt`;
                   }
+                  if (state === 'no_cargo') return '0 plt';
                   return row.counterpartyWeeklyEstimate > 0 ? `${row.counterpartyWeeklyEstimate} plt` : '—';
                 })();
 
@@ -1565,6 +1590,9 @@ export function UnifiedContractsPanel({
                         {state === 'entry' && f?.source === 'SHIPPER_PORTAL' && (
                           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-cyan-light)' }}>Shipper Est.</span>
                         )}
+                        {state === 'no_cargo' && (
+                          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>No Cargo</span>
+                        )}
                       </td>
 
                       {/* Status */}
@@ -1585,6 +1613,9 @@ export function UnifiedContractsPanel({
                             {f.planImpact === 'INCORPORATED' ? 'Incorporated' : 'Pending Review'}
                           </span>
                         )}
+                        {state === 'no_cargo' && (
+                          <span className={clientStyles.badgeNoCargo}>No Cargo</span>
+                        )}
                       </td>
 
                       {/* Actions */}
@@ -1604,17 +1635,26 @@ export function UnifiedContractsPanel({
                                   </button>
                                 )}
                                 {(state === 'none' || state === 'default') && (
-                                  <button
-                                    className={clientStyles.btnEnterEst}
-                                    onClick={() => {
-                                      setOpenRowId(row.rowId);
-                                      setEstimateValue('');
-                                      setRowError(null);
-                                    }}
-                                    disabled={isPending}
-                                  >
-                                    Enter Estimate
-                                  </button>
+                                  <>
+                                    <button
+                                      className={clientStyles.btnEnterEst}
+                                      onClick={() => {
+                                        setOpenRowId(row.rowId);
+                                        setEstimateValue('');
+                                        setRowError(null);
+                                      }}
+                                      disabled={isPending}
+                                    >
+                                      Enter Estimate
+                                    </button>
+                                    <button
+                                      className={clientStyles.btnNoCargo}
+                                      onClick={() => handleNoCargoDeclaration(row.contractId, row.counterpartyId)}
+                                      disabled={isPending}
+                                    >
+                                      No Cargo
+                                    </button>
+                                  </>
                                 )}
                                 {state === 'entry' && f && (
                                   <button
@@ -1641,6 +1681,19 @@ export function UnifiedContractsPanel({
                                   </button>
                                 )}
                               </>
+                            )}
+                            {state === 'no_cargo' && (
+                              <button
+                                className={clientStyles.btnEditEst}
+                                onClick={() => {
+                                  setOpenRowId(row.rowId);
+                                  setEstimateValue('');
+                                  setRowError(null);
+                                }}
+                                disabled={isPending}
+                              >
+                                Edit
+                              </button>
                             )}
                             {state === 'booking' && b && voyageStatus === 'IN_PROGRESS' && (
                               <ChangeDestinationButton

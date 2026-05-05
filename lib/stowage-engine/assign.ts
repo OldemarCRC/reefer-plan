@@ -37,6 +37,17 @@ function levelIndex(level: string): number {
   return idx === -1 ? LEVEL_ORDER.length : idx; // unknown → least accessible
 }
 
+// Depth ranking for score tie-breaking: higher value = deeper in hold.
+// Deeper sections win ties so the engine fills bottom-up: latest-discharge cargo
+// settles at the bottom and earliest-discharge cargo at the top of each hold,
+// which is the correct reefer overstow practice and lets canPlace pass freely.
+const LEVEL_DEPTH: Record<string, number> = { FC: 0, A: 1, B: 2, C: 3, D: 4 };
+
+function depthRank(sectionId: string): number {
+  const { level } = parseSection(sectionId);
+  return LEVEL_DEPTH[level] ?? levelIndex(level);
+}
+
 // Returns sectionIds in the same hold that are ABOVE (more accessible than) sectionId.
 function getLevelsAbove(sectionId: string, holdState: HoldState): string[] {
   const { holdNumber, level } = parseSection(sectionId);
@@ -240,13 +251,20 @@ export function assignCargo(
       }
 
       // Score and rank candidates; pick the lowest score.
+      // On score tie: prefer the deeper section (higher depthRank → bottom-up fill).
+      // On depth tie: prefer the higher hold number.
       const best = candidates.reduce(
         (bestSec, sec) => {
-          const state = holdState[sec.sectionId];
-          const score = sectionScore(sec.sectionId, state.palletsUsed, state.capacity, preferredPair);
+          const state    = holdState[sec.sectionId];
+          const score    = sectionScore(sec.sectionId, state.palletsUsed, state.capacity, preferredPair);
           const bestState = holdState[bestSec.sectionId];
           const bestScore = sectionScore(bestSec.sectionId, bestState.palletsUsed, bestState.capacity, preferredPair);
-          return score < bestScore ? sec : bestSec;
+          if (score !== bestScore) return score < bestScore ? sec : bestSec;
+          const depth    = depthRank(sec.sectionId);
+          const depthBest = depthRank(bestSec.sectionId);
+          if (depth !== depthBest) return depth > depthBest ? sec : bestSec;
+          return parseSection(sec.sectionId).holdNumber > parseSection(bestSec.sectionId).holdNumber
+            ? sec : bestSec;
         },
         candidates[0],
       );
