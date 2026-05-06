@@ -17,11 +17,11 @@ import {
 // ============================================================================
 
 const SVG_W = 960;
-const SVG_H = 500;
-const MARGIN = { top: 60, right: 30, bottom: 50, left: 30 };
+const SVG_H = 430;
+const MARGIN = { top: 0, right: 30, bottom: 50, left: 30 };
 
 // Hull shape
-const HULL_Y_TOP = MARGIN.top;           // Main deck line
+const HULL_Y_TOP = 0;                    // Main deck line
 const HULL_Y_BOTTOM = SVG_H - MARGIN.bottom; // Keel line
 const HULL_X_BOW = MARGIN.left + 20;
 const HULL_X_STERN = SVG_W - MARGIN.right;
@@ -34,8 +34,10 @@ const CARGO_AREA_W = 820;     // Total width for cargo holds (~85% of SVG_W)
 const SUPERSTRUCTURE_X = HULL_X_STERN - 110; // Bridge/superstructure
 
 // Height budget for all levels in a hold (px)
-const HOLD_HEIGHT_BUDGET = 340;
+const HOLD_HEIGHT_BUDGET = SVG_H - MARGIN.bottom;
 const MIN_LEVEL_H = 60;  // minimum height per level for readability
+const DECK_STRIP_H = 66;   // height of the above-deck SVG strip
+const DECK_LEVEL_H = 40;   // height of each FC/UPD cell in the strip
 
 // Cell data-overlay layout constants
 const CELL_HEADER_H = 16;    // top strip: capacity / loaded / available
@@ -115,34 +117,54 @@ function buildCompartmentRects(
   const rects: CompartmentRect[] = [];
   const assignMap = new Map(assignments.map((a) => [a.compartmentId, a]));
 
-  // FC/UPD are "special" levels: narrower and shorter than normal levels.
-  // FC: 60% hold width, centered — only in Hold 1 (T4A/T4B)
-  // UPD: 50% hold width, centered — only in Holds 2+ (T1)
   const SPECIAL_LEVELS = new Set(['FC', 'UPD']);
+  const ABOVE_DECK = new Set(['FC', 'UPD']);
   const SPECIAL_HEIGHT_RATIO = 0.6;
   const FC_WIDTH_RATIO = 0.6;
   const UPD_WIDTH_RATIO = 0.5;
+
+  // Collect all unique levels across all holds, preserving LEVEL_DISPLAY_ORDER
+  const allLevels = new Set<string>();
+  for (const hold of layout.holds) {
+    for (const s of hold.levels) {
+      allLevels.add(s.sectionId.slice(1));
+    }
+  }
+  const orderedLevels = LEVEL_DISPLAY_ORDER.filter(l => allLevels.has(l));
+
+  // Hull levels only (exclude FC/UPD — those go in the deck strip)
+  const hullLevels = orderedLevels.filter(l => !ABOVE_DECK.has(l));
+
+  // Compute global row heights using hull levels only
+  const gaps = (hullLevels.length - 1) * 1;
+  const budget = HOLD_HEIGHT_BUDGET - gaps;
+  const normalH = budget / hullLevels.length;
+
+  // Build global y positions keyed by level name (hull levels only)
+  const levelY: Record<string, number> = {};
+  const levelH: Record<string, number> = {};
+  let y = HULL_Y_TOP + 2;
+  for (const level of hullLevels) {
+    levelY[level] = y;
+    levelH[level] = normalH;
+    y += normalH + 1;
+  }
+
+  // Above-deck levels get a fixed height (used by deck strip renderer)
+  for (const level of orderedLevels.filter(l => ABOVE_DECK.has(l))) {
+    levelH[level] = normalH * SPECIAL_HEIGHT_RATIO;
+    levelY[level] = -1; // sentinel: rendered in deck strip, not hull
+  }
 
   for (const hold of layout.holds) {
     const pos = holdPositions.find(p => p.holdNumber === hold.holdNumber);
     if (!pos) continue;
 
-    const levels = hold.levels; // already sorted top-to-bottom by LEVEL_DISPLAY_ORDER
-    const nSpecial = levels.filter(l => SPECIAL_LEVELS.has(l.sectionId.slice(1))).length;
-    const nNormal = levels.length - nSpecial;
-    const gaps = (levels.length - 1) * 1;
-    const budget = HOLD_HEIGHT_BUDGET - gaps;
-    // Solve: normalH * (nNormal + nSpecial * SPECIAL_HEIGHT_RATIO) = budget
-    const normalH = budget / (nNormal + nSpecial * SPECIAL_HEIGHT_RATIO);
-    const specialH = normalH * SPECIAL_HEIGHT_RATIO;
-
-    let y = HULL_Y_TOP + 4;
-
-    for (const section of levels) {
-      const level = section.sectionId.slice(1); // "A", "B", "UPD", "FC", "E", etc.
+    for (const section of hold.levels) {
+      const level = section.sectionId.slice(1);
       const isFC = level === 'FC';
       const isUPD = level === 'UPD';
-      const h = (isFC || isUPD) ? specialH : normalH;
+      const h = levelH[level] ?? normalH;
       const w = isFC ? pos.w * FC_WIDTH_RATIO
               : isUPD ? pos.w * UPD_WIDTH_RATIO
               : pos.w;
@@ -153,14 +175,12 @@ function buildCompartmentRects(
         holdNumber: hold.holdNumber,
         level,
         x: xPos,
-        y,
+        y: levelY[level] ?? HULL_Y_TOP + 4,
         w,
         h,
         zoneId: section.zoneId,
         assignment: assignMap.get(section.sectionId),
       });
-
-      y += h + 1;
     }
   }
 
@@ -228,6 +248,12 @@ export default function VesselProfile({
   const holdPositions = computeHoldPositions(layout);
   const compartments = buildCompartmentRects(layout, holdPositions, tempAssignments);
 
+  // Separate above-deck levels (FC, UPD) from below-deck levels
+  const ABOVE_DECK_LEVELS = new Set(['FC', 'UPD']);
+  const deckCompartments = compartments.filter(c => ABOVE_DECK_LEVELS.has(c.level));
+  const hullCompartments = compartments.filter(c => !ABOVE_DECK_LEVELS.has(c.level));
+  const hasDeckLevels = deckCompartments.length > 0;
+
   const hovered = hoveredId ? compartments.find((c) => c.id === hoveredId) : null;
   const selected = selectedId ? compartments.find((c) => c.id === selectedId) : null;
   const detail = selected || hovered;
@@ -268,6 +294,166 @@ export default function VesselProfile({
       </div>
 
       <div className={styles.svgWrap}>
+        {/* Above-deck strip — FC / UPD compartments */}
+        {(
+          <svg
+            viewBox={`0 0 ${SVG_W} ${DECK_STRIP_H}`}
+            className={styles.deckStrip}
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            {/* Ghost outlines for all hold columns */}
+            {hasDeckLevels && holdPositions.map((h) => (
+              <rect
+                key={`deck-ghost-${h.holdNumber}`}
+                x={h.x}
+                y={DECK_STRIP_H - DECK_LEVEL_H - 2}
+                width={h.w}
+                height={DECK_LEVEL_H}
+                rx={2}
+                fill="none"
+                stroke="#1E3A5F"
+                strokeWidth={0.8}
+                strokeDasharray="4,3"
+                opacity={0.4}
+              />
+            ))}
+            {/* Hold labels */}
+            {holdPositions.map((h) => (
+              <text
+                key={`deck-label-h${h.holdNumber}`}
+                x={h.x + h.w / 2}
+                y={10}
+                textAnchor="middle"
+                className={styles.holdLabel}
+              >
+                Hold {h.holdNumber}
+              </text>
+            ))}
+            {/* Actual FC/UPD compartments */}
+            {hasDeckLevels && deckCompartments.map((comp) => {
+              const pos = holdPositions.find(p => p.holdNumber === comp.holdNumber);
+              if (!pos) return null;
+              const effectiveColor = comp.assignment?.podColor || comp.assignment?.zoneColor || '#1E3A5F';
+              const loaded = comp.assignment?.palletsLoaded ?? 0;
+              const capacity = comp.assignment?.palletsCapacity ?? 0;
+              const available = capacity - loaded;
+              const fillPct = capacity > 0 ? loaded / capacity : 0;
+              const isHovered = hoveredId === comp.id;
+              const isSelected = selectedId === comp.id;
+              const cellY = DECK_STRIP_H - DECK_LEVEL_H - 2;
+              const isEstimated = comp.assignment?.confidence === 'ESTIMATED';
+
+              return (
+                <g
+                  key={comp.id}
+                  onMouseEnter={() => setHoveredId(comp.id)}
+                  onMouseLeave={() => setHoveredId(null)}
+                  onClick={() => {
+                    setSelectedId(selectedId === comp.id ? null : comp.id);
+                    onCompartmentClick?.(comp.id);
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {/* Background */}
+                  <rect
+                    x={pos.x}
+                    y={cellY}
+                    width={pos.w}
+                    height={DECK_LEVEL_H}
+                    rx={2}
+                    fill={comp.assignment?.cargoType ? effectiveColor : '#111E33'}
+                    opacity={isSelected ? 0.5 : isHovered ? 0.4 : 0.15}
+                    stroke={isSelected ? '#FCD34D' : isHovered ? '#fff' : effectiveColor}
+                    strokeWidth={isSelected ? 2 : isHovered ? 1.5 : 0.8}
+                  />
+                  {/* Cargo fill bar */}
+                  {fillPct > 0 && (
+                    <rect
+                      x={pos.x + 1}
+                      y={cellY + DECK_LEVEL_H * (1 - fillPct)}
+                      width={pos.w - 2}
+                      height={DECK_LEVEL_H * fillPct - 1}
+                      rx={1}
+                      fill={effectiveColor}
+                      opacity={isSelected ? 0.7 : isHovered ? 0.6 : 0.35}
+                    />
+                  )}
+                  {/* Hatch for estimated */}
+                  {fillPct > 0 && isEstimated && (
+                    <rect
+                      x={pos.x + 1}
+                      y={cellY + DECK_LEVEL_H * (1 - fillPct)}
+                      width={pos.w - 2}
+                      height={DECK_LEVEL_H * fillPct - 1}
+                      rx={1}
+                      fill="url(#hatch-estimated)"
+                      opacity={0.6}
+                    />
+                  )}
+                  {/* Header: capacity / loaded / available */}
+                  {comp.assignment && (
+                    <>
+                      <rect x={pos.x} y={cellY} width={pos.w} height={CELL_HEADER_H}
+                        fill="#070f1c" opacity={0.78} rx={2} />
+                      <line x1={pos.x + pos.w / 3} y1={cellY + 2} x2={pos.x + pos.w / 3} y2={cellY + CELL_HEADER_H - 2} stroke="#1E3A5F" strokeWidth={0.5} />
+                      <line x1={pos.x + pos.w * 2 / 3} y1={cellY + 2} x2={pos.x + pos.w * 2 / 3} y2={cellY + CELL_HEADER_H - 2} stroke="#1E3A5F" strokeWidth={0.5} />
+                      <text x={pos.x + pos.w / 6} y={cellY + CELL_HEADER_H / 2}
+                        textAnchor="middle" dominantBaseline="middle"
+                        style={{ fontSize: '8px', fill: '#64748b', fontFamily: 'monospace' }}>
+                        {capacity}
+                      </text>
+                      <text x={pos.x + pos.w / 2} y={cellY + CELL_HEADER_H / 2}
+                        textAnchor="middle" dominantBaseline="middle"
+                        style={{ fontSize: '8px', fontFamily: 'monospace',
+                          fill: loaded > 0 ? '#e2e8f0' : '#475569',
+                          fontWeight: loaded > 0 ? 'bold' : 'normal' }}>
+                        {loaded}
+                      </text>
+                      <text x={pos.x + pos.w * 5 / 6} y={cellY + CELL_HEADER_H / 2}
+                        textAnchor="middle" dominantBaseline="middle"
+                        style={{ fontSize: '8px', fontFamily: 'monospace',
+                          fill: available < 0 ? '#ef4444' : available === 0 ? '#94a3b8' : '#22c55e' }}>
+                        {available}
+                      </text>
+                    </>
+                  )}
+                  {/* Cargo label */}
+                  {comp.assignment?.cargoShortLabel && (
+                    <text
+                      x={pos.x + pos.w / 2}
+                      y={cellY + DECK_LEVEL_H / 2 + 3}
+                      textAnchor="middle" dominantBaseline="middle"
+                      className={styles.cargoShortLabel}
+                    >
+                      {comp.assignment.cargoShortLabel}
+                    </text>
+                  )}
+                  {/* Level badge — top-left */}
+                  <text
+                    x={pos.x + 5}
+                    y={cellY + DECK_LEVEL_H - 5}
+                    textAnchor="start"
+                    style={{ fontSize: '8px', fill: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}
+                  >
+                    {comp.id}
+                  </text>
+                </g>
+              );
+            })}
+            {/* Level label on the left */}
+            {deckCompartments.length > 0 && (
+              <text
+                x={CARGO_AREA_X - 8}
+                y={DECK_STRIP_H - DECK_LEVEL_H / 2 - 2}
+                textAnchor="end"
+                dominantBaseline="middle"
+                className={styles.levelLabel}
+              >
+                {deckCompartments[0].level}
+              </text>
+            )}
+          </svg>
+        )}
         <svg
           viewBox={`0 0 ${SVG_W} ${SVG_H}`}
           className={styles.svg}
@@ -321,7 +507,8 @@ export default function VesselProfile({
             strokeWidth="2"
           />
 
-          {/* Superstructure / Bridge */}
+          {false && (
+          <>{/* Superstructure / Bridge */}
           <rect
             x={SUPERSTRUCTURE_X}
             y={HULL_Y_TOP - 50}
@@ -356,25 +543,15 @@ export default function VesselProfile({
             fill="#1a2a3f"
             stroke="#2A4060"
             strokeWidth="1"
-          />
+          /></>
+          )}
 
-          {/* Mast / Derricks */}
+          {false && (
+          <>{/* Mast / Derricks */}
           <line x1={CARGO_AREA_X + 60} y1={HULL_Y_TOP - 30} x2={CARGO_AREA_X + 60} y2={HULL_Y_TOP} stroke="#2A4060" strokeWidth="1.5" />
           <line x1={CARGO_AREA_X + 60} y1={HULL_Y_TOP - 28} x2={CARGO_AREA_X + 100} y2={HULL_Y_TOP - 5} stroke="#2A4060" strokeWidth="0.8" />
-          <line x1={CARGO_AREA_X + CARGO_AREA_W / 2} y1={HULL_Y_TOP - 25} x2={CARGO_AREA_X + CARGO_AREA_W / 2} y2={HULL_Y_TOP} stroke="#2A4060" strokeWidth="1.5" />
-
-          {/* Hold labels */}
-          {holdPositions.map((h) => (
-            <text
-              key={`label-h${h.holdNumber}`}
-              x={h.x + h.w / 2}
-              y={HULL_Y_TOP - 6}
-              textAnchor="middle"
-              className={styles.holdLabel}
-            >
-              Hold {h.holdNumber}
-            </text>
-          ))}
+          <line x1={CARGO_AREA_X + CARGO_AREA_W / 2} y1={HULL_Y_TOP - 25} x2={CARGO_AREA_X + CARGO_AREA_W / 2} y2={HULL_Y_TOP} stroke="#2A4060" strokeWidth="1.5" /></>
+          )}
 
           {/* Bulkhead lines */}
           {holdPositions.slice(0, -1).map((h, i) => (
@@ -406,7 +583,7 @@ export default function VesselProfile({
           ))}
 
           {/* Compartments */}
-          {compartments.map((comp) => {
+          {hullCompartments.map((comp) => {
             const isHovered = hoveredId === comp.id;
             const isSelected = selectedId === comp.id;
             const inZone = highlightZone && comp.assignment?.zoneId === highlightZone;
@@ -782,7 +959,7 @@ export default function VesselProfile({
 
           {/* Level labels (left side — use hold with most levels as reference) */}
           {compartments
-            .filter((c) => c.holdNumber === refHoldNumber)
+            .filter((c) => c.holdNumber === refHoldNumber && !ABOVE_DECK_LEVELS.has(c.level))
             .map((c) => (
               <text
                 key={`ll-${c.level}`}

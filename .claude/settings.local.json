@@ -14,7 +14,8 @@
       "Bash(curl -s http://localhost:3001/api/health)",
       "Bash(node scripts/trace-voyage.mjs AC26020)",
       "Bash(del *)",
-      "Bash(findstr /i MONGODB)"
+      "Bash(findstr /i MONGODB)",
+      "Bash(Remove-Item *)"
     ]
   }
 }
