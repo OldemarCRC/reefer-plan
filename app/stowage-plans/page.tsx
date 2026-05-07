@@ -31,20 +31,40 @@ export default async function StowagePlansPage() {
   const result = await getStowagePlans();
   const plans = result.success ? result.data : [];
 
-  const displayPlans = plans.map((p: any) => ({
-    _id: p._id,
-    planNumber: p.planNumber || `PLAN-${p._id.toString().slice(-6)}`,
-    status: p.status || 'DRAFT',
-    vesselName: p.vesselId?.name || p.vesselName || 'Unknown Vessel',
-    voyageNumber: p.voyageId?.voyageNumber || p.voyageNumber || 'N/A',
-    updatedAt: p.updatedAt
-      ? new Date(p.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-      : 'N/A',
-    palletsAssigned: p.cargoPositions?.length || 0,
-    palletsTotal: 4840, // TODO: fetch from vessel capacity
-    overstowViolations: p.validation?.overstowViolations?.length || 0,
-    temperatureConflicts: p.validation?.temperatureConflicts?.length || 0,
-  }));
+  const displayPlans = plans.map((p: any) => {
+    const vessel = p.vesselId;
+    const palletsTotal = vessel?.holds
+      ? (vessel.holds as any[]).reduce(
+          (sum: number, hold: any) =>
+            sum + ((hold.compartments as any[]) || []).reduce(
+              (s: number, c: any) => s + (c.maxPallets || 0), 0
+            ),
+          0
+        )
+      : 0;
+
+    const uniqueBookingIds = new Set(
+      ((p.cargoPositions as any[]) || []).map((cp: any) => cp.bookingId).filter(Boolean)
+    );
+
+    return {
+      _id: p._id,
+      planNumber: p.planNumber || `PLAN-${p._id.toString().slice(-6)}`,
+      status: p.status || 'DRAFT',
+      vesselName: vessel?.name || p.vesselName || 'Unknown Vessel',
+      voyageNumber: p.voyageId?.voyageNumber || p.voyageNumber || 'N/A',
+      updatedAt: p.updatedAt
+        ? new Date(p.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+        : 'N/A',
+      palletsAssigned: ((p.cargoPositions as any[]) || []).reduce(
+        (sum: number, cp: any) => sum + (cp.quantity || 0), 0
+      ),
+      palletsTotal,
+      overstowViolations: p.overstowViolations?.length || 0,
+      temperatureConflicts: p.temperatureConflicts?.length || 0,
+      bookingCount: uniqueBookingIds.size,
+    };
+  });
 
   return (
     <AppShell>
@@ -77,6 +97,8 @@ export default async function StowagePlansPage() {
                     <span>{p.vesselName}</span>
                     <span className={styles.dot}>·</span>
                     <span className={styles.muted}>{p.voyageNumber}</span>
+                    <span className={styles.dot}>·</span>
+                    <span className={styles.muted}>{p.bookingCount} booking{p.bookingCount !== 1 ? 's' : ''}</span>
                     <span className={styles.dot}>·</span>
                     <span className={styles.muted}>Updated {p.updatedAt}</span>
                   </div>
