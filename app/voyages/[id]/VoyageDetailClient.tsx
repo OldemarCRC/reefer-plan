@@ -1390,9 +1390,10 @@ export function UnifiedContractsPanel({
   const estimateCount = rows.filter(r => {
     const f = r.forecast;
     if (!f) return false;
+    if ((f.estimatedPallets ?? 0) <= 0) return false;
+    if (f.source === 'CONTRACT_DEFAULT') return f.planImpact === 'INCORPORATED';
     if (f.source === 'NO_CARGO') return false;
-    if (f.planImpact === 'SUPERSEDED' || f.planImpact === 'REPLACED_BY_BOOKING') return false;
-    return (f.estimatedPallets ?? 0) > 0;
+    return f.planImpact !== 'SUPERSEDED' && f.planImpact !== 'REPLACED_BY_BOOKING';
   }).length;
 
   const canEnterForecasts = canEdit && ['PLANNED', 'IN_PROGRESS'].includes(voyageStatus);
