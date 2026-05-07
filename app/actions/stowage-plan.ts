@@ -607,6 +607,7 @@ export async function getStowagePlans() {
           $match: {
             voyageId:   { $in: voyageObjectIds },
             planImpact: { $nin: ['SUPERSEDED', 'REPLACED_BY_BOOKING'] },
+            source:     { $ne: 'NO_CARGO' },
             $or: [
               { source: 'CONTRACT_DEFAULT' },
               { source: { $in: ['SHIPPER_PORTAL', 'PLANNER_ENTRY'] }, estimatedPallets: { $gt: 0 } },

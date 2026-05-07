@@ -1593,6 +1593,9 @@ export function UnifiedContractsPanel({
                         {state === 'entry' && f?.source === 'SHIPPER_PORTAL' && (
                           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-cyan-light)' }}>Shipper Est.</span>
                         )}
+                        {state === 'default' && (
+                          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Contract Est.</span>
+                        )}
                         {state === 'no_cargo' && (
                           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>No Cargo</span>
                         )}
@@ -1609,7 +1612,7 @@ export function UnifiedContractsPanel({
                           <span className={clientStyles.badgeNoEst}>No Estimate</span>
                         )}
                         {state === 'default' && (
-                          <span className={clientStyles.badgeContractEst}>Contract Est.</span>
+                          <span className={clientStyles.badgeIncorporated}>Incorporated</span>
                         )}
                         {state === 'entry' && f && (
                           <span className={f.planImpact === 'INCORPORATED' ? clientStyles.badgeIncorporated : clientStyles.badgePending}>
