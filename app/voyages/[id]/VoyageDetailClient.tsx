@@ -1392,7 +1392,6 @@ export function UnifiedContractsPanel({
     if (!f) return false;
     if (f.source === 'NO_CARGO') return false;
     if (f.planImpact === 'SUPERSEDED' || f.planImpact === 'REPLACED_BY_BOOKING') return false;
-    if (f.source === 'CONTRACT_DEFAULT') return true;
     return (f.estimatedPallets ?? 0) > 0;
   }).length;
 
