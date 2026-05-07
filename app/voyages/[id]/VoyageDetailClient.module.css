@@ -966,18 +966,19 @@
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   font-size: 11px;
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
-  border: 1px solid var(--color-border);
-  background: transparent;
-  color: var(--color-text-muted);
+  border: 1px solid var(--color-warning);
+  background: var(--color-warning-muted);
+  color: var(--color-warning);
   transition: all var(--transition-fast);
   white-space: nowrap;
+  min-width: 72px;
 }
 
 .btnNoCargo:hover:not(:disabled) {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-secondary);
+  background: var(--color-warning);
+  color: white;
 }
 
 .btnNoCargo:disabled { opacity: 0.4; cursor: not-allowed; }

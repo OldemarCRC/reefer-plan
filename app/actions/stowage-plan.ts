@@ -605,9 +605,12 @@ export async function getStowagePlans() {
       SpaceForecastModel.aggregate([
         {
           $match: {
-            voyageId: { $in: voyageObjectIds },
-            source: { $in: ['SHIPPER_PORTAL', 'PLANNER_ENTRY', 'CONTRACT_DEFAULT'] },
+            voyageId:   { $in: voyageObjectIds },
             planImpact: { $nin: ['SUPERSEDED', 'REPLACED_BY_BOOKING'] },
+            $or: [
+              { source: 'CONTRACT_DEFAULT' },
+              { source: { $in: ['SHIPPER_PORTAL', 'PLANNER_ENTRY'] }, estimatedPallets: { $gt: 0 } },
+            ],
           },
         },
         { $group: { _id: '$voyageId', count: { $sum: 1 } } },

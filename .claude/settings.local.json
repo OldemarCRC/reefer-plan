@@ -15,7 +15,8 @@
       "Bash(node scripts/trace-voyage.mjs AC26020)",
       "Bash(del *)",
       "Bash(findstr /i MONGODB)",
-      "Bash(Remove-Item *)"
+      "Bash(Remove-Item *)",
+      "Bash(dir D:\\\\REPOSITORIOS\\\\NextJS\\\\reefer-plan\\\\scripts *)"
     ]
   }
 }

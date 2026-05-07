@@ -1387,11 +1387,14 @@ export function UnifiedContractsPanel({
 
   const rows          = buildContractRows(activeContracts, bookings, allForecasts);
   const bookingCount  = bookings.filter((b: any) => !['CANCELLED', 'REJECTED'].includes(b.status)).length;
-  const estimateCount = rows.filter(r =>
-    r.forecast &&
-    r.forecast.planImpact !== 'REPLACED_BY_BOOKING' &&
-    !r.booking
-  ).length;
+  const estimateCount = rows.filter(r => {
+    const f = r.forecast;
+    if (!f) return false;
+    if (f.source === 'NO_CARGO') return false;
+    if (f.planImpact === 'SUPERSEDED' || f.planImpact === 'REPLACED_BY_BOOKING') return false;
+    if (f.source === 'CONTRACT_DEFAULT') return true;
+    return (f.estimatedPallets ?? 0) > 0;
+  }).length;
 
   const canEnterForecasts = canEdit && ['PLANNED', 'IN_PROGRESS'].includes(voyageStatus);
 
@@ -1727,7 +1730,7 @@ export function UnifiedContractsPanel({
                             <button
                               className={clientStyles.btnSaveEst}
                               onClick={handleSaveEstimate}
-                              disabled={isPending || !estimateValue}
+                              disabled={isPending || !estimateValue || parseInt(estimateValue, 10) === 0}
                             >
                               {isPending ? 'Saving…' : 'Save'}
                             </button>
@@ -1737,6 +1740,11 @@ export function UnifiedContractsPanel({
                             >
                               Cancel
                             </button>
+                            {estimateValue !== '' && parseInt(estimateValue, 10) === 0 && (
+                              <span className={clientStyles.inlineError}>
+                                Use the No Cargo button to indicate no cargo — quantity must be greater than 0.
+                              </span>
+                            )}
                             {rowError && (
                               <span className={clientStyles.inlineError}>{rowError}</span>
                             )}

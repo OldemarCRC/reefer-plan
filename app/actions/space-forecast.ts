@@ -263,6 +263,11 @@ export async function createSpaceForecast(
       return { success: false, error: 'No active counterparty found for this shipper on this contract' };
     }
 
+    // Block PLANNER_ENTRY with zero quantity — use No Cargo button instead
+    if (validated.source === 'PLANNER_ENTRY' && validated.estimatedPallets === 0) {
+      return { success: false, error: 'Use the No Cargo button to indicate no cargo — quantity must be greater than 0.' };
+    }
+
     // 5–11. Core creation logic
     const submittedBy = (session.user as any).email ?? session.user.name ?? 'SYSTEM';
     return await _createForecastCore({
