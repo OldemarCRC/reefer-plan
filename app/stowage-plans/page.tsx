@@ -33,18 +33,22 @@ export default async function StowagePlansPage() {
 
   const displayPlans = plans.map((p: any) => {
     const vessel = p.vesselId;
-    const palletsTotal = vessel?.holds
-      ? (vessel.holds as any[]).reduce(
-          (sum: number, hold: any) =>
-            sum + ((hold.compartments as any[]) || []).reduce(
-              (s: number, c: any) => s + (c.maxPallets || 0), 0
+    const palletsTotal = vessel?.temperatureZones
+      ? (vessel.temperatureZones as any[]).reduce(
+          (sum: number, zone: any) =>
+            sum + ((zone.coolingSections as any[]) || []).reduce(
+              (s: number, sec: any) =>
+                s + Math.floor((sec.sqm || 0) * (sec.designStowageFactor || 1.32)),
+              0
             ),
           0
         )
       : 0;
 
     const uniqueBookingIds = new Set(
-      ((p.cargoPositions as any[]) || []).map((cp: any) => cp.bookingId).filter(Boolean)
+      ((p.cargoPositions as any[]) || [])
+        .map((cp: any) => cp.bookingId)
+        .filter((id: any) => id && !id.startsWith('FORECAST-') && !id.startsWith('CONTRACT-ESTIMATE-'))
     );
 
     return {
