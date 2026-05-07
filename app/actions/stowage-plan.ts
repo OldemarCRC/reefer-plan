@@ -592,9 +592,47 @@ export async function getStowagePlans() {
       return (a.planNumber ?? '').localeCompare(b.planNumber ?? '');
     });
 
+    // Collect unique voyageIds for a single-pass batch count (2 queries regardless of plan count)
+    const voyageObjectIds = [...new Set(
+      (plans as any[]).map((p: any) => p.voyageId?._id).filter(Boolean),
+    )];
+
+    const [bookingAgg, forecastAgg] = await Promise.all([
+      BookingModel.aggregate([
+        { $match: { voyageId: { $in: voyageObjectIds }, status: { $nin: ['CANCELLED', 'REJECTED'] } } },
+        { $group: { _id: '$voyageId', count: { $sum: 1 } } },
+      ]),
+      SpaceForecastModel.aggregate([
+        {
+          $match: {
+            voyageId: { $in: voyageObjectIds },
+            source: { $in: ['SHIPPER_PORTAL', 'PLANNER_ENTRY', 'CONTRACT_DEFAULT'] },
+            planImpact: { $nin: ['SUPERSEDED', 'REPLACED_BY_BOOKING'] },
+          },
+        },
+        { $group: { _id: '$voyageId', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const bookingCountMap = new Map<string, number>(
+      bookingAgg.map((r: any) => [r._id.toString(), r.count as number]),
+    );
+    const estimateCountMap = new Map<string, number>(
+      forecastAgg.map((r: any) => [r._id.toString(), r.count as number]),
+    );
+
+    const enrichedPlans = (plans as any[]).map((p: any) => {
+      const vid = p.voyageId?._id?.toString() ?? '';
+      return {
+        ...p,
+        realBookingCount: bookingCountMap.get(vid) ?? 0,
+        estimateCount:    estimateCountMap.get(vid) ?? 0,
+      };
+    });
+
     return {
       success: true,
-      data: JSON.parse(JSON.stringify(plans)),
+      data: JSON.parse(JSON.stringify(enrichedPlans)),
     };
   } catch (error) {
     console.error('Error fetching plans:', error);

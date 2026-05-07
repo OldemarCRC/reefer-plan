@@ -45,12 +45,6 @@ export default async function StowagePlansPage() {
         )
       : 0;
 
-    const uniqueBookingIds = new Set(
-      ((p.cargoPositions as any[]) || [])
-        .map((cp: any) => cp.bookingId)
-        .filter((id: any) => id && !id.startsWith('FORECAST-') && !id.startsWith('CONTRACT-ESTIMATE-'))
-    );
-
     return {
       _id: p._id,
       planNumber: p.planNumber || `PLAN-${p._id.toString().slice(-6)}`,
@@ -66,7 +60,8 @@ export default async function StowagePlansPage() {
       palletsTotal,
       overstowViolations: p.overstowViolations?.length || 0,
       temperatureConflicts: p.temperatureConflicts?.length || 0,
-      bookingCount: uniqueBookingIds.size,
+      bookingCount: p.realBookingCount ?? 0,
+      estimateCount: p.estimateCount ?? 0,
     };
   });
 
@@ -102,7 +97,10 @@ export default async function StowagePlansPage() {
                     <span className={styles.dot}>·</span>
                     <span className={styles.muted}>{p.voyageNumber}</span>
                     <span className={styles.dot}>·</span>
-                    <span className={styles.muted}>{p.bookingCount} booking{p.bookingCount !== 1 ? 's' : ''}</span>
+                    <span className={styles.muted}>
+                      {p.bookingCount} booking{p.bookingCount !== 1 ? 's' : ''}
+                      {p.estimateCount > 0 ? ` · ${p.estimateCount} estimate${p.estimateCount !== 1 ? 's' : ''}` : ''}
+                    </span>
                     <span className={styles.dot}>·</span>
                     <span className={styles.muted}>Updated {p.updatedAt}</span>
                   </div>
