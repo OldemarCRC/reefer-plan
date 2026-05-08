@@ -620,7 +620,7 @@ export async function getStowagePlans() {
             ],
           },
         },
-        { $group: { _id: '$voyageId', count: { $sum: 1 } } },
+        { $group: { _id: '$voyageId', count: { $sum: 1 }, total: { $sum: '$estimatedPallets' } } },
       ]),
     ]);
 
@@ -630,13 +630,17 @@ export async function getStowagePlans() {
     const estimateCountMap = new Map<string, number>(
       forecastAgg.map((r: any) => [r._id.toString(), r.count as number]),
     );
+    const estimateTotalMap = new Map<string, number>(
+      forecastAgg.map((r: any) => [r._id.toString(), r.total as number]),
+    );
 
     const enrichedPlans = (plans as any[]).map((p: any) => {
       const vid = p.voyageId?._id?.toString() ?? '';
       return {
         ...p,
-        realBookingCount: bookingCountMap.get(vid) ?? 0,
-        estimateCount:    estimateCountMap.get(vid) ?? 0,
+        realBookingCount:      bookingCountMap.get(vid) ?? 0,
+        estimateCount:         estimateCountMap.get(vid) ?? 0,
+        estimatedPalletsTotal: estimateTotalMap.get(vid) ?? 0,
       };
     });
 

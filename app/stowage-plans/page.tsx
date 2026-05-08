@@ -1,6 +1,7 @@
 import AppShell from '@/components/layout/AppShell';
 import { getStowagePlans } from '@/app/actions/stowage-plan';
 import AutoGenerateButton from './AutoGenerateButton';
+import CapacityBar from '@/components/ui/CapacityBar/CapacityBar';
 import styles from './page.module.css';
 import Link from 'next/link';
 
@@ -54,10 +55,14 @@ export default async function StowagePlansPage() {
       updatedAt: p.updatedAt
         ? new Date(p.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
         : 'N/A',
-      palletsAssigned: ((p.cargoPositions as any[]) || []).reduce(
-        (sum: number, cp: any) => sum + (cp.quantity || 0), 0
-      ),
+      palletsAssigned: ((p.cargoPositions as any[]) || [])
+        .filter((cp: any) => {
+          const bid = cp.bookingId?.toString() ?? '';
+          return !bid.startsWith('FORECAST-') && !bid.startsWith('CONTRACT-ESTIMATE-');
+        })
+        .reduce((sum: number, cp: any) => sum + (cp.quantity || 0), 0),
       palletsTotal,
+      estimatedPalletsTotal: p.estimatedPalletsTotal ?? 0,
       overstowViolations: p.overstowViolations?.length || 0,
       temperatureConflicts: p.temperatureConflicts?.length || 0,
       bookingCount: p.realBookingCount ?? 0,
@@ -81,9 +86,7 @@ export default async function StowagePlansPage() {
 
         <div className={styles.planList}>
           {displayPlans.map((p: any) => {
-            const pct = Math.round((p.palletsAssigned / p.palletsTotal) * 100);
             const hasIssues = p.overstowViolations > 0 || p.temperatureConflicts > 0;
-            const barColor = pct >= 90 ? 'var(--color-danger)' : pct >= 70 ? 'var(--color-warning)' : 'var(--color-cyan)';
 
             return (
               <div key={p._id} className={styles.planCard}>
@@ -106,18 +109,12 @@ export default async function StowagePlansPage() {
                   </div>
                 </div>
 
-                {/* Loading progress */}
-                <div className={styles.progress}>
-                  <div className={styles.progressHeader}>
-                    <span className={styles.progressLabel}>Cargo loaded</span>
-                    <span className={styles.progressValue}>
-                      {p.palletsAssigned.toLocaleString()} / {p.palletsTotal.toLocaleString()} pallets
-                    </span>
-                  </div>
-                  <div className={styles.progressTrack}>
-                    <div className={styles.progressFill} style={{ width: `${pct}%`, background: barColor }} />
-                  </div>
-                </div>
+                <CapacityBar
+                  bookedPallets={p.palletsAssigned}
+                  estimatedPallets={p.estimatedPalletsTotal}
+                  totalCapacity={p.palletsTotal}
+                  size="md"
+                />
 
                 {/* Validation status */}
                 <div className={styles.validation}>

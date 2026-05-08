@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { VoyageModel, VesselModel, StowagePlanModel, BookingModel, ServiceModel } from '@/lib/db/schemas';
+import { VoyageModel, VesselModel, StowagePlanModel, BookingModel, ServiceModel, SpaceForecastModel } from '@/lib/db/schemas';
 import type { Voyage, VoyagePortCall } from '@/types/models';
 import { auth } from '@/auth';
 
@@ -957,17 +957,41 @@ export async function getVoyages() {
       .lean();
 
     const ids = voyages.map((v: any) => v._id);
-    const bookingAgg = await BookingModel.aggregate([
-      { $match: { voyageId: { $in: ids }, status: { $in: ['CONFIRMED', 'PARTIAL', 'PENDING'] } } },
-      { $group: { _id: '$voyageId', confirmedPallets: { $sum: '$confirmedQuantity' }, bookingCount: { $sum: 1 } } },
+    const [bookingAgg, forecastAgg] = await Promise.all([
+      BookingModel.aggregate([
+        { $match: { voyageId: { $in: ids }, status: { $in: ['CONFIRMED', 'PARTIAL', 'PENDING'] } } },
+        { $group: { _id: '$voyageId', confirmedPallets: { $sum: '$confirmedQuantity' }, bookingCount: { $sum: 1 } } },
+      ]),
+      SpaceForecastModel.aggregate([
+        {
+          $match: {
+            voyageId: { $in: ids },
+            $or: [
+              {
+                source:           { $in: ['SHIPPER_PORTAL', 'PLANNER_ENTRY'] },
+                estimatedPallets: { $gt: 0 },
+                planImpact:       { $nin: ['SUPERSEDED', 'REPLACED_BY_BOOKING'] },
+              },
+              {
+                source:           'CONTRACT_DEFAULT',
+                estimatedPallets: { $gt: 0 },
+                planImpact:       'INCORPORATED',
+              },
+            ],
+          },
+        },
+        { $group: { _id: '$voyageId', total: { $sum: '$estimatedPallets' } } },
+      ]),
     ]);
-    const bookingMap = Object.fromEntries(bookingAgg.map((r: any) => [r._id.toString(), r]));
+    const bookingMap  = Object.fromEntries(bookingAgg.map((r: any) => [r._id.toString(), r]));
+    const forecastMap = Object.fromEntries(forecastAgg.map((r: any) => [r._id.toString(), r.total as number]));
 
     const enriched = voyages.map((v: any) => ({
       ...v,
-      palletsBooked:  bookingMap[v._id.toString()]?.confirmedPallets ?? 0,
-      palletsCapacity: (v.vesselId as any)?.capacity?.totalPallets ?? 0,
-      bookingsCount:  bookingMap[v._id.toString()]?.bookingCount ?? 0,
+      palletsBooked:         bookingMap[v._id.toString()]?.confirmedPallets ?? 0,
+      palletsCapacity:       (v.vesselId as any)?.capacity?.totalPallets ?? 0,
+      bookingsCount:         bookingMap[v._id.toString()]?.bookingCount ?? 0,
+      estimatedPalletsTotal: forecastMap[v._id.toString()] ?? 0,
     }));
 
     return {

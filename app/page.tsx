@@ -3,6 +3,7 @@ import { getVoyages } from '@/app/actions/voyage';
 import { getStowagePlans } from '@/app/actions/stowage-plan';
 import { getBookings } from '@/app/actions/booking';
 import { ClickablePlanRow } from '@/components/dashboard/ClickablePlanRow';
+import CapacityBar from '@/components/ui/CapacityBar/CapacityBar';
 import styles from './page.module.css';
 import type { CargoType } from '@/types/models';
 
@@ -33,26 +34,6 @@ function StatusBadge({ status }: { status: string }) {
     >
       {label}
     </span>
-  );
-}
-
-function UtilizationBar({ used, total }: { used: number; total: number }) {
-  const pct = total > 0 ? Math.round((used / total) * 100) : 0;
-  const barColor =
-    pct >= 90 ? 'var(--color-danger)' :
-    pct >= 70 ? 'var(--color-warning)' :
-    'var(--color-cyan)';
-
-  return (
-    <div className={styles.utilBar}>
-      <div className={styles.utilTrack}>
-        <div
-          className={styles.utilFill}
-          style={{ width: `${pct}%`, background: barColor }}
-        />
-      </div>
-      <span className={styles.utilLabel}>{pct}%</span>
-    </div>
   );
 }
 
@@ -95,6 +76,9 @@ export default async function DashboardPage() {
   const voyageCapacityMap = new Map<string, number>(
     (voyages as any[]).map((v: any) => [v._id.toString(), v.palletsCapacity ?? 0])
   );
+  const voyageEstimatedPalletsMap = new Map<string, number>(
+    (voyages as any[]).map((v: any) => [v._id.toString(), v.estimatedPalletsTotal ?? 0])
+  );
 
   const recentVoyages = voyages.slice(0, 5).map((v: any) => ({
     _id: v._id,
@@ -102,8 +86,9 @@ export default async function DashboardPage() {
     status: v.status || 'PLANNED',
     vesselName: v.vesselName,
     serviceCode: v.serviceId?.serviceCode || 'N/A',
-    palletsBooked:  v.palletsBooked ?? 0,
-    palletsCapacity: v.palletsCapacity ?? 0,
+    palletsBooked:         v.palletsBooked ?? 0,
+    palletsCapacity:       v.palletsCapacity ?? 0,
+    estimatedPalletsTotal: v.estimatedPalletsTotal ?? 0,
   }));
 
   const recentPlans = plans.slice(0, 5).map((p: any) => {
@@ -113,8 +98,9 @@ export default async function DashboardPage() {
       planNumber: p.planNumber || `PLAN-${p._id.toString().slice(-6)}`,
       voyageNumber: p.voyageId?.voyageNumber || 'N/A',
       status: p.status || 'DRAFT',
-      palletsAssigned: voyageConfirmedPalletsMap.get(planVoyageId) ?? 0,
-      palletsTotal:    voyageCapacityMap.get(planVoyageId) ?? 0,
+      palletsAssigned:       voyageConfirmedPalletsMap.get(planVoyageId) ?? 0,
+      palletsTotal:          voyageCapacityMap.get(planVoyageId) ?? 0,
+      estimatedPalletsTotal: voyageEstimatedPalletsMap.get(planVoyageId) ?? 0,
       overstowViolations: p.validation?.overstowViolations?.length || 0,
       temperatureConflicts: p.validation?.temperatureConflicts?.length || 0,
     };
@@ -185,7 +171,12 @@ export default async function DashboardPage() {
                       <td>{v.vesselName}</td>
                       <td className={styles.cellMuted}>{v.serviceCode}</td>
                       <td>
-                        <UtilizationBar used={v.palletsBooked} total={v.palletsCapacity} />
+                        <CapacityBar
+                          bookedPallets={v.palletsBooked}
+                          estimatedPallets={v.estimatedPalletsTotal}
+                          totalCapacity={v.palletsCapacity}
+                          size="sm"
+                        />
                       </td>
                       <td><StatusBadge status={v.status} /></td>
                     </tr>
@@ -218,7 +209,12 @@ export default async function DashboardPage() {
                       <td className={styles.cellMono}>{p.planNumber}</td>
                       <td className={styles.cellMuted}>{p.voyageNumber}</td>
                       <td>
-                        <UtilizationBar used={p.palletsAssigned} total={p.palletsTotal} />
+                        <CapacityBar
+                          bookedPallets={p.palletsAssigned}
+                          estimatedPallets={p.estimatedPalletsTotal}
+                          totalCapacity={p.palletsTotal}
+                          size="sm"
+                        />
                       </td>
                       <td>
                         <IssueIndicators
