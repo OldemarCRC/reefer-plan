@@ -89,10 +89,11 @@ async function _createForecastCore(
   }).sort({ submittedAt: -1 }).lean();
 
   let newPlanImpact: SpaceForecastPlanImpact;
-  if (existingForecast && (existingForecast as any).estimatedPallets === estimatedPallets) {
-    newPlanImpact = 'NO_CHANGE';
-  } else if (source === 'SHIPPER_PORTAL') {
-    newPlanImpact = 'PENDING_REVIEW';
+  if (source === 'SHIPPER_PORTAL') {
+    // NO_CHANGE only makes sense for SHIPPER_PORTAL: shipper resubmitted the same figure
+    newPlanImpact = existingForecast && (existingForecast as any).estimatedPallets === estimatedPallets
+      ? 'NO_CHANGE'
+      : 'PENDING_REVIEW';
   } else {
     // PLANNER_ENTRY and CONTRACT_DEFAULT are authoritative — mark incorporated immediately
     newPlanImpact = 'INCORPORATED';
