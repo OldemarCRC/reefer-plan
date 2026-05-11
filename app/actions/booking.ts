@@ -83,7 +83,7 @@ const CancelBookingSchema = z.object({
 
 const UpdateBookingQuantitySchema = z.object({
   bookingId: z.string().min(1),
-  requestedQuantity: z.number().int().min(1).max(10000),
+  requestedQuantity: z.number().int().min(1).max(10000).optional(),
   confirmedQuantity: z.number().int().min(0).optional(),
   notes: z.string().max(1000).optional(),
   status: z.enum(['PENDING', 'CONFIRMED', 'PARTIAL', 'STANDBY', 'REJECTED', 'CANCELLED']).optional(),
@@ -874,8 +874,9 @@ export async function updateBookingQuantity(data: unknown) {
       }
     }
 
-    const previousQuantity = booking.requestedQuantity;
-    const newQuantity = validated.requestedQuantity;
+    const previousRequestedQty = booking.requestedQuantity;
+    const previousConfirmedQty = booking.confirmedQuantity ?? 0;
+    const newRequestedQty = validated.requestedQuantity ?? booking.requestedQuantity;
     let requiresReapproval = false;
 
     if (isExporter) {
@@ -896,41 +897,43 @@ export async function updateBookingQuantity(data: unknown) {
         return { success: false, error: 'Forbidden: you can only cancel bookings' };
       }
 
-      booking.requestedQuantity = newQuantity;
-      if (validated.notes !== undefined) booking.notes = validated.notes;
-
       if (validated.status === 'CANCELLED') {
         booking.status = 'CANCELLED';
         booking.approvedBy = (session.user as any).name ?? (session.user as any).email ?? 'system';
-      } else if (newQuantity > previousQuantity) {
-        // Increase requires re-approval: reset to PENDING and clear all allocation
+      } else {
+        // Shipper edit: update requestedQuantity, always reset to PENDING for re-approval
+        booking.requestedQuantity = newRequestedQty;
+        if (validated.notes !== undefined) booking.notes = validated.notes;
         booking.status = 'PENDING';
-        booking.confirmedQuantity = 0;
-        booking.standbyQuantity = 0;
-        booking.rejectedQuantity = 0;
         requiresReapproval = true;
       }
-      // Decrease: keep current status unchanged
     } else {
       // Planner / Admin
-      booking.requestedQuantity = newQuantity;
-      if (validated.confirmedQuantity !== undefined) booking.confirmedQuantity = validated.confirmedQuantity;
       if (validated.notes !== undefined) booking.notes = validated.notes;
-      if (validated.status) {
-        booking.status = validated.status;
-        if (validated.status === 'CANCELLED') {
-          booking.approvedBy = (session.user as any).name ?? (session.user as any).email ?? 'system';
+
+      if (validated.confirmedQuantity !== undefined) {
+        // Agency edit path: set confirmedQuantity, force CONFIRMED, leave requestedQuantity untouched
+        booking.confirmedQuantity = validated.confirmedQuantity;
+        booking.status = 'CONFIRMED';
+      } else {
+        booking.requestedQuantity = newRequestedQty;
+        if (validated.status) {
+          booking.status = validated.status;
+          if (validated.status === 'CANCELLED') {
+            booking.approvedBy = (session.user as any).name ?? (session.user as any).email ?? 'system';
+          }
         }
       }
     }
 
+    const isAgencyEdit = !isExporter && validated.confirmedQuantity !== undefined;
     if (!(booking as any).changelog) (booking as any).changelog = [];
     (booking as any).changelog.push({
       changedAt: new Date(),
       changedBy: session.user.name ?? (session.user as any).email ?? 'system',
-      field: 'requestedQuantity',
-      fromValue: String(previousQuantity),
-      toValue: String(newQuantity),
+      field: isAgencyEdit ? 'confirmedQuantity' : 'requestedQuantity',
+      fromValue: isAgencyEdit ? String(previousConfirmedQty) : String(previousRequestedQty),
+      toValue: isAgencyEdit ? String(validated.confirmedQuantity) : String(newRequestedQty),
     });
 
     await booking.save();

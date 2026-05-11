@@ -1209,15 +1209,6 @@ function RejectModal({
 // Edit Modal (Admin/Planner)
 // ---------------------------------------------------------------------------
 
-const ALL_EDIT_STATUSES: Array<{ value: string; label: string }> = [
-  { value: 'PENDING',   label: 'Pending' },
-  { value: 'CONFIRMED', label: 'Confirmed' },
-  { value: 'PARTIAL',   label: 'Partial' },
-  { value: 'STANDBY',   label: 'Standby' },
-  { value: 'REJECTED',  label: 'Rejected' },
-  { value: 'CANCELLED', label: 'Cancelled' },
-];
-
 function EditModal({
   booking,
   onClose,
@@ -1227,21 +1218,19 @@ function EditModal({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [qty, setQty] = useState(booking.requestedQuantity);
+  const [confirmedQty, setConfirmedQty] = useState(booking.confirmedQuantity || booking.requestedQuantity);
   const [notes, setNotes] = useState('');
-  const [status, setStatus] = useState(booking.status);
   const [error, setError] = useState('');
 
   function handleSave() {
-    if (qty < 1) { setError('Quantity must be at least 1'); return; }
+    if (confirmedQty < 0) { setError('Quantity cannot be negative'); return; }
     setError('');
     startTransition(async () => {
       try {
         const result = await updateBookingQuantity({
           bookingId: booking._id,
-          requestedQuantity: qty,
+          confirmedQuantity: confirmedQty,
           notes: notes.trim() || undefined,
-          status: status !== booking.status ? status : undefined,
         });
         if (!result.success) {
           setError(result.error || 'Failed to update');
@@ -1268,27 +1257,15 @@ function EditModal({
 
         <div className={styles.modalBody}>
           <div className={styles.formRow}>
-            <label className={styles.formLabel}>Requested Quantity</label>
+            <label className={styles.formLabel}>Confirmed Quantity</label>
             <input
               type="number"
               className={styles.formInput}
-              min={1}
+              min={0}
               max={10000}
-              value={qty}
-              onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))}
+              value={confirmedQty}
+              onChange={(e) => setConfirmedQty(Math.max(0, parseInt(e.target.value) || 0))}
             />
-          </div>
-          <div className={styles.formRow}>
-            <label className={styles.formLabel}>Status</label>
-            <select
-              className={styles.formSelect}
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              {ALL_EDIT_STATUSES.map(s => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
           </div>
           <div className={styles.formRow}>
             <label className={styles.formLabel}>Notes (optional)</label>
