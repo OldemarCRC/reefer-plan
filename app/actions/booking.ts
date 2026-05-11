@@ -877,6 +877,8 @@ export async function updateBookingQuantity(data: unknown) {
     const previousRequestedQty = booking.requestedQuantity;
     const previousConfirmedQty = booking.confirmedQuantity ?? 0;
     const newRequestedQty = validated.requestedQuantity ?? booking.requestedQuantity;
+    const newQuantity = validated.confirmedQuantity ?? validated.requestedQuantity ?? 0;
+    const previousQuantity = previousRequestedQty;
     let requiresReapproval = false;
 
     if (isExporter) {
