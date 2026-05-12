@@ -125,10 +125,31 @@ function sectionScore(
   palletsUsed: number,
   capacity: number,
   preferredPair: Set<number>,
+  podSeq: number,
+  holdState: HoldState,
 ): number {
-  const balanceScore = capacity > 0 ? palletsUsed / capacity : 1;
-  const bonus = preferredPair.has(parseSection(sectionId).holdNumber) ? -0.2 : 0;
-  return balanceScore + bonus;
+  const fillRatio = capacity > 0 ? palletsUsed / capacity : 1;
+  const pairBonus = preferredPair.has(parseSection(sectionId).holdNumber) ? -0.2 : 0;
+
+  const { holdNumber } = parseSection(sectionId);
+  const podInThisHold = Object.values(holdState)
+    .filter(s => parseSection(s.sectionId).holdNumber === holdNumber)
+    .reduce((sum, s) =>
+      sum + s.entries.filter(e => e.podSeq === podSeq).reduce((q, e) => q + e.quantity, 0),
+    0);
+
+  const podTotal = Object.values(holdState)
+    .reduce((sum, s) =>
+      sum + s.entries.filter(e => e.podSeq === podSeq).reduce((q, e) => q + e.quantity, 0),
+    0);
+
+  const podImbalancePenalty = podTotal > 0 ? (podInThisHold / podTotal) * 0.4 : 0;
+
+  // Bonus for sections already partially filled — consolidate before opening new ones.
+  // Only applies if the section has cargo (palletsUsed > 0) and isn't nearly full.
+  const compactnessBonus = (palletsUsed > 0 && fillRatio < 0.85) ? -0.15 : 0;
+
+  return fillRatio + pairBonus + podImbalancePenalty + compactnessBonus;
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
@@ -178,12 +199,12 @@ export function assignCargo(
     };
   }
 
-  // 3. Preferred hold pair determined once at the start (full vessel capacity).
-  const preferredPair = getPreferredPair(holdState);
-
-  // 4. Main assignment loop.
+  // 3. Main assignment loop.
   for (const booking of workQueue) {
     let palletsRemaining = booking.pallets;
+
+    // Recalculate preferred pair per booking so it reflects live balance state.
+    const preferredPair = getPreferredPair(holdState);
 
     while (palletsRemaining > 0) {
       // Filter sections that pass all three gates:
@@ -256,9 +277,9 @@ export function assignCargo(
       const best = candidates.reduce(
         (bestSec, sec) => {
           const state    = holdState[sec.sectionId];
-          const score    = sectionScore(sec.sectionId, state.palletsUsed, state.capacity, preferredPair);
+          const score    = sectionScore(sec.sectionId, state.palletsUsed, state.capacity, preferredPair, booking.podSeq, holdState);
           const bestState = holdState[bestSec.sectionId];
-          const bestScore = sectionScore(bestSec.sectionId, bestState.palletsUsed, bestState.capacity, preferredPair);
+          const bestScore = sectionScore(bestSec.sectionId, bestState.palletsUsed, bestState.capacity, preferredPair, booking.podSeq, holdState);
           if (score !== bestScore) return score < bestScore ? sec : bestSec;
           const depth    = depthRank(sec.sectionId);
           const depthBest = depthRank(bestSec.sectionId);

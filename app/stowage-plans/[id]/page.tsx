@@ -557,13 +557,22 @@ export default function StowagePlanDetailPage() {
   // Total pallets already assigned to a compartment across all bookings
   const usedInCompartment = useMemo(() => {
     const map: Record<string, number> = {};
+    // Real bookings
     for (const b of bookings) {
       for (const a of b.assignments) {
         map[a.compartmentId] = (map[a.compartmentId] ?? 0) + a.quantity;
       }
     }
+    // Engine estimate positions (FORECAST-* / CONTRACT-ESTIMATE-*)
+    for (const pos of planCargoPositions) {
+      const bid = String(pos.bookingId ?? '');
+      if (!bid.startsWith('FORECAST-') && !bid.startsWith('CONTRACT-ESTIMATE-')) continue;
+      const sectionId = pos.coolingSectionId ?? pos.compartment?.id ?? '';
+      if (!sectionId) continue;
+      map[sectionId] = (map[sectionId] ?? 0) + (pos.quantity ?? 0);
+    }
     return map;
-  }, [bookings]);
+  }, [bookings, planCargoPositions]);
 
   const totalPallets = bookings.reduce((sum, b) => sum + b.totalQuantity, 0);
   const stowedPallets = bookings.reduce((sum, b) => sum + assignedQty(b), 0);
@@ -610,14 +619,32 @@ export default function StowagePlanDetailPage() {
   // Build the slot list for the currently selected section
   const selectedSectionSlots = useMemo((): SectionBookingSlot[] => {
     if (!selectedSectionId) return [];
-    return bookings.map(b => ({
+    const slots: SectionBookingSlot[] = bookings.map(b => ({
       bookingId: b.bookingId,
       bookingNumber: b.bookingNumber,
       cargoType: b.cargoType,
       quantity: b.assignments.find(a => a.compartmentId === selectedSectionId)?.quantity ?? 0,
       color: podColorMap[b.pod] ?? '#64748b',
     }));
-  }, [selectedSectionId, bookings, podColorMap]);
+
+    // Add estimate slots (FORECAST-* / CONTRACT-ESTIMATE-*)
+    const estimatePositions = planCargoPositions.filter((pos: any) => {
+      const bid = String(pos.bookingId ?? '');
+      const sid = pos.coolingSectionId ?? pos.compartment?.id ?? '';
+      return sid === selectedSectionId &&
+        (bid.startsWith('FORECAST-') || bid.startsWith('CONTRACT-ESTIMATE-'));
+    });
+    for (const pos of estimatePositions) {
+      slots.push({
+        bookingId: String(pos.bookingId),
+        bookingNumber: pos.shipperName ?? 'Estimate',
+        cargoType: pos.cargoType ?? '',
+        quantity: pos.quantity ?? 0,
+        color: podColorMap[pos.podPortCode ?? ''] ?? '#94a3b8',
+      });
+    }
+    return slots;
+  }, [selectedSectionId, bookings, planCargoPositions, podColorMap]);
 
   // Resolve temperature + zone colour for the selected section
   const selectedSectionInfo = useMemo(() => {
@@ -1091,10 +1118,29 @@ export default function StowagePlanDetailPage() {
           pos => (pos.coolingSectionId ?? pos.compartment?.id) === selectedSectionId
         );
         const consigneeNames = [...new Set(
-          sectionPositions
-            .map((pos: any) => bookings.find(b => b.bookingId === String(pos.bookingId))?.consignee)
-            .filter(Boolean)
+          sectionPositions.map((pos: any) => {
+            // 1. Consignee name saved directly on the position (real bookings, engine output)
+            if (pos.consigneeName) return pos.consigneeName as string;
+            // 2. Shipper name as fallback for estimate positions
+            if (pos.shipperName) return pos.shipperName as string;
+            // 3. Look up in confirmed bookings state
+            return bookings.find(b => b.bookingId === String(pos.bookingId ?? ''))?.consignee ?? '';
+          }).filter(Boolean)
         )] as string[];
+
+        // For estimate positions, build descriptive labels (shipper · qty · POL→POD)
+        const estimateLabels = sectionPositions
+          .filter((pos: any) => {
+            const bid = String(pos.bookingId ?? '');
+            return bid.startsWith('FORECAST-') || bid.startsWith('CONTRACT-ESTIMATE-');
+          })
+          .map((pos: any) => {
+            const qty = pos.quantity ?? 0;
+            const shipper = pos.shipperName ?? '';
+            const pol = pos.polPortCode ?? '';
+            const pod = pos.podPortCode ?? '';
+            return `${shipper || 'Estimate'} · ${qty} pal${pol ? ` · ${pol}→${pod}` : ''}`;
+          });
 
         const eligibleBookings = canEdit && !isLocked ? bookings.filter(b => {
           if (remainingQty(b) <= 0) return false;
@@ -1124,6 +1170,15 @@ export default function StowagePlanDetailPage() {
                 ? consigneeNames.map((name, i) => (
                     <span key={name} style={{ display: 'inline-block', background: 'var(--surface-base)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '0 0.4rem', marginRight: i < consigneeNames.length - 1 ? '0.3rem' : 0, fontSize: '0.75rem' }}>{name}</span>
                   ))
+                : estimateLabels.length > 0
+                ? (
+                  <>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--surface-muted)', border: '1px solid var(--border-color)', borderRadius: '3px', padding: '0 0.3rem', marginRight: '0.4rem' }}>Est.</span>
+                    {estimateLabels.map((label, i) => (
+                      <span key={i} style={{ display: 'inline-block', color: 'var(--text-muted)', fontSize: '0.75rem', marginRight: i < estimateLabels.length - 1 ? '0.5rem' : 0 }}>{label}</span>
+                    ))}
+                  </>
+                )
                 : <span style={{ color: 'var(--text-muted)' }}>No cargo assigned</span>
               }
             </div>
