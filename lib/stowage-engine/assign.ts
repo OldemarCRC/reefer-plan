@@ -129,6 +129,7 @@ function sectionScore(
   holdState: HoldState,
   incomingPolSeq: number,
   sectionMaxPolSeq: number,
+  remainingByPolSeq: Map<number, number>,
 ): number {
   const fillRatio = capacity > 0 ? palletsUsed / capacity : 1;
   const pairBonus = preferredPair.has(parseSection(sectionId).holdNumber) ? -0.2 : 0;
@@ -155,7 +156,12 @@ function sectionScore(
   const polCompatible = sectionMaxPolSeq === 0 || sectionMaxPolSeq <= incomingPolSeq;
   const compactnessBonus = (palletsUsed > 0 && fillRatio < 0.85 && polCompatible) ? -0.15 : 0;
 
-  return fillRatio + pairBonus + podImbalancePenalty + compactnessBonus;
+  const laterPolPending = [...remainingByPolSeq.entries()]
+    .filter(([pol]) => pol > incomingPolSeq)
+    .reduce((sum, [, qty]) => sum + qty, 0);
+  const headroomPenalty = (fillRatio > 0.70 && laterPolPending > 0) ? 0.35 : 0;
+
+  return fillRatio + pairBonus + podImbalancePenalty + compactnessBonus + headroomPenalty;
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
@@ -205,18 +211,106 @@ export function assignCargo(
     };
   }
 
-  // 3. Main assignment loop.
-  for (const booking of workQueue) {
-    let palletsRemaining = booking.pallets;
+  // 3. Build remainingByPolSeq for headroom penalty tracking.
+  const remainingByPolSeq = new Map<number, number>();
+  for (const b of workQueue) {
+    remainingByPolSeq.set(b.polSeq, (remainingByPolSeq.get(b.polSeq) ?? 0) + b.pallets);
+  }
 
-    // Recalculate preferred pair per booking so it reflects live balance state.
+  // 4. Two-pass assignment.
+  //    Pass 1: latest-POD first (podSeq DESC) — fills bottom of holds with
+  //            last-discharge cargo from all POL ports.
+  //    Pass 2: earliest-POD first (podSeq ASC) — places first-discharge cargo
+  //            on top. Conflict detection runs only here.
+  //    HoldState and remainingByPolSeq are shared across both passes.
+
+  const fullyPlaced     = new Set<string>();
+  const partialRemaining = new Map<string, number>(); // bookingId → pallets deferred
+
+  // ── Pass 1 ────────────────────────────────────────────────────────────────
+  const pass1Queue = [...workQueue].sort((a, b) => {
+    if (b.podSeq !== a.podSeq) return b.podSeq - a.podSeq; // latest POD first
+    if (a.polSeq !== b.polSeq) return a.polSeq - b.polSeq;
+    return b.pallets - a.pallets;
+  });
+
+  for (const booking of pass1Queue) {
+    let palletsRemaining = booking.pallets;
     const preferredPair = getPreferredPair(holdState);
 
     while (palletsRemaining > 0) {
-      // Filter sections that pass all three gates:
-      //   a) remaining capacity > 0
-      //   b) temperature compatible with zone
-      //   c) canPlace POL/POD constraint passes
+      const candidates = sections.filter(sec => {
+        const state = holdState[sec.sectionId];
+        if (!state || state.capacity - state.palletsUsed <= 0) return false;
+        const zone = zoneMap.get(sec.zoneId);
+        if (!zone || !isTemperatureCompatible(booking, zone)) return false;
+        if (!canPlace(booking, sec.sectionId, holdState)) return false;
+        return true;
+      });
+
+      if (candidates.length === 0) {
+        // Silently defer remaining pallets to pass 2 — no conflict recorded here.
+        partialRemaining.set(booking.bookingId, palletsRemaining);
+        break;
+      }
+
+      const best = candidates.reduce(
+        (bestSec, sec) => {
+          const state     = holdState[sec.sectionId];
+          const score     = sectionScore(sec.sectionId, state.palletsUsed, state.capacity, preferredPair, booking.podSeq, holdState, booking.polSeq, state.maxPolSeq, remainingByPolSeq);
+          const bestState = holdState[bestSec.sectionId];
+          const bestScore = sectionScore(bestSec.sectionId, bestState.palletsUsed, bestState.capacity, preferredPair, booking.podSeq, holdState, booking.polSeq, bestState.maxPolSeq, remainingByPolSeq);
+          if (score !== bestScore) return score < bestScore ? sec : bestSec;
+          const depth     = depthRank(sec.sectionId);
+          const depthBest = depthRank(bestSec.sectionId);
+          if (depth !== depthBest) return depth > depthBest ? sec : bestSec;
+          return parseSection(sec.sectionId).holdNumber > parseSection(bestSec.sectionId).holdNumber
+            ? sec : bestSec;
+        },
+        candidates[0],
+      );
+
+      const bestState  = holdState[best.sectionId];
+      const assignable = Math.min(palletsRemaining, bestState.capacity - bestState.palletsUsed);
+
+      bestState.entries.push({
+        bookingId:  booking.bookingId,
+        confidence: booking.confidence,
+        polSeq:     booking.polSeq,
+        podSeq:     booking.podSeq,
+        quantity:   assignable,
+      });
+      bestState.palletsUsed += assignable;
+      bestState.minPolSeq    = Math.min(bestState.minPolSeq, booking.polSeq);
+      bestState.maxPolSeq    = Math.max(bestState.maxPolSeq, booking.polSeq);
+      bestState.minPodSeq    = Math.min(bestState.minPodSeq, booking.podSeq);
+      bestState.maxPodSeq    = Math.max(bestState.maxPodSeq, booking.podSeq);
+
+      palletsRemaining -= assignable;
+      remainingByPolSeq.set(
+        booking.polSeq,
+        Math.max(0, (remainingByPolSeq.get(booking.polSeq) ?? 0) - assignable),
+      );
+    }
+
+    if (palletsRemaining === 0) fullyPlaced.add(booking.bookingId);
+  }
+
+  // ── Pass 2 ────────────────────────────────────────────────────────────────
+  const pass2Queue = workQueue
+    .filter(b => !fullyPlaced.has(b.bookingId))
+    .map(b => ({ ...b, pallets: partialRemaining.get(b.bookingId) ?? b.pallets }))
+    .sort((a, b) => {
+      if (a.podSeq !== b.podSeq) return a.podSeq - b.podSeq; // earliest POD first
+      if (a.polSeq !== b.polSeq) return a.polSeq - b.polSeq;
+      return b.pallets - a.pallets;
+    });
+
+  for (const booking of pass2Queue) {
+    let palletsRemaining = booking.pallets;
+    const preferredPair = getPreferredPair(holdState);
+
+    while (palletsRemaining > 0) {
       const candidates = sections.filter(sec => {
         const state = holdState[sec.sectionId];
         if (!state || state.capacity - state.palletsUsed <= 0) return false;
@@ -267,14 +361,14 @@ export function assignCargo(
 
         conflicts.push({
           type,
-          bookingIds: [booking.bookingId],
-          sectionsInvolved: compatibleTempSections.map(s => s.sectionId),
-          palletsAffected: palletsRemaining,
+          bookingIds:        [booking.bookingId],
+          sectionsInvolved:  compatibleTempSections.map(s => s.sectionId),
+          palletsAffected:   palletsRemaining,
           message,
           suggestedActions,
         });
         unassigned.push({ bookingId: booking.bookingId, reason: message });
-        break; // stop trying to place this booking
+        break;
       }
 
       // Score and rank candidates; pick the lowest score.
@@ -282,12 +376,12 @@ export function assignCargo(
       // On depth tie: prefer the higher hold number.
       const best = candidates.reduce(
         (bestSec, sec) => {
-          const state    = holdState[sec.sectionId];
-          const score    = sectionScore(sec.sectionId, state.palletsUsed, state.capacity, preferredPair, booking.podSeq, holdState, booking.polSeq, state.maxPolSeq);
+          const state     = holdState[sec.sectionId];
+          const score     = sectionScore(sec.sectionId, state.palletsUsed, state.capacity, preferredPair, booking.podSeq, holdState, booking.polSeq, state.maxPolSeq, remainingByPolSeq);
           const bestState = holdState[bestSec.sectionId];
-          const bestScore = sectionScore(bestSec.sectionId, bestState.palletsUsed, bestState.capacity, preferredPair, booking.podSeq, holdState, booking.polSeq, bestState.maxPolSeq);
+          const bestScore = sectionScore(bestSec.sectionId, bestState.palletsUsed, bestState.capacity, preferredPair, booking.podSeq, holdState, booking.polSeq, bestState.maxPolSeq, remainingByPolSeq);
           if (score !== bestScore) return score < bestScore ? sec : bestSec;
-          const depth    = depthRank(sec.sectionId);
+          const depth     = depthRank(sec.sectionId);
           const depthBest = depthRank(bestSec.sectionId);
           if (depth !== depthBest) return depth > depthBest ? sec : bestSec;
           return parseSection(sec.sectionId).holdNumber > parseSection(bestSec.sectionId).holdNumber
@@ -296,25 +390,29 @@ export function assignCargo(
         candidates[0],
       );
 
-      const bestState = holdState[best.sectionId];
+      const bestState  = holdState[best.sectionId];
       const assignable = Math.min(palletsRemaining, bestState.capacity - bestState.palletsUsed);
 
       // Record the entry in HoldState.
       const entry: SectionEntry = {
-        bookingId: booking.bookingId,
+        bookingId:  booking.bookingId,
         confidence: booking.confidence,
-        polSeq: booking.polSeq,
-        podSeq: booking.podSeq,
-        quantity: assignable,
+        polSeq:     booking.polSeq,
+        podSeq:     booking.podSeq,
+        quantity:   assignable,
       };
       bestState.entries.push(entry);
-      bestState.palletsUsed   += assignable;
-      bestState.minPolSeq      = Math.min(bestState.minPolSeq, booking.polSeq);
-      bestState.maxPolSeq      = Math.max(bestState.maxPolSeq, booking.polSeq);
-      bestState.minPodSeq      = Math.min(bestState.minPodSeq, booking.podSeq);
-      bestState.maxPodSeq      = Math.max(bestState.maxPodSeq, booking.podSeq);
+      bestState.palletsUsed += assignable;
+      bestState.minPolSeq    = Math.min(bestState.minPolSeq, booking.polSeq);
+      bestState.maxPolSeq    = Math.max(bestState.maxPolSeq, booking.polSeq);
+      bestState.minPodSeq    = Math.min(bestState.minPodSeq, booking.podSeq);
+      bestState.maxPodSeq    = Math.max(bestState.maxPodSeq, booking.podSeq);
 
       palletsRemaining -= assignable;
+      remainingByPolSeq.set(
+        booking.polSeq,
+        Math.max(0, (remainingByPolSeq.get(booking.polSeq) ?? 0) - assignable),
+      );
     }
   }
 
