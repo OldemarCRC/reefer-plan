@@ -127,6 +127,8 @@ function sectionScore(
   preferredPair: Set<number>,
   podSeq: number,
   holdState: HoldState,
+  incomingPolSeq: number,
+  sectionMaxPolSeq: number,
 ): number {
   const fillRatio = capacity > 0 ? palletsUsed / capacity : 1;
   const pairBonus = preferredPair.has(parseSection(sectionId).holdNumber) ? -0.2 : 0;
@@ -145,9 +147,13 @@ function sectionScore(
 
   const podImbalancePenalty = podTotal > 0 ? (podInThisHold / podTotal) * 0.4 : 0;
 
-  // Bonus for sections already partially filled — consolidate before opening new ones.
-  // Only applies if the section has cargo (palletsUsed > 0) and isn't nearly full.
-  const compactnessBonus = (palletsUsed > 0 && fillRatio < 0.85) ? -0.15 : 0;
+  // Compactness bonus: only reward partial sections when the existing cargo has the
+  // same or earlier polSeq as the incoming booking. If the section already holds
+  // later-loaded cargo (sectionMaxPolSeq > incomingPolSeq), canPlace() will block
+  // the attempt anyway — suppressing the bonus here prevents wasted scoring passes
+  // and lets empty sections (like 3A) win the comparison instead.
+  const polCompatible = sectionMaxPolSeq === 0 || sectionMaxPolSeq <= incomingPolSeq;
+  const compactnessBonus = (palletsUsed > 0 && fillRatio < 0.85 && polCompatible) ? -0.15 : 0;
 
   return fillRatio + pairBonus + podImbalancePenalty + compactnessBonus;
 }
@@ -277,9 +283,9 @@ export function assignCargo(
       const best = candidates.reduce(
         (bestSec, sec) => {
           const state    = holdState[sec.sectionId];
-          const score    = sectionScore(sec.sectionId, state.palletsUsed, state.capacity, preferredPair, booking.podSeq, holdState);
+          const score    = sectionScore(sec.sectionId, state.palletsUsed, state.capacity, preferredPair, booking.podSeq, holdState, booking.polSeq, state.maxPolSeq);
           const bestState = holdState[bestSec.sectionId];
-          const bestScore = sectionScore(bestSec.sectionId, bestState.palletsUsed, bestState.capacity, preferredPair, booking.podSeq, holdState);
+          const bestScore = sectionScore(bestSec.sectionId, bestState.palletsUsed, bestState.capacity, preferredPair, booking.podSeq, holdState, booking.polSeq, bestState.maxPolSeq);
           if (score !== bestScore) return score < bestScore ? sec : bestSec;
           const depth    = depthRank(sec.sectionId);
           const depthBest = depthRank(bestSec.sectionId);
