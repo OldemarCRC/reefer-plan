@@ -524,6 +524,7 @@ const CargoPositionSchema = new Schema({
   shipmentId: { type: Schema.Types.ObjectId, ref: 'Shipment' }, // optional — not all positions come from formal shipments
   bookingId: { type: String },          // booking reference (string for flexibility)
   bookingNumber: { type: String },      // denormalized booking number snapshot
+  shipperName:   { type: String },      // snapshot from booking/forecast at plan-generation time
   consigneeName: { type: String },      // snapshot from booking at plan-save time
   cargoUnitId: { type: String },
   cargoType: { type: String },          // e.g. 'BANANAS', 'TABLE_GRAPES' — used for temp-conflict checks
