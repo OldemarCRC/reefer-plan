@@ -52,15 +52,6 @@ const CELL = 18;   // SVG units per pallet cell
 const GAP  = 1;
 const STEP = CELL + GAP;
 
-const CARGO_ABBREV: Record<string, string> = {
-  BANANAS: 'BAN', ORGANIC_BANANAS: 'OBAN', PLANTAINS: 'PLAN',
-  FROZEN_FISH: 'FISH', TABLE_GRAPES: 'GRAP', CITRUS: 'CITR',
-  AVOCADOS: 'AVOC', BERRIES: 'BERR', KIWIS: 'KIWI', PINEAPPLES: 'PINE',
-  CHERRIES: 'CHER', BLUEBERRIES: 'BLUE', PLUMS: 'PLUM', PEACHES: 'PEAC',
-  APPLES: 'APPL', PEARS: 'PEAR', PAPAYA: 'PAPA', MANGOES: 'MANG',
-  OTHER_FROZEN: 'FRZN', OTHER_CHILLED: 'CHLD',
-};
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function CoolingSectionTopDown({
@@ -292,11 +283,10 @@ export default function CoolingSectionTopDown({
               const party = s.shipperName && s.consigneeName
                 ? `${s.shipperName} – ${s.consigneeName}`
                 : (s.shipperName || s.consigneeName || '');
-              const abbrev = CARGO_ABBREV[s.cargoType] ?? s.cargoType.replace(/_/g, '').slice(0, 4);
               return (
                 <span key={s.bookingId} className={styles.headerChip}>
                   <span className={styles.headerChipDot} style={{ background: s.color }} />
-                  {label}{party ? ` · ${party}` : ''}{abbrev ? ` · ${abbrev}` : ''} · {s.quantity}p
+                  {label}{party ? ` · ${party}` : ''} · {s.quantity}p
                 </span>
               );
             })}
