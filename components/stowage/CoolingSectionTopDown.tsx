@@ -289,11 +289,14 @@ export default function CoolingSectionTopDown({
             {slots.filter(s => s.quantity > 0).map(s => {
               const isEst = s.bookingId.startsWith('FORECAST-') || s.bookingId.startsWith('CONTRACT-ESTIMATE-');
               const label = isEst ? 'Est' : s.bookingNumber;
-              const party = s.shipperName || s.consigneeName || '';
+              const party = s.shipperName && s.consigneeName
+                ? `${s.shipperName} – ${s.consigneeName}`
+                : (s.shipperName || s.consigneeName || '');
+              const abbrev = CARGO_ABBREV[s.cargoType] ?? s.cargoType.replace(/_/g, '').slice(0, 4);
               return (
-                <span key={s.bookingId} className={styles.headerChip}
-                      style={{ borderColor: s.color, color: s.color }}>
-                  {label}{party ? ` · ${party}` : ''} · {s.quantity}p
+                <span key={s.bookingId} className={styles.headerChip}>
+                  <span className={styles.headerChipDot} style={{ background: s.color }} />
+                  {label}{party ? ` · ${party}` : ''}{abbrev ? ` · ${abbrev}` : ''} · {s.quantity}p
                 </span>
               );
             })}
@@ -450,43 +453,6 @@ export default function CoolingSectionTopDown({
         </svg>
       </div>
 
-      {/* Legend */}
-      <div className={styles.legend}>
-        {slots.filter(s => s.quantity > 0).map(s => {
-          const isEst = s.bookingId.startsWith('FORECAST-') || s.bookingId.startsWith('CONTRACT-ESTIMATE-');
-          const label = isEst ? 'Est' : s.bookingNumber;
-          const party = s.shipperName && s.consigneeName
-            ? `${s.shipperName} – ${s.consigneeName}`
-            : (s.shipperName || s.consigneeName || '');
-          const abbrev = CARGO_ABBREV[s.cargoType] ?? s.cargoType.replace(/_/g, '').slice(0, 4);
-          return (
-            <div
-              key={s.bookingId}
-              className={`${styles.legendItem} ${s.bookingId === selectedBookingId ? styles.legendActive : ''}`}
-            >
-              <span className={styles.legendDot} style={{ background: s.color }} />
-              <span className={styles.legendLabel}>
-                {label}
-                {party ? ` · ${party}` : ''}
-                {abbrev ? ` · ${abbrev}` : ''}
-                {` · ${s.quantity} plt`}
-              </span>
-            </div>
-          );
-        })}
-        {loaded < capacity && (
-          <div className={styles.legendItem}>
-            <span className={styles.legendDot} style={{ background: '#334155' }} />
-            <span className={styles.legendNum}>Empty</span>
-            <span className={styles.legendQty}>{capacity - loaded} plt</span>
-          </div>
-        )}
-        {loaded > capacity && (
-          <div className={`${styles.legendItem} ${styles.legendOver}`}>
-            <span className={styles.legendNum}>Over capacity by {loaded - capacity}</span>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

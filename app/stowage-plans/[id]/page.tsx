@@ -574,8 +574,8 @@ export default function StowagePlanDetailPage() {
         cargoType: pos.cargoType ?? '',
         quantity: pos.quantity ?? 0,
         color: podColorMap[pos.podPortCode ?? ''] ?? '#94a3b8',
-        shipperName: pos.shipperName ?? '',
-        consigneeName: pos.consigneeName ?? '',
+        shipperName: (pos.shipperName ?? pos.shipperCode ?? '') as string,
+        consigneeName: (pos.consigneeName ?? '') as string,
       });
     }
     return slots;
