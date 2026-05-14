@@ -46,9 +46,6 @@ export default function StowagePlanDetailPage() {
   const [assigningBooking, setAssigningBooking] = useState<CargoInPlan | null>(null);
   const [selectedCompartment, setSelectedCompartment] = useState<string>('');
   const [assignQuantity, setAssignQuantity] = useState<number>(0);
-  const [showConflictWarning, setShowConflictWarning] = useState(false);
-  const [confirmedConflicts, setConfirmedConflicts] = useState<Set<string>>(new Set());
-
   const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSaving, startSaveTransition] = useTransition();
   const [isCopying, startCopyTransition] = useTransition();
@@ -238,20 +235,6 @@ export default function StowagePlanDetailPage() {
   }, [planId]);
 
 
-  // Required temperature range per cargo type (shared by validation + auto-stow)
-  const cargoTempRequirements: Record<string, { min: number; max: number }> = {
-    BANANAS:       { min: 12, max: 14 },
-    TABLE_GRAPES:  { min: -1, max:  1 },
-    AVOCADOS:      { min:  5, max:  8 },
-    CITRUS:        { min:  4, max:  8 },
-    BERRIES:       { min:  0, max:  2 },
-    PINEAPPLES:    { min: 10, max: 13 },
-    KIWIS:         { min:  0, max:  2 },
-    FROZEN_FISH:   { min: -25, max: -18 },
-    OTHER_FROZEN:  { min: -25, max: -15 },
-    OTHER_CHILLED: { min:  0, max: 10 },
-  };
-
   // Build compartment → section lookup once
   const compartmentToSection = useMemo(() => {
     const map: Record<string, { sectionId: string; temp: number }> = {};
@@ -292,24 +275,6 @@ export default function StowagePlanDetailPage() {
       const section = compartmentToSection[compId];
       if (!section) continue;
 
-      // Temperature conflict check
-      for (const { booking, quantity } of entries) {
-        const req = cargoTempRequirements[booking.cargoType];
-        if (req && (section.temp < req.min || section.temp > req.max)) {
-          const userConfirmed = confirmedConflicts.has(`${booking.bookingId}-${compId}`);
-          temperatureConflicts.push({
-            compartmentId: compId,
-            coolingSectionId: section.sectionId,
-            description: `${booking.cargoType.replace('_', ' ')} (${quantity} pallets) requires ${req.min}–${req.max}°C but ${section.sectionId} is set to ${section.temp > 0 ? '+' : ''}${section.temp}°C`,
-            affectedBookings: [booking.bookingNumber],
-            userConfirmed,
-            cargoType: booking.cargoType,
-            bookingId: booking.bookingId,
-            quantity,
-          });
-        }
-      }
-
       // Overstow: more than one booking per compartment
       if (entries.length > 1) {
         overstowViolations.push({
@@ -338,12 +303,11 @@ export default function StowagePlanDetailPage() {
       capacityViolations,
       weightDistributionWarnings: ['Port list of 0.8° detected - consider redistributing cargo'],
     };
-  }, [bookings, compartmentToSection, confirmedConflicts]);
+  }, [bookings, compartmentToSection]);
 
   // Auto-expand validation sections that have violations
   useEffect(() => {
     const expanded: Record<string, boolean> = {};
-    if (validation.temperatureConflicts.length > 0) expanded.temperature = true;
     if (validation.overstowViolations.length > 0) expanded.overstow = true;
     if (validation.capacityViolations.length > 0) expanded.capacity = true;
     if (validation.weightDistributionWarnings.length > 0) expanded.weight = true;
@@ -502,39 +466,6 @@ export default function StowagePlanDetailPage() {
     [validation.temperatureConflicts]
   );
 
-  // For each conflict, find compartments in zones with compatible temperature
-  const conflictSuggestions = useMemo(() => {
-    return validation.temperatureConflicts.map(conflict => {
-      const req = cargoTempRequirements[conflict.cargoType];
-      if (!req) return { ...conflict, suggestions: [] };
-
-      // Compute how many pallets are already in each compartment
-      const loadedByComp: Record<string, number> = {};
-      for (const b of bookings) {
-        for (const a of b.assignments) {
-          loadedByComp[a.compartmentId] = (loadedByComp[a.compartmentId] ?? 0) + a.quantity;
-        }
-      }
-
-      const suggestions: { compartmentId: string; sectionId: string; temp: number; free: number }[] = [];
-      for (const zone of tempZoneConfig) {
-        if (zone.temp < req.min || zone.temp > req.max) continue;
-        for (const compId of zone.compartments) {
-          if (compId === conflict.compartmentId) continue;
-          const capacity = compartmentCapacities[compId] ?? 0;
-          const loaded = loadedByComp[compId] ?? 0;
-          const free = capacity - loaded;
-          if (free > 0) {
-            suggestions.push({ compartmentId: compId, sectionId: zone.sectionId, temp: zone.temp, free });
-          }
-        }
-      }
-      // Sort by most free space first, cap at 4
-      suggestions.sort((a, b) => b.free - a.free);
-      return { ...conflict, suggestions: suggestions.slice(0, 4) };
-    });
-  }, [validation.temperatureConflicts, bookings, tempZoneConfig]);
-
   const stability = {
     displacement: 8450,
     estimatedGM: 2.8,
@@ -677,19 +608,6 @@ export default function StowagePlanDetailPage() {
   const handleConfirmAssign = () => {
     if (!assigningBooking || !selectedCompartment || assignQuantity <= 0) return;
 
-    const section = compartmentToSection[selectedCompartment];
-    const req = cargoTempRequirements[assigningBooking.cargoType];
-    const hasConflict = req && section && (section.temp < req.min || section.temp > req.max);
-
-    if (hasConflict && !showConflictWarning) {
-      setShowConflictWarning(true);
-      return;
-    }
-
-    if (hasConflict) {
-      setConfirmedConflicts(prev => new Set([...prev, `${assigningBooking.bookingId}-${selectedCompartment}`]));
-    }
-
     setBookings(prev => prev.map(b => {
       if (b.bookingId !== assigningBooking.bookingId) return b;
       const existing = b.assignments.find(a => a.compartmentId === selectedCompartment);
@@ -703,14 +621,12 @@ export default function StowagePlanDetailPage() {
     setAssigningBooking(null);
     setSelectedCompartment('');
     setAssignQuantity(0);
-    setShowConflictWarning(false);
   };
 
   const handleCancelAssign = () => {
     setAssigningBooking(null);
     setSelectedCompartment('');
     setAssignQuantity(0);
-    setShowConflictWarning(false);
   };
 
   const handleRemoveAssignment = (bookingId: string, compartmentId: string) => {
@@ -730,12 +646,7 @@ export default function StowagePlanDetailPage() {
         const rem = remainingQty(booking);
         if (rem <= 0) continue;
 
-        const req = cargoTempRequirements[booking.cargoType];
-        if (!req) continue;
-
         for (const zone of tempZoneConfig) {
-          if (zone.temp < req.min || zone.temp > req.max) continue;
-
           const freeCompartment = zone.compartments.find(c => !usedCompartments.has(c));
           if (!freeCompartment) continue;
 
@@ -1144,10 +1055,6 @@ export default function StowagePlanDetailPage() {
 
         const eligibleBookings = canEdit && !isLocked ? bookings.filter(b => {
           if (remainingQty(b) <= 0) return false;
-          if (zoneTemp != null) {
-            const req = cargoTempRequirements[b.cargoType];
-            if (req && (zoneTemp < req.min || zoneTemp > req.max)) return false;
-          }
           return true;
         }) : [];
 
@@ -1338,57 +1245,13 @@ export default function StowagePlanDetailPage() {
           </button>
           {expandedValidation.temperature && (
             <div className={styles.validationSectionContent}>
-              {conflictSuggestions.length === 0 ? (
-                <div className={styles.successBox}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="10" stroke="#22c55e" strokeWidth="2"/>
-                    <path d="M8 12l3 3 5-6" stroke="#22c55e" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                  <span>No temperature conflicts</span>
-                </div>
-              ) : (
-                conflictSuggestions.map((conflict, idx) => (
-                  <div key={idx} className={conflict.userConfirmed ? styles.conflictCardWarning : styles.conflictCard}>
-                    <div className={styles.conflictHeader}>
-                      {conflict.userConfirmed ? (
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                          <path d="M10 2l8 16H2l8-16z" stroke="#eab308" strokeWidth="1.5"/>
-                          <path d="M10 8v4m0 3h.01" stroke="#eab308" strokeWidth="2"/>
-                        </svg>
-                      ) : (
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                          <circle cx="10" cy="10" r="8" stroke="#ef4444" strokeWidth="2"/>
-                          <path d="M10 6v4m0 4h.01" stroke="#ef4444" strokeWidth="2"/>
-                        </svg>
-                      )}
-                      <span>{conflict.compartmentId}</span>
-                      {conflict.userConfirmed && <span className={styles.confirmedBadge}>user accepted</span>}
-                    </div>
-                    <p>{conflict.description}</p>
-                    <div className={styles.affectedShipments}>
-                      Affected: {conflict.affectedBookings.join(', ')}
-                    </div>
-                    {conflict.suggestions.length > 0 && (
-                      <div className={styles.conflictSuggestions}>
-                        <span className={styles.conflictSuggestLabel}>Move to:</span>
-                        {conflict.suggestions.map(s => (
-                          <span key={s.compartmentId} className={styles.conflictSuggestChip} title={`${s.free} pallets free`}>
-                            {s.compartmentId}
-                            <span className={styles.conflictSuggestMeta}>
-                              {s.sectionId} · {s.temp > 0 ? '+' : ''}{s.temp}°C · {s.free}↑
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {conflict.suggestions.length === 0 && !conflict.userConfirmed && (
-                      <div className={styles.conflictNoAlt}>
-                        No compatible compartments with free capacity — reassign cargo or adjust zone temperature.
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
+              <div className={styles.successBox}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="#22c55e" strokeWidth="2"/>
+                  <path d="M8 12l3 3 5-6" stroke="#22c55e" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+                <span>No temperature conflicts</span>
+              </div>
             </div>
           )}
         </div>
@@ -1663,7 +1526,6 @@ export default function StowagePlanDetailPage() {
                           checked={selectedCompartment === compId}
                           onChange={() => {
                             setSelectedCompartment(compId);
-                            setShowConflictWarning(false);
                             // Auto-cap qty to compartment free capacity
                             if (assigningBooking && free > 0) {
                               setAssignQuantity(Math.min(remainingQty(assigningBooking), free));
@@ -1698,31 +1560,10 @@ export default function StowagePlanDetailPage() {
                 value={assignQuantity}
                 min={1}
                 max={remainingQty(assigningBooking)}
-                onChange={e => { setAssignQuantity(parseInt(e.target.value) || 0); setShowConflictWarning(false); }}
+                onChange={e => { setAssignQuantity(parseInt(e.target.value) || 0); }}
               />
               <span className={styles.quantityMax}>/ {remainingQty(assigningBooking)} remaining</span>
             </div>
-
-            {showConflictWarning && selectedCompartment && (() => {
-              const section = compartmentToSection[selectedCompartment];
-              const req = cargoTempRequirements[assigningBooking.cargoType];
-              return (
-                <div className={styles.conflictWarning}>
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                    <path d="M10 2l8 16H2l8-16z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                    <path d="M10 8v4m0 3h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                  <div>
-                    <strong>Temperature Conflict</strong>
-                    <p>
-                      {assigningBooking.cargoType.replace('_', ' ')} requires {req?.min}–{req?.max}°C<br />
-                      {selectedCompartment} (section {section?.sectionId}) is set to {section?.temp > 0 ? '+' : ''}{section?.temp}°C
-                    </p>
-                    <p>Assigning here may damage the product.</p>
-                  </div>
-                </div>
-              );
-            })()}
 
             {selectedCompartment && assignQuantity > 0 && (() => {
               const cap = compartmentCapacities[selectedCompartment];
@@ -1752,11 +1593,11 @@ export default function StowagePlanDetailPage() {
                 Cancel
               </button>
               <button
-                className={showConflictWarning ? styles.btnWarning : styles.btnPrimary}
+                className={styles.btnPrimary}
                 disabled={!selectedCompartment || assignQuantity <= 0}
                 onClick={handleConfirmAssign}
               >
-                {showConflictWarning ? 'Assign Anyway' : 'Assign'}
+                Assign
               </button>
             </div>
           </div>
