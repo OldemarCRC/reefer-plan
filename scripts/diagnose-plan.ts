@@ -86,20 +86,37 @@ function mapEngineOutputToDocument(
 ) {
   const bookingMap = new Map(bookingMeta.map((b: any) => [b._id.toString(), b]));
 
+  const cpLookup = new Map<string, any>();
+  for (const cp of (engineOutput as any).cargoPositions ?? []) {
+    const key = `${cp.bookingId ?? ''}::${cp.sectionId}`;
+    cpLookup.set(key, cp);
+  }
+
   const cargoPositions = engineOutput.assignments.map(a => {
     const bk = bookingMap.get(a.bookingId);
     const holdNumber = parseInt(String(a.sectionId).charAt(0), 10) || 1;
     const level = String(a.sectionId).slice(1);
     const polPortCode = (bk as any)?.pol?.portCode ?? (bk as any)?.polPortCode ?? undefined;
     const podPortCode = (bk as any)?.pod?.portCode ?? (bk as any)?.podPortCode ?? undefined;
+    const cpKey = `${a.bookingId}::${a.sectionId}`;
+    const cpSnap = cpLookup.get(cpKey);
+    const confidence: string = (bk as any)?.confidence
+      ?? (a.bookingId?.startsWith('FORECAST-') ? 'ESTIMATED'
+        : a.bookingId?.startsWith('CONTRACT-ESTIMATE-') ? 'CONTRACT_ESTIMATE'
+        : 'CONFIRMED');
     return {
-      bookingId:     a.bookingId,
-      cargoType:     bk?.cargoType ?? undefined,
-      consigneeName: (bk as any)?.consignee?.name ?? undefined,
+      bookingId:        a.bookingId,
+      cargoType:        bk?.cargoType ?? cpSnap?.cargoType ?? undefined,
+      shipperName:      (bk as any)?.shipperName ?? cpSnap?.shipperName ?? undefined,
+      consigneeName:    (bk as any)?.consignee?.name ?? (bk as any)?.consigneeName ?? cpSnap?.consigneeName ?? undefined,
       polPortCode,
       podPortCode,
-      quantity:      a.palletsAssigned,
-      compartment:   { id: a.sectionId, holdNumber, level },
+      quantity:         a.palletsAssigned,
+      snapshotQuantity: cpSnap?.snapshotQuantity ?? a.palletsAssigned,
+      confidence,
+      polSeq:           (bk as any)?.polSeq ?? cpSnap?.polSeq ?? 0,
+      podSeq:           (bk as any)?.podSeq ?? cpSnap?.podSeq ?? 0,
+      compartment:      { id: a.sectionId, holdNumber, level },
     };
   });
 
@@ -124,18 +141,50 @@ async function diagnose() {
   await connectDB();
   const db = mongoose.connection.db!;
 
-  // ── 1. Find most recent Baltic Klipper plan ───────────────────────────────
-  const plan = await db.collection('stowageplans').findOne(
-    { vesselName: /baltic klipper/i },
+  // ── 1. Find most recent plan (any vessel), or fall back to first bookable voyage ──
+  let plan = await db.collection('stowageplans').findOne(
+    {},
     { sort: { createdAt: -1 } },
   );
-  if (!plan) { console.log('Plan not found'); process.exit(1); }
 
-  console.log('\n=== RE-RUNNING ENGINE for PLAN:', plan.planNumber, '===');
+  let voyage: any;
+  let planId: any;
 
-  // ── 2. Load voyage ────────────────────────────────────────────────────────
-  const voyage = await db.collection('voyages').findOne({ _id: plan.voyageId });
-  if (!voyage) { console.log('Voyage not found'); process.exit(1); }
+  if (plan) {
+    console.log('\n=== RE-RUNNING ENGINE for PLAN:', plan.planNumber, '===');
+    voyage = await db.collection('voyages').findOne({ _id: plan.voyageId });
+    if (!voyage) { console.log('Voyage not found'); process.exit(1); }
+    planId = plan._id;
+  } else {
+    // No plans exist — find a voyage that has bookings and create a skeleton plan
+    console.log('\n=== No plans found — searching for a voyage with bookings ===');
+    const allVoyages = await db.collection('voyages').find({}).toArray();
+    for (const v of allVoyages) {
+      const bkCount = await db.collection('bookings').countDocuments({ voyageId: v._id });
+      if (bkCount > 0) { voyage = v; break; }
+    }
+    if (!voyage) { console.log('No voyage with bookings found'); process.exit(1); }
+
+    const skeletonVessel = await db.collection('vessels').findOne({ _id: voyage.vesselId });
+    const now = new Date();
+    const insertResult = await db.collection('stowageplans').insertOne({
+      voyageId:    voyage._id,
+      vesselName:  skeletonVessel?.name ?? 'Unknown',
+      planNumber:  `DIAG-${Date.now()}`,
+      status:      'DRAFT',
+      generationMethod: 'AUTO',
+      cargoPositions:   [],
+      coolingSectionStatus: [],
+      conflicts:        [],
+      createdAt:   now,
+      updatedAt:   now,
+    });
+    planId = insertResult.insertedId;
+    plan = { _id: planId, planNumber: `DIAG-${Date.now()}`, voyageId: voyage._id };
+    console.log('Created skeleton plan:', planId);
+  }
+
+  console.log('\n=== VOYAGE:', voyage.voyageNumber, '===');
   console.log('Voyage:', voyage.voyageNumber, '· portCalls:',
     (voyage.portCalls ?? []).map((pc: any) => `${pc.portCode}(seq=${pc.sequence})`).join(', '));
 
@@ -324,16 +373,24 @@ async function diagnose() {
   const allBookingMeta = [
     ...bookings,
     ...forecastBookings.map(fe => ({
-      _id: { toString: () => fe.bookingId },
+      _id:         { toString: () => fe.bookingId },
       cargoType:   fe.cargoType,
       polPortCode: fe.polPortCode,
       podPortCode: fe.podPortCode,
+      shipperName: (fe as any).shipperName ?? undefined,
+      confidence:  fe.confidence,
+      polSeq:      fe.polSeq,
+      podSeq:      fe.podSeq,
     })),
     ...contractDefaultEstimates.map(ce => ({
-      _id: { toString: () => ce.bookingId },
+      _id:         { toString: () => ce.bookingId },
       cargoType:   ce.cargoType,
       polPortCode: ce.polPortCode,
       podPortCode: ce.podPortCode,
+      shipperName: (ce as any).shipperName ?? undefined,
+      confidence:  ce.confidence,
+      polSeq:      ce.polSeq,
+      podSeq:      ce.podSeq,
     })),
   ];
 
@@ -344,7 +401,7 @@ async function diagnose() {
 
   // ── 11. Save to DB ────────────────────────────────────────────────────────
   await db.collection('stowageplans').updateOne(
-    { _id: plan._id },
+    { _id: planId },
     {
       $set: {
         cargoPositions,

@@ -17,7 +17,8 @@
       "Bash(findstr /i MONGODB)",
       "Bash(Remove-Item *)",
       "Bash(dir D:\\\\REPOSITORIOS\\\\NextJS\\\\reefer-plan\\\\scripts *)",
-      "Bash(powershell *)"
+      "Bash(powershell *)",
+      "Bash(node *)"
     ]
   }
 }

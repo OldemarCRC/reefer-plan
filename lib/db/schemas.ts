@@ -531,7 +531,11 @@ const CargoPositionSchema = new Schema({
   polPortCode: { type: String },         // port of loading code — snapshot for SVG POL display
   podPortCode: { type: String },         // port of discharge code — drives POD color on SVG
   quantity: { type: Number, default: 0 }, // pallets in this position
+  snapshotQuantity: { type: Number },      // pallets assigned in this position at plan-generation time
   snapshotTotalQuantity: { type: Number }, // booking's total quantity at plan-save time
+  confidence: { type: String },            // 'CONFIRMED' | 'ESTIMATED' | 'CONTRACT_ESTIMATE'
+  polSeq: { type: Number },                // voyage port-call sequence for port of loading
+  podSeq: { type: Number },                // voyage port-call sequence for port of discharge
   compartment: {
     id: { type: String, required: true },
     holdNumber: { type: Number, required: true },
