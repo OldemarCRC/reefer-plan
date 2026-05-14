@@ -556,6 +556,8 @@ export default function StowagePlanDetailPage() {
       cargoType: b.cargoType,
       quantity: b.assignments.find(a => a.compartmentId === selectedSectionId)?.quantity ?? 0,
       color: podColorMap[b.pod] ?? '#64748b',
+      shipperName: b.shipperName,
+      consigneeName: b.consignee,
     }));
 
     // Add estimate slots (FORECAST-* / CONTRACT-ESTIMATE-*)
@@ -572,6 +574,8 @@ export default function StowagePlanDetailPage() {
         cargoType: pos.cargoType ?? '',
         quantity: pos.quantity ?? 0,
         color: podColorMap[pos.podPortCode ?? ''] ?? '#94a3b8',
+        shipperName: pos.shipperName ?? '',
+        consigneeName: pos.consigneeName ?? '',
       });
     }
     return slots;

@@ -28,6 +28,8 @@ export interface SectionBookingSlot {
   quantity: number;
   /** Hex colour for this booking/cargo type */
   color: string;
+  shipperName?: string;
+  consigneeName?: string;
 }
 
 interface Props {
@@ -49,6 +51,15 @@ interface Props {
 const CELL = 18;   // SVG units per pallet cell
 const GAP  = 1;
 const STEP = CELL + GAP;
+
+const CARGO_ABBREV: Record<string, string> = {
+  BANANAS: 'BAN', ORGANIC_BANANAS: 'OBAN', PLANTAINS: 'PLAN',
+  FROZEN_FISH: 'FISH', TABLE_GRAPES: 'GRAP', CITRUS: 'CITR',
+  AVOCADOS: 'AVOC', BERRIES: 'BERR', KIWIS: 'KIWI', PINEAPPLES: 'PINE',
+  CHERRIES: 'CHER', BLUEBERRIES: 'BLUE', PLUMS: 'PLUM', PEACHES: 'PEAC',
+  APPLES: 'APPL', PEARS: 'PEAR', PAPAYA: 'PAPA', MANGOES: 'MANG',
+  OTHER_FROZEN: 'FRZN', OTHER_CHILLED: 'CHLD',
+};
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -274,6 +285,19 @@ export default function CoolingSectionTopDown({
           <div className={styles.fillBar}>
             <div className={styles.fillBarFill} style={{ width: `${fillPct}%`, background: zoneColor }} />
           </div>
+          <div className={styles.headerChips}>
+            {slots.filter(s => s.quantity > 0).map(s => {
+              const isEst = s.bookingId.startsWith('FORECAST-') || s.bookingId.startsWith('CONTRACT-ESTIMATE-');
+              const label = isEst ? 'Est' : s.bookingNumber;
+              const party = s.shipperName || s.consigneeName || '';
+              return (
+                <span key={s.bookingId} className={styles.headerChip}
+                      style={{ borderColor: s.color, color: s.color }}>
+                  {label}{party ? ` · ${party}` : ''} · {s.quantity}p
+                </span>
+              );
+            })}
+          </div>
         </div>
         <div className={styles.headerRight}>
           <span className={styles.viewLabel}>Top-down · {cols}×{rows}</span>
@@ -428,17 +452,28 @@ export default function CoolingSectionTopDown({
 
       {/* Legend */}
       <div className={styles.legend}>
-        {slots.filter(s => s.quantity > 0).map(s => (
-          <div
-            key={s.bookingId}
-            className={`${styles.legendItem} ${s.bookingId === selectedBookingId ? styles.legendActive : ''}`}
-          >
-            <span className={styles.legendDot} style={{ background: s.color }} />
-            <span className={styles.legendNum}>{s.bookingNumber}</span>
-            <span className={styles.legendType}>{s.cargoType.replace(/_/g, ' ')}</span>
-            <span className={styles.legendQty}>{s.quantity} plt</span>
-          </div>
-        ))}
+        {slots.filter(s => s.quantity > 0).map(s => {
+          const isEst = s.bookingId.startsWith('FORECAST-') || s.bookingId.startsWith('CONTRACT-ESTIMATE-');
+          const label = isEst ? 'Est' : s.bookingNumber;
+          const party = s.shipperName && s.consigneeName
+            ? `${s.shipperName} – ${s.consigneeName}`
+            : (s.shipperName || s.consigneeName || '');
+          const abbrev = CARGO_ABBREV[s.cargoType] ?? s.cargoType.replace(/_/g, '').slice(0, 4);
+          return (
+            <div
+              key={s.bookingId}
+              className={`${styles.legendItem} ${s.bookingId === selectedBookingId ? styles.legendActive : ''}`}
+            >
+              <span className={styles.legendDot} style={{ background: s.color }} />
+              <span className={styles.legendLabel}>
+                {label}
+                {party ? ` · ${party}` : ''}
+                {abbrev ? ` · ${abbrev}` : ''}
+                {` · ${s.quantity} plt`}
+              </span>
+            </div>
+          );
+        })}
         {loaded < capacity && (
           <div className={styles.legendItem}>
             <span className={styles.legendDot} style={{ background: '#334155' }} />

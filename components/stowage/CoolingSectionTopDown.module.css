@@ -80,6 +80,23 @@
   opacity: 0.8;
 }
 
+.headerChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.headerChip {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  border: 1px solid;
+  background: transparent;
+  white-space: nowrap;
+  opacity: 0.9;
+}
+
 .viewLabel {
   font-size: 0.72rem;
   color: #475569;
@@ -205,6 +222,11 @@
 .legendNum {
   font-weight: 600;
   color: #cbd5e1;
+}
+
+.legendLabel {
+  color: #cbd5e1;
+  font-size: 0.78rem;
 }
 
 .legendType {
