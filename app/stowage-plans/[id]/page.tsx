@@ -16,6 +16,7 @@ import CoolingSectionTopDown, { type SectionBookingSlot } from '@/components/sto
 import type { VoyageTempAssignment, VesselLayout } from '@/lib/vessel-profile-data';
 import { LEVEL_DISPLAY_ORDER } from '@/lib/vessel-profile-data';
 import styles from './page.module.css';
+import { getPodColor } from '@/lib/constants/pod-colors';
 
 interface CargoAssignment {
   compartmentId: string;
@@ -320,17 +321,14 @@ export default function StowagePlanDetailPage() {
     return `hsl(${hue}, 70%, 50%)`;
   };
 
-  // POD color palette — one distinct color per unique port of destination
-  const POD_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
-
   const podColorMap = useMemo(() => {
-    // Read podPortCode directly from raw cargoPositions — populated by the engine for all
-    // positions including contract-estimate entries. No booking-status filter needed.
     const pods = [...new Set(
-      planCargoPositions.map((pos: any) => (pos.podPortCode as string | undefined) ?? '').filter(Boolean)
+      planCargoPositions
+        .map((pos: any) => (pos.podPortCode as string | undefined) ?? '')
+        .filter(Boolean)
     )];
     const map: Record<string, string> = {};
-    pods.forEach((pod, i) => { map[pod] = POD_COLORS[i % POD_COLORS.length]; });
+    pods.forEach(pod => { map[pod] = getPodColor(pod); });
     return map;
   }, [planCargoPositions]); // eslint-disable-line react-hooks/exhaustive-deps
 
