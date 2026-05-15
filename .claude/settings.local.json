@@ -18,7 +18,19 @@
       "Bash(Remove-Item *)",
       "Bash(dir D:\\\\REPOSITORIOS\\\\NextJS\\\\reefer-plan\\\\scripts *)",
       "Bash(powershell *)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(pip --version)",
+      "Bash(pip3 --version)",
+      "Bash(where python *)",
+      "Bash(pip show *)",
+      "Bash(dir *)",
+      "Bash(python -m venv venv)",
+      "Bash(venv/Scripts/pip install *)",
+      "Bash(venv/Scripts/python.exe -c \"from ortools.sat.python import cp_model; print\\('OR-Tools OK'\\)\")",
+      "Bash(venv/Scripts/python.exe -c \"import pymongo; print\\('pymongo OK'\\)\")",
+      "Bash(venv/Scripts/python.exe -c \"import pandas; print\\('pandas OK'\\)\")",
+      "Bash(venv/Scripts/python.exe solver.py)",
+      "Bash(venv/Scripts/python.exe solver.py 69e631cd593e9d58097259b9)"
     ]
   }
 }
