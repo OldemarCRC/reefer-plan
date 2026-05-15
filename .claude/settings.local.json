@@ -30,7 +30,10 @@
       "Bash(venv/Scripts/python.exe -c \"import pymongo; print\\('pymongo OK'\\)\")",
       "Bash(venv/Scripts/python.exe -c \"import pandas; print\\('pandas OK'\\)\")",
       "Bash(venv/Scripts/python.exe solver.py)",
-      "Bash(venv/Scripts/python.exe solver.py 69e631cd593e9d58097259b9)"
+      "Bash(venv/Scripts/python.exe solver.py 69e631cd593e9d58097259b9)",
+      "Bash(venv/Scripts/python.exe _inspect.py)",
+      "Bash(venv/Scripts/python.exe _overstow.py)",
+      "Bash(stowage-optimizer\\\\venv\\\\Scripts\\\\python.exe stowage-optimizer\\\\solver.py 69e631cd593e9d58097259b9)"
     ]
   }
 }

@@ -115,6 +115,10 @@ def is_temp_compatible(cargo, section):
         return True
     return cargo['tempMin'] <= t <= cargo['tempMax']
 
+def temp_ranges_overlap(cargo_a, cargo_b):
+    return cargo_a['tempMax'] >= cargo_b['tempMin'] and \
+           cargo_b['tempMax'] >= cargo_a['tempMin']
+
 # ── MongoDB data loading ───────────────────────────────────────────────────────
 
 def load_voyage(db, voyage_id):
@@ -284,35 +288,56 @@ def solve(cargo_items, sections, config, time_limit=30):
                     for i2 in range(i1 + 1, n_c):
 
                         # POL monotonicity:
-                        # Late-loading cargo (higher polSeq) must not sit below
-                        # early-loading cargo (lower polSeq) in the same hold.
+                        # Overstow check counts early-in-j_lo + late-in-j_hi as a
+                        # violation (early cargo in the higher-depth section blocks
+                        # late cargo from reaching the lower-depth section at a later
+                        # POL). Block that specific pattern.
                         pol1, pol2 = cargo_items[i1]['polSeq'], cargo_items[i2]['polSeq']
                         if pol1 != pol2:
-                            early = i1 if pol1 < pol2 else i2
-                            late  = i2 if pol1 < pol2 else i1
-                            if (late, j_lo) in compat and (early, j_hi) in compat:
-                                b = model.NewBoolVar(f'b{_bv[0]}'); _bv[0] += 1
+                            i_early = i1 if pol1 < pol2 else i2
+                            i_late  = i2 if pol1 < pol2 else i1
+                            if (i_early, j_lo) in compat and (i_late, j_hi) in compat:
+                                b = model.NewBoolVar(f'b_pol_{_bv[0]}'); _bv[0] += 1
                                 cap_lo = sections[j_lo]['capacity']
                                 cap_hi = sections[j_hi]['capacity']
-                                model.Add(x[late, j_lo] <= cap_lo * b)
-                                model.Add(x[late, j_lo] >= b)
-                                model.Add(x[early, j_hi] <= cap_hi * (1 - b))
+                                model.Add(x[i_early, j_lo] <= cap_lo * b)
+                                model.Add(x[i_early, j_lo] >= b)
+                                model.Add(x[i_late, j_hi] <= cap_hi * (1 - b))
 
                         # POD monotonicity:
-                        # Early-discharge cargo (lower podSeq) must be in more
-                        # accessible (shallower) sections than late-discharge cargo.
+                        # Early-discharge cargo (lower podSeq, first port to unload)
+                        # must be accessible: not buried under late-discharge cargo.
+                        # Block early-discharge in j_lo + late-discharge in j_hi.
                         pod1, pod2 = cargo_items[i1]['podSeq'], cargo_items[i2]['podSeq']
                         if pod1 != pod2:
-                            early_d = i1 if pod1 < pod2 else i2
-                            late_d  = i2 if pod1 < pod2 else i1
-                            # early-discharge cargo must NOT be below late-discharge cargo
-                            if (early_d, j_lo) in compat and (late_d, j_hi) in compat:
-                                b = model.NewBoolVar(f'b{_bv[0]}'); _bv[0] += 1
+                            i_early_d = i1 if pod1 < pod2 else i2
+                            i_late_d  = i2 if pod1 < pod2 else i1
+                            if (i_early_d, j_lo) in compat and (i_late_d, j_hi) in compat:
+                                b = model.NewBoolVar(f'b_pod_{_bv[0]}'); _bv[0] += 1
                                 cap_lo = sections[j_lo]['capacity']
                                 cap_hi = sections[j_hi]['capacity']
-                                model.Add(x[early_d, j_lo] <= cap_lo * b)
-                                model.Add(x[early_d, j_lo] >= b)
-                                model.Add(x[late_d, j_hi] <= cap_hi * (1 - b))
+                                model.Add(x[i_early_d, j_lo] <= cap_lo * b)
+                                model.Add(x[i_early_d, j_lo] >= b)
+                                model.Add(x[i_late_d, j_hi] <= cap_hi * (1 - b))
+
+    # ── Constraint 5: TEMPERATURE ZONE GROUPING ────────────────────────────
+    # Two cargo types with non-overlapping temperature ranges must not both
+    # be placed in the same cooling zone (zoneId).
+    zones_sec = defaultdict(list)
+    for j, sec in enumerate(sections):
+        zones_sec[sec['zoneId']].append(j)
+
+    incompat_pairs = [
+        (i1, i2)
+        for i1 in range(n_c) for i2 in range(i1 + 1, n_c)
+        if not temp_ranges_overlap(cargo_items[i1], cargo_items[i2])
+    ]
+
+    for i1, i2 in incompat_pairs:
+        for zone_id, z_secs in zones_sec.items():
+            b = model.NewBoolVar(f'tz_{i1}_{i2}_{zone_id}')
+            model.Add(sum(x[i1, j] for j in z_secs) == 0).OnlyEnforceIf(b.Not())
+            model.Add(sum(x[i2, j] for j in z_secs) == 0).OnlyEnforceIf(b)
 
     # ── Objective ──────────────────────────────────────────────────────────
     W_BAL = config['W_BAL']
