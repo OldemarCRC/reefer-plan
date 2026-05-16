@@ -153,7 +153,7 @@ def build_sections(vessel):
             sid = cs.get('sectionId', '')
             sqm = float(cs.get('sqm') or 0)
             dsf = float(cs.get('designStowageFactor') or 1.32)
-            capacity = math.floor(sqm * dsf)
+            capacity = math.floor(sqm / dsf)
             hold_num, level = parse_section_id(sid)
             sections.append({
                 'sectionId':   sid,
@@ -261,9 +261,11 @@ def solve(cargo_items, sections, config, time_limit=30):
     total_cap = sum(s['capacity'] for s in sections)
     total_pal = sum(c['pallets'] for c in cargo_items)
 
-    # ── Constraint 1: SUPPLY — each cargo fully placed ──────────────────────
+    # ── Constraint 1: SUPPLY — place as much of each cargo as possible ──────
+    # Using <= (not ==) so the model stays feasible when total demand exceeds
+    # total capacity; the utilization objective maximises placement.
     for i in range(n_c):
-        model.Add(sum(x[i, j] for j in range(n_s)) == cargo_items[i]['pallets'])
+        model.Add(sum(x[i, j] for j in range(n_s)) <= cargo_items[i]['pallets'])
 
     # ── Constraint 2: CAPACITY — sections not overfilled ────────────────────
     for j in range(n_s):
@@ -288,21 +290,21 @@ def solve(cargo_items, sections, config, time_limit=30):
                     for i2 in range(i1 + 1, n_c):
 
                         # POL monotonicity:
-                        # Overstow check counts early-in-j_lo + late-in-j_hi as a
-                        # violation (early cargo in the higher-depth section blocks
-                        # late cargo from reaching the lower-depth section at a later
-                        # POL). Block that specific pattern.
+                        # Early-POL loads first → goes to BOTTOM (deepest sections).
+                        # Late-POL loads last  → goes on TOP  (shallowest sections).
+                        # Block the violation: late-POL in deep (j_lo) + early-POL in
+                        # shallow (j_hi) simultaneously.
                         pol1, pol2 = cargo_items[i1]['polSeq'], cargo_items[i2]['polSeq']
                         if pol1 != pol2:
                             i_early = i1 if pol1 < pol2 else i2
                             i_late  = i2 if pol1 < pol2 else i1
-                            if (i_early, j_lo) in compat and (i_late, j_hi) in compat:
+                            if (i_late, j_lo) in compat and (i_early, j_hi) in compat:
                                 b = model.NewBoolVar(f'b_pol_{_bv[0]}'); _bv[0] += 1
                                 cap_lo = sections[j_lo]['capacity']
                                 cap_hi = sections[j_hi]['capacity']
-                                model.Add(x[i_early, j_lo] <= cap_lo * b)
-                                model.Add(x[i_early, j_lo] >= b)
-                                model.Add(x[i_late, j_hi] <= cap_hi * (1 - b))
+                                model.Add(x[i_late, j_lo] <= cap_lo * b)
+                                model.Add(x[i_late, j_lo] >= b)
+                                model.Add(x[i_early, j_hi] <= cap_hi * (1 - b))
 
                         # POD monotonicity:
                         # Early-discharge cargo (lower podSeq, first port to unload)
@@ -442,7 +444,7 @@ def compute_metrics(assignments, cargo_items, sections):
     for h_assgns in by_hold.values():
         for a1 in h_assgns:
             for a2 in h_assgns:
-                if a1['polSeq'] < a2['polSeq'] and a2['depth'] < a1['depth']:
+                if a1['polSeq'] < a2['polSeq'] and a1['depth'] < a2['depth']:
                     overstow += min(a1['qty'], a2['qty'])
 
     lower = {'C', 'D'}
@@ -621,7 +623,7 @@ def build_and_solve(data: dict) -> list:
         sname = STATUS_NAMES.get(status, str(status))
 
         if assignments is None:
-            print(f'  ✗ {sname}')
+            print(f'  FAILED [{sname}]')
             if status == cp_model.INFEASIBLE:
                 print('    Likely cause: temperature constraints leave insufficient '
                       'compatible capacity for one or more cargo types, '

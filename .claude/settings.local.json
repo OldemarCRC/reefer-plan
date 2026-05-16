@@ -33,7 +33,8 @@
       "Bash(venv/Scripts/python.exe solver.py 69e631cd593e9d58097259b9)",
       "Bash(venv/Scripts/python.exe _inspect.py)",
       "Bash(venv/Scripts/python.exe _overstow.py)",
-      "Bash(stowage-optimizer\\\\venv\\\\Scripts\\\\python.exe stowage-optimizer\\\\solver.py 69e631cd593e9d58097259b9)"
+      "Bash(stowage-optimizer\\\\venv\\\\Scripts\\\\python.exe stowage-optimizer\\\\solver.py 69e631cd593e9d58097259b9)",
+      "Bash(venv\\\\Scripts\\\\python.exe _diag.py)"
     ]
   }
 }
