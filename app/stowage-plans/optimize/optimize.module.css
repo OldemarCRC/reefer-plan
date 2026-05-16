@@ -1,0 +1,476 @@
+/* ============================================================================
+   STOWAGE OPTIMIZER PAGE
+   ============================================================================ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 960px;
+}
+
+.pageHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.pageTitle {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+}
+
+.pageSubtitle {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}
+
+/* ── Voyage selector ─────────────────────────────────────────────────────── */
+
+.selectorCard {
+  background: var(--color-surface);
+  border: var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-1);
+  display: block;
+}
+
+.select {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  outline: none;
+  cursor: pointer;
+}
+
+.select:focus {
+  border-color: var(--color-cyan);
+}
+
+.selectDisabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+.runBtn {
+  align-self: flex-end;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  border: 1px solid var(--color-cyan);
+  background: var(--color-cyan-muted, rgba(6,182,212,0.12));
+  color: var(--color-cyan);
+  transition: all var(--transition-fast);
+}
+
+.runBtn:hover:not(:disabled) {
+  background: rgba(6,182,212,0.22);
+}
+
+.runBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Loading state ───────────────────────────────────────────────────────── */
+
+.loadingCard {
+  background: var(--color-surface);
+  border: var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  text-align: center;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(6,182,212,0.2);
+  border-top-color: var(--color-cyan);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loadingTitle {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-primary);
+}
+
+.loadingSubtitle {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}
+
+.healthBadge {
+  font-size: var(--text-xs);
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-family: var(--font-mono);
+}
+
+.healthOk {
+  background: var(--color-success-muted);
+  color: var(--color-success);
+}
+
+.healthChecking {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+}
+
+/* ── Error state ─────────────────────────────────────────────────────────── */
+
+.errorCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.errorTitle {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--color-danger);
+}
+
+.errorMsg {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.errorCmd {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--color-bg-tertiary);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--color-cyan-light);
+}
+
+.retryBtn {
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.retryBtn:hover {
+  border-color: var(--color-text-tertiary);
+  color: var(--color-text-primary);
+}
+
+/* ── Carousel ────────────────────────────────────────────────────────────── */
+
+.carouselCard {
+  background: var(--color-surface);
+  border: var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.carouselHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.carouselTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.solutionLabel {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--color-cyan-light);
+}
+
+.solutionIndex {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+.carouselNav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.navBtn {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.navBtn:hover:not(:disabled) {
+  border-color: var(--color-cyan);
+  color: var(--color-cyan);
+}
+
+.navBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.navDots {
+  display: flex;
+  gap: 6px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-bg-tertiary);
+  transition: background var(--transition-fast);
+}
+
+.dotActive {
+  background: var(--color-cyan);
+}
+
+/* ── Metrics row ─────────────────────────────────────────────────────────── */
+
+.metricsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.metricItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+}
+
+.metricLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.metricValue {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  font-family: var(--font-mono);
+}
+
+.metricGreen  { color: var(--color-success); }
+.metricYellow { color: var(--color-warning); }
+.metricRed    { color: var(--color-danger); }
+.metricNeutral { color: var(--color-text-secondary); }
+
+.compactBar {
+  height: 4px;
+  background: var(--color-bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
+  width: 80px;
+}
+
+.compactFill {
+  height: 100%;
+  background: var(--color-cyan);
+  border-radius: 2px;
+  transition: width 400ms ease;
+}
+
+/* ── Infeasible banner ───────────────────────────────────────────────────── */
+
+.infeasibleBanner {
+  padding: var(--space-4) var(--space-5);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* ── Cargo positions table ───────────────────────────────────────────────── */
+
+.tableWrap {
+  overflow-x: auto;
+  padding: var(--space-4) var(--space-5);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+.table th {
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text-muted);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--space-1) var(--space-2);
+  vertical-align: middle;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.sectionRow td {
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--color-bg-tertiary);
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.podCell {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  color: rgba(0,0,0,0.85);
+  white-space: nowrap;
+}
+
+.badge {
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.badgeConfirmed {
+  background: var(--color-success-muted);
+  color: var(--color-success);
+}
+
+.badgeEstimated {
+  background: var(--color-warning-muted);
+  color: var(--color-warning);
+}
+
+.qtyCell {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  text-align: right;
+}
+
+.routeCell {
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* ── Footer actions ──────────────────────────────────────────────────────── */
+
+.carouselFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.saveBtn {
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  border: none;
+  background: var(--color-cyan);
+  color: #000;
+  transition: all var(--transition-fast);
+}
+
+.saveBtn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.saveBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.discardBtn {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  transition: all var(--transition-fast);
+}
+
+.discardBtn:hover {
+  color: var(--color-text-secondary);
+  border-color: var(--color-text-muted);
+}
+
+.saveStatus {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-right: auto;
+}

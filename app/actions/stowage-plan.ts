@@ -2496,3 +2496,104 @@ export async function autoGenerateSinglePlan(
     return { success: false, error: `Auto-generation failed: ${msg}` };
   }
 }
+
+// ----------------------------------------------------------------------------
+// SAVE PYTHON OPTIMIZER PLAN
+// Persists one solution from the OR-Tools CP-SAT optimizer as a new StowagePlan.
+// ----------------------------------------------------------------------------
+
+export async function savePythonPlan(
+  voyageId: string,
+  solution: {
+    solutionIndex: number;
+    label: string;
+    metrics: Record<string, number>;
+    cargoPositions: Array<{
+      bookingId: string;
+      sectionId: string;
+      holdNumber: number;
+      level: string;
+      quantity: number;
+      polPortCode: string;
+      podPortCode: string;
+      cargoType: string;
+      shipperName: string;
+      consigneeName: string;
+      confidence: string;
+    }>;
+  },
+): Promise<{ success: boolean; planId?: string; error?: string }> {
+  const session = await auth();
+  if (!session?.user) return { success: false, error: 'Unauthorized' };
+  const role = (session.user as any).role as string;
+  if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) return { success: false, error: 'Forbidden' };
+
+  try {
+    await connectDB();
+
+    const voyage = await VoyageModel.findById(voyageId)
+      .populate('vesselId', 'name')
+      .lean() as any;
+    if (!voyage) return { success: false, error: 'Voyage not found' };
+
+    const vessel = voyage.vesselId as any;
+    if (!vessel) return { success: false, error: 'Vessel not found' };
+
+    // Build port-sequence map for polSeq / podSeq on each position
+    const portSeqMap: Record<string, number> = {};
+    for (const pc of voyage.portCalls ?? []) {
+      portSeqMap[(pc as any).portCode] = (pc as any).sequence;
+    }
+
+    const planNumber = await generatePlanNumber(
+      voyage.voyageNumber,
+      vessel.name,
+      voyage.weekNumber ?? undefined,
+      voyage.departureDate ?? undefined,
+    );
+
+    const cargoPositions = solution.cargoPositions.map(pos => ({
+      bookingId:        pos.bookingId,
+      bookingNumber:    pos.bookingId,
+      cargoType:        pos.cargoType,
+      polPortCode:      pos.polPortCode,
+      podPortCode:      pos.podPortCode,
+      quantity:         pos.quantity,
+      snapshotQuantity: pos.quantity,
+      shipperName:      pos.shipperName,
+      consigneeName:    pos.consigneeName,
+      confidence:       pos.confidence,
+      polSeq:           portSeqMap[pos.polPortCode] ?? 0,
+      podSeq:           portSeqMap[pos.podPortCode] ?? 99,
+      compartment: {
+        id:         pos.sectionId,
+        holdNumber: pos.holdNumber,
+        level:      pos.level,
+      },
+    }));
+
+    const genMethod = `PYTHON_OPTIMIZER_${solution.label.toUpperCase().replace(/ /g, '_')}`;
+
+    const newPlan = await StowagePlanModel.create({
+      planNumber,
+      voyageId,
+      vesselId:     vessel._id,
+      vesselName:   vessel.name,
+      voyageNumber: voyage.voyageNumber,
+      status:       'ESTIMATED',
+      generationMethod: genMethod,
+      cargoPositions,
+      conflicts:                  [],
+      stabilityIndicators:        [],
+      overstowViolations:         [],
+      temperatureConflicts:       [],
+      weightDistributionWarnings: [],
+      createdBy: (session.user as any).id ?? 'SYSTEM',
+    });
+
+    return { success: true, planId: (newPlan as any)._id.toString() };
+  } catch (err) {
+    console.error('[savePythonPlan]', err);
+    return { success: false, error: 'Failed to save plan' };
+  }
+}

@@ -563,68 +563,57 @@ def export_json(voyage_id, solutions, voyage_number, out_dir):
         json.dump(out, f, indent=2)
     return path
 
-# ── Main ───────────────────────────────────────────────────────────────────────
+# ── Public API (importable by api.py) ─────────────────────────────────────────
 
-def main():
-    # Load .env.local from project root (one level above stowage-optimizer/)
-    env_path = os.path.join(os.path.dirname(__file__), '..', '.env.local')
-    load_dotenv(env_path)
+def load_voyage_data(voyage_id: str):
+    """Load all voyage/vessel/cargo data from MongoDB.
+
+    Reads MONGODB_URI from the environment (caller must ensure it is set).
+    Returns a data dict on success, or None if voyage/vessel is not found.
+    """
     mongo_uri = os.getenv('MONGODB_URI')
     if not mongo_uri:
-        print('ERROR: MONGODB_URI not found in .env.local')
-        sys.exit(1)
-
+        raise RuntimeError('MONGODB_URI not set in environment')
     client = MongoClient(mongo_uri)
     db     = client['reefer-planner']
 
-    # No args → list voyages
-    if len(sys.argv) < 2:
-        print('Usage: python solver.py <voyage_id>\n')
-        print('Available voyages (most recent 20):')
-        voyages = list(db.voyages.find(
-            {}, {'voyageNumber': 1, 'vesselName': 1, 'status': 1, 'departureDate': 1}
-        ).sort('departureDate', -1).limit(20))
-        for v in voyages:
-            dep = v.get('departureDate', '')
-            dep_s = dep.strftime('%Y-%m-%d') if hasattr(dep, 'strftime') else str(dep)[:10]
-            print(f"  {v['_id']}  {v.get('voyageNumber','?'):<20}  "
-                  f"{v.get('vesselName','?'):<30}  [{v.get('status','?')}]  dep={dep_s}")
-        sys.exit(0)
-
-    voyage_id = sys.argv[1]
-    print(f'\nLoading voyage {voyage_id}...')
-
     voyage = load_voyage(db, voyage_id)
     if not voyage:
-        print(f'ERROR: Voyage {voyage_id} not found.')
-        sys.exit(1)
+        return None
 
     vessel = load_vessel(db, voyage.get('vesselId'))
     if not vessel:
-        print('ERROR: Vessel not found.')
-        sys.exit(1)
+        return None
 
-    bookings  = load_bookings(db, voyage_id)
-    forecasts = load_forecasts(db, voyage_id)
+    bookings     = load_bookings(db, voyage_id)
+    forecasts    = load_forecasts(db, voyage_id)
+    port_seq_map = build_port_seq_map(voyage.get('portCalls', []))
+    sections     = build_sections(vessel)
+    cargo_items  = build_cargo_items(bookings, forecasts, port_seq_map)
 
-    if not bookings and not forecasts:
-        print('WARNING: No confirmed bookings or incorporated forecasts found. Nothing to optimize.')
-        sys.exit(0)
+    return {
+        'voyageId':    voyage_id,
+        'voyageNumber': voyage.get('voyageNumber', 'UNKNOWN'),
+        'vesselName':  vessel.get('name', 'UNKNOWN'),
+        'portCalls':   voyage.get('portCalls', []),
+        'sections':    sections,
+        'cargoItems':  cargo_items,
+        'bookings':    bookings,
+        'forecasts':   forecasts,
+        'voyage':      voyage,   # raw doc — used by print_loading_summary in CLI
+        'vessel':      vessel,   # raw doc — used by print_loading_summary in CLI
+    }
 
-    port_seq_map  = build_port_seq_map(voyage.get('portCalls', []))
-    sections      = build_sections(vessel)
-    cargo_items   = build_cargo_items(bookings, forecasts, port_seq_map)
-    voyage_number = voyage.get('voyageNumber', 'UNKNOWN')
-    out_dir       = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
 
-    print()
-    print_loading_summary(voyage, vessel, bookings, forecasts, sections)
+def build_and_solve(data: dict) -> list:
+    """Run CP-SAT solver for all 5 configurations. Returns list of solution dicts."""
+    cargo_items = data['cargoItems']
+    sections    = data['sections']
+    solutions   = []
 
     print(f'\n{"="*62}')
     print(f'CP-SAT optimizer  {len(cargo_items)} cargo items, {len(sections)} sections')
     print(f'{"="*62}\n')
-
-    solutions = []
 
     for idx, cfg in enumerate(SOLUTION_CONFIGS, start=1):
         print(f'Solving {idx}/5: {cfg["label"]}...')
@@ -679,10 +668,94 @@ def main():
             'cargoPositions': cargo_positions,
         })
 
+    return solutions
+
+
+def format_solutions(solutions: list, data: dict) -> dict:
+    """Wrap solutions in the full JSON output structure (used by CLI for file export)."""
+    return {
+        'voyageId':     data['voyageId'],
+        'voyageNumber': data['voyageNumber'],
+        'generatedAt':  datetime.utcnow().isoformat() + 'Z',
+        'solutions': [
+            {
+                'solutionIndex': sol['solutionIndex'],
+                'label':         sol['label'],
+                'status':        sol['status'],
+                'metrics':       sol.get('metrics', {}),
+                'cargoPositions': [
+                    {
+                        'bookingId':     p['bookingId'],
+                        'sectionId':     p['sectionId'],
+                        'holdNumber':    p['holdNumber'],
+                        'level':         p['level'],
+                        'quantity':      p['quantity'],
+                        'polPortCode':   p['polPortCode'],
+                        'podPortCode':   p['podPortCode'],
+                        'cargoType':     p['cargoType'],
+                        'shipperName':   p['shipperName'],
+                        'consigneeName': p['consigneeName'],
+                        'confidence':    p['confidence'],
+                    }
+                    for p in sol.get('cargoPositions', [])
+                ],
+            }
+            for sol in solutions
+        ],
+    }
+
+
+# ── Main ───────────────────────────────────────────────────────────────────────
+
+def main():
+    # Load .env.local from project root (one level above stowage-optimizer/)
+    env_path = os.path.join(os.path.dirname(__file__), '..', '.env.local')
+    load_dotenv(env_path)
+    mongo_uri = os.getenv('MONGODB_URI')
+    if not mongo_uri:
+        print('ERROR: MONGODB_URI not found in .env.local')
+        sys.exit(1)
+
+    client = MongoClient(mongo_uri)
+    db     = client['reefer-planner']
+
+    # No args → list voyages
+    if len(sys.argv) < 2:
+        print('Usage: python solver.py <voyage_id>\n')
+        print('Available voyages (most recent 20):')
+        voyages = list(db.voyages.find(
+            {}, {'voyageNumber': 1, 'vesselName': 1, 'status': 1, 'departureDate': 1}
+        ).sort('departureDate', -1).limit(20))
+        for v in voyages:
+            dep = v.get('departureDate', '')
+            dep_s = dep.strftime('%Y-%m-%d') if hasattr(dep, 'strftime') else str(dep)[:10]
+            print(f"  {v['_id']}  {v.get('voyageNumber','?'):<20}  "
+                  f"{v.get('vesselName','?'):<30}  [{v.get('status','?')}]  dep={dep_s}")
+        sys.exit(0)
+
+    voyage_id = sys.argv[1]
+    print(f'\nLoading voyage {voyage_id}...')
+
+    data = load_voyage_data(voyage_id)
+    if data is None:
+        print(f'ERROR: Voyage {voyage_id} not found or vessel missing.')
+        sys.exit(1)
+
+    if not data['bookings'] and not data['forecasts']:
+        print('WARNING: No confirmed bookings or incorporated forecasts found. Nothing to optimize.')
+        sys.exit(0)
+
+    print()
+    print_loading_summary(data['voyage'], data['vessel'], data['bookings'], data['forecasts'], data['sections'])
+
+    solutions = build_and_solve(data)
+
+    out_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
+
     print(f'{"="*62}')
     print('Exporting results...')
-    excel_path = export_excel(solutions, voyage_number, out_dir)
-    json_path  = export_json(voyage_id, solutions, voyage_number, out_dir)
+    excel_path = export_excel(solutions, data['voyageNumber'], out_dir)
+    json_path  = export_json(data['voyageId'], solutions, data['voyageNumber'], out_dir)
     print(f'  Excel : {excel_path}')
     print(f'  JSON  : {json_path}')
     print('\nDone.')

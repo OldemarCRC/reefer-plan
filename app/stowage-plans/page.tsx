@@ -1,6 +1,7 @@
 import AppShell from '@/components/layout/AppShell';
 import { getStowagePlans } from '@/app/actions/stowage-plan';
 import AutoGenerateButton from './AutoGenerateButton';
+import AdvancedOptimizeButton from './AdvancedOptimizeButton';
 import CapacityBar from '@/components/ui/CapacityBar/CapacityBar';
 import styles from './page.module.css';
 import Link from 'next/link';
@@ -79,6 +80,7 @@ export default async function StowagePlansPage() {
             <p className={styles.pageSubtitle}>{displayPlans.length} plans</p>
           </div>
           <AutoGenerateButton />
+          <AdvancedOptimizeButton />
           <Link href={`/stowage-plans/new/`} className={styles.btnGhost}>
             + New Plan
           </Link>

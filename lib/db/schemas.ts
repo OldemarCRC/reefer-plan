@@ -664,7 +664,6 @@ const StowagePlanSchema = new Schema({
   // Engine output fields (added v1.23.0 — Step 4)
   generationMethod: {
     type: String,
-    enum: ['AUTO', 'MANUAL', 'REVISED'],
     default: 'MANUAL',
   },
   conflicts: [{
