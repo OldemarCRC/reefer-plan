@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { VesselModel, VoyageModel, StowagePlanModel } from '@/lib/db/schemas';
+import { VesselModel, VoyageModel, StowagePlanModel, ServiceModel } from '@/lib/db/schemas';
 import type { Vessel } from '@/types/models';
 import { auth } from '@/auth';
 
@@ -68,13 +68,31 @@ const UpdateVesselSchema = z.object({
 
 export async function getVessels(): Promise<Vessel[]> {
   try {
+    const session = await auth();
+    const role = (session?.user as any)?.role as string | undefined;
+    const serviceFilter: string[] = (session?.user as any)?.serviceFilter ?? [];
+
     await connectDB();
-    
-    const vessels = await VesselModel.find()
+
+    let query: Record<string, any> = {};
+
+    if (role !== 'ADMIN' && role !== 'SUPERUSER') {
+      if (serviceFilter.length === 0) return [];
+
+      const services = await ServiceModel.find(
+        { serviceCode: { $in: serviceFilter } },
+        { vesselPool: 1 }
+      ).lean();
+      const allowedVesselIds = (services as any[]).flatMap(s =>
+        (s.vesselPool ?? []).map((id: any) => id.toString())
+      );
+      query = { _id: { $in: allowedVesselIds } };
+    }
+
+    const vessels = await VesselModel.find(query)
       .sort({ name: 1 })
       .lean();
-    
-    // Convert MongoDB documents to plain objects
+
     return JSON.parse(JSON.stringify(vessels));
   } catch (error) {
     console.error('Error fetching vessels:', error);
