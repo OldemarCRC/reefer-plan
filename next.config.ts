@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com data:",
               "img-src 'self' data: blob: https:",
-              "connect-src 'self' https://api.openweathermap.org",
+              "connect-src 'self' https://api.openweathermap.org http://localhost:8001",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",
