@@ -101,7 +101,12 @@ export default async function VoyagesPage() {
             <p className={styles.pageSubtitle}>{displayVoyages.length} voyages</p>
           </div>
           {isDemo ? (
-            <button className={styles.btnPrimary} disabled title="Not available in demo mode">
+            <button
+              className={styles.btnPrimary}
+              disabled
+              style={{ opacity: 0.4, cursor: 'not-allowed' }}
+              title="Not available in demo mode"
+            >
               + New Voyage
             </button>
           ) : (
