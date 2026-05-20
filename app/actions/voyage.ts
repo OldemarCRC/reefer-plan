@@ -1103,7 +1103,10 @@ export async function getVoyageById(voyageId: unknown) {
 
     if (!['ADMIN', 'SUPERUSER'].includes(role) && serviceFilter.length > 0) {
       const voyageServiceCode = (voyage as any).serviceCode ?? '';
-      if (!serviceFilter.includes(voyageServiceCode)) {
+      // Only block if serviceCode exists AND is not in the user's filter.
+      // If serviceCode is missing from the voyage document, allow access
+      // (missing data should not be treated as a security violation).
+      if (voyageServiceCode && !serviceFilter.includes(voyageServiceCode)) {
         return { success: false, error: 'Access denied' };
       }
     }
