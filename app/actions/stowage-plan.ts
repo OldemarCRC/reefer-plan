@@ -525,9 +525,10 @@ export async function getStowagePlanById(id: unknown) {
     const role = (session?.user as any)?.role as string;
 
     if (!['ADMIN', 'SUPERUSER'].includes(role) && serviceFilter.length > 0) {
-      const planServiceCode = (plan as any).serviceCode
-        ?? (plan.voyageId as any)?.serviceCode
-        ?? '';
+      const voyage = await VoyageModel.findById((plan as any).voyageId)
+        .select('serviceCode')
+        .lean();
+      const planServiceCode = (voyage as any)?.serviceCode ?? '';
       if (!serviceFilter.includes(planServiceCode)) {
         return { success: false, error: 'Access denied' };
       }
