@@ -520,6 +520,19 @@ export async function getStowagePlanById(id: unknown) {
       return { success: false, error: 'Plan not found' };
     }
 
+    const session = await auth();
+    const serviceFilter: string[] = (session?.user as any)?.serviceFilter ?? [];
+    const role = (session?.user as any)?.role as string;
+
+    if (!['ADMIN', 'SUPERUSER'].includes(role) && serviceFilter.length > 0) {
+      const planServiceCode = (plan as any).serviceCode
+        ?? (plan.voyageId as any)?.serviceCode
+        ?? '';
+      if (!serviceFilter.includes(planServiceCode)) {
+        return { success: false, error: 'Access denied' };
+      }
+    }
+
     return {
       success: true,
       data: JSON.parse(JSON.stringify(plan)),

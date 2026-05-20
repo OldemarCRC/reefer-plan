@@ -1096,7 +1096,18 @@ export async function getVoyageById(voyageId: unknown) {
     if (!voyage) {
       return { success: false, error: 'Voyage not found' };
     }
-    
+
+    const session = await auth();
+    const serviceFilter: string[] = (session?.user as any)?.serviceFilter ?? [];
+    const role = (session?.user as any)?.role as string;
+
+    if (!['ADMIN', 'SUPERUSER'].includes(role) && serviceFilter.length > 0) {
+      const voyageServiceCode = (voyage as any).serviceCode ?? '';
+      if (!serviceFilter.includes(voyageServiceCode)) {
+        return { success: false, error: 'Access denied' };
+      }
+    }
+
     return {
       success: true,
       data: JSON.parse(JSON.stringify(voyage)),
