@@ -78,6 +78,16 @@
   cursor: not-allowed;
 }
 
+.serviceDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
 /* --- Auto-Generate Plans button + result toast --- */
 
 .autoGenWrap {
