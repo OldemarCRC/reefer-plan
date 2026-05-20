@@ -104,6 +104,7 @@ export default function Header({
   const roleLabel: Record<string, string> = {
     ADMIN: 'Administrator',
     SHIPPING_PLANNER: 'Shipping Planner',
+    DEMO_AGENT: 'Demo Agent',
     STEVEDORE: 'Stevedore',
     CHECKER: 'Checker',
     EXPORTER: 'Exporter',

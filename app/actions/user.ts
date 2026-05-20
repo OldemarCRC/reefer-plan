@@ -20,7 +20,7 @@ import { toTitleCase, toUpperCode } from '@/lib/utils/normalize';
 
 const UserIdSchema = z.string().min(1, 'User ID is required');
 
-const ROLES = ['ADMIN', 'SHIPPING_PLANNER', 'STEVEDORE', 'CHECKER', 'EXPORTER', 'VIEWER'] as const;
+const ROLES = ['ADMIN', 'SHIPPING_PLANNER', 'DEMO_AGENT', 'STEVEDORE', 'CHECKER', 'EXPORTER', 'VIEWER'] as const;
 
 const CreateUserSchema = z.object({
   email: z.string().email('Valid email is required'),

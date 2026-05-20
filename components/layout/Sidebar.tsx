@@ -91,7 +91,7 @@ const LIMITED_ITEMS = new Set(['dashboard', 'voyages', 'stowage-plans']);
 
 function getVisibleItems(role: string | undefined): NavItem[] {
   if (role === 'ADMIN') return navItems;
-  if (role === 'SHIPPING_PLANNER') return navItems.filter(i => i.id !== 'admin');
+  if (role === 'SHIPPING_PLANNER' || role === 'DEMO_AGENT') return navItems.filter(i => i.id !== 'admin');
   // STEVEDORE, CHECKER, VIEWER — and any unrecognized role (safe default)
   return navItems.filter(i => LIMITED_ITEMS.has(i.id));
 }
