@@ -37,7 +37,7 @@ function buildZoneMap(temperatureZones: any[]): Map<string, {
     const zoneName = `Hold ${holdNum} ${levels}`;
     for (const section of zone.coolingSections) {
       const designFactor = section.designStowageFactor ?? 1.32;
-      const pallets = Math.round(section.sqm * designFactor);
+      const pallets = Math.floor(section.sqm / designFactor);
       map.set(section.sectionId, {
         zoneId: zone.zoneId,
         zoneName,

@@ -4,14 +4,14 @@
 // ============================================================================
 
 // A single physical cooling section (one floor area, one stowage factor).
-// maxPallets = Math.floor(sqm * designStowageFactor)
-// Note: designStowageFactor in this codebase means pallets-per-sqm (not cubic m/t).
+// maxPallets = Math.floor(sqm / designStowageFactor)
+// Note: designStowageFactor in this codebase means m²/pallet (area per pallet, not cubic m/t).
 export interface EngineSection {
   sectionId: string;            // e.g. "1A", "2UPD", "3B"
   zoneId: string;               // zone this section belongs to, e.g. "1AB"
   sqm: number;
-  designStowageFactor: number;  // pallets per sqm, e.g. 1.32
-  maxPallets: number;           // Math.floor(sqm * designStowageFactor)
+  designStowageFactor: number;  // m²/pallet, e.g. 1.32 (area per pallet)
+  maxPallets: number;           // Math.floor(sqm / designStowageFactor)
   holdNumber: number;           // 1 | 2 | 3 | 4
   longitudinalArm: number;      // metres from midship (+fwd / -aft)
   transverseArm: number;        // metres from centreline (+port / -starboard)

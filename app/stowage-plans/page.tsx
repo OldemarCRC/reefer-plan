@@ -42,7 +42,7 @@ export default async function StowagePlansPage() {
           (sum: number, zone: any) =>
             sum + ((zone.coolingSections as any[]) || []).reduce(
               (s: number, sec: any) =>
-                s + Math.floor((sec.sqm || 0) * (sec.designStowageFactor || 1.32)),
+                s + Math.floor((sec.sqm || 0) / (sec.designStowageFactor || 1.32)),
               0
             ),
           0

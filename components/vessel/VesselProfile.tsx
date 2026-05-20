@@ -608,7 +608,7 @@ export default function VesselProfile({
             const displayCapacity = (() => {
               if (!comp.assignment) return 0;
               if (factorMode === 'historical' && comp.assignment.historicalStowageFactor && comp.assignment.sqm) {
-                return Math.round(comp.assignment.sqm * comp.assignment.historicalStowageFactor);
+                return Math.floor(comp.assignment.sqm / comp.assignment.historicalStowageFactor);
               }
               return comp.assignment.palletsCapacity;
             })();
