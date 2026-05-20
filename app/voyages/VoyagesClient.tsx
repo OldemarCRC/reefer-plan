@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import styles from './page.module.css';
+import CapacityBar from '@/components/ui/CapacityBar/CapacityBar';
 
 const statusStyles: Record<string, { bg: string; color: string }> = {
   PLANNED:     { bg: 'var(--color-blue-muted)',    color: 'var(--color-blue-light)'    },
@@ -21,19 +22,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function UtilizationBar({ used, total }: { used: number; total: number }) {
-  const pct = total > 0 ? Math.round((used / total) * 100) : 0;
-  const barColor = pct >= 90 ? 'var(--color-danger)' : pct >= 70 ? 'var(--color-warning)' : 'var(--color-cyan)';
-  return (
-    <div className={styles.utilBar}>
-      <div className={styles.utilTrack}>
-        <div className={styles.utilFill} style={{ width: `${pct}%`, background: barColor }} />
-      </div>
-      <span className={styles.utilPct}>{pct}%</span>
-      <span className={styles.utilDetail}>{used.toLocaleString()}/{total.toLocaleString()}</span>
-    </div>
-  );
-}
 
 export interface DisplayPortCall {
   portCode: string;
@@ -60,6 +48,7 @@ export interface DisplayVoyage {
   portCalls: DisplayPortCall[];
   bookingsCount: number;
   palletsBooked: number;
+  estimatedPallets: number;
   palletsCapacity: number;
 }
 
@@ -231,8 +220,13 @@ export default function VoyagesClient({ voyages }: VoyagesClientProps) {
                   <span className={styles.voyageStatValue}>{v.bookingsCount}</span>
                 </div>
                 <div className={styles.voyageUtilWrap}>
-                  <span className={styles.voyageStatLabel}>Utilization</span>
-                  <UtilizationBar used={v.palletsBooked} total={v.palletsCapacity} />
+                  <CapacityBar
+                    bookedPallets={v.palletsBooked}
+                    estimatedPallets={v.estimatedPallets}
+                    totalCapacity={v.palletsCapacity}
+                    size="sm"
+                    showLabel={false}
+                  />
                 </div>
                 <Link href={`/voyages/${v._id}`} className={styles.btnGhost}>View Details →</Link>
               </div>

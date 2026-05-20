@@ -86,9 +86,10 @@ export default async function VoyagesPage() {
         };
       }),
     vesselImoNumber: v.vesselId?.imoNumber ?? null,
-    bookingsCount:  v.bookingsCount ?? 0,
-    palletsBooked:  v.palletsBooked ?? 0,
-    palletsCapacity: v.palletsCapacity ?? 0,
+    bookingsCount:    v.bookingsCount ?? 0,
+    palletsBooked:    v.palletsBooked ?? 0,
+    estimatedPallets: v.estimatedPalletsTotal ?? 0,
+    palletsCapacity:  v.palletsCapacity ?? 0,
   }));
 
   return (
