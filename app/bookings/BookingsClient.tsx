@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import styles from './page.module.css';
 import { createBookingFromContract, approveBooking, rejectBooking, updateBookingQuantity, resolveStandby } from '@/app/actions/booking';
 import ContractSelect from '@/components/ui/ContractSelect';
@@ -175,6 +176,8 @@ export default function BookingsClient({
   initialStatusFilter = '',
 }: BookingsClientProps) {
   const router = useRouter();
+  const { data: session } = useSession();
+  const isDemo = session?.user?.role === 'DEMO_AGENT';
   const [searchText, setSearchText] = useState('');
   const [filterVoyage, setFilterVoyage] = useState('');
   const [filterCargo, setFilterCargo] = useState('');
@@ -240,7 +243,12 @@ export default function BookingsClient({
             {bookings.length} total · {confirmedCount} confirmed · {pendingCount} pending action
           </p>
         </div>
-        <button className={styles.btnPrimary} onClick={() => setShowCreateModal(true)}>
+        <button
+          className={styles.btnPrimary}
+          onClick={() => setShowCreateModal(true)}
+          disabled={isDemo}
+          title={isDemo ? 'Not available in demo mode' : undefined}
+        >
           + New Booking
         </button>
       </div>
@@ -425,12 +433,16 @@ export default function BookingsClient({
                             <button
                               className={styles.btnApprove}
                               onClick={() => setApproveTarget(b)}
+                              disabled={isDemo}
+                              title={isDemo ? 'Not available in demo mode' : undefined}
                             >
                               Approve
                             </button>
                             <button
                               className={styles.btnReject}
                               onClick={() => setRejectTarget(b)}
+                              disabled={isDemo}
+                              title={isDemo ? 'Not available in demo mode' : undefined}
                             >
                               Reject
                             </button>
@@ -441,12 +453,16 @@ export default function BookingsClient({
                             <button
                               className={styles.btnStandbyConfirm}
                               onClick={() => setResolveStandbyTarget({ booking: b, action: 'CONFIRM' })}
+                              disabled={isDemo}
+                              title={isDemo ? 'Not available in demo mode' : undefined}
                             >
                               Confirm Stby
                             </button>
                             <button
                               className={styles.btnStandbyReject}
                               onClick={() => setResolveStandbyTarget({ booking: b, action: 'REJECT' })}
+                              disabled={isDemo}
+                              title={isDemo ? 'Not available in demo mode' : undefined}
                             >
                               Reject Stby
                             </button>
@@ -456,6 +472,8 @@ export default function BookingsClient({
                           <button
                             className={styles.btnEdit}
                             onClick={() => setEditTarget(b)}
+                            disabled={isDemo}
+                            title={isDemo ? 'Not available in demo mode' : undefined}
                           >
                             Edit
                           </button>

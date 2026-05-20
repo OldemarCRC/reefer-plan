@@ -741,6 +741,7 @@ export default function StowagePlanDetailPage() {
   const isLocked = LOCKED_STATUSES.includes(plan.status);
 
   const { data: session } = useSession();
+  // DEMO_AGENT is intentionally excluded — all write buttons are gated on canEdit.
   const canEdit = ['ADMIN', 'SHIPPING_PLANNER'].includes(session?.user?.role ?? '');
 
   const handleMarkSent = () => {

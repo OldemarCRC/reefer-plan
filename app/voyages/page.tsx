@@ -2,6 +2,7 @@ import AppShell from '@/components/layout/AppShell';
 import { getVoyages } from '@/app/actions/voyage';
 import { getPortWeatherForecast } from '@/app/actions/weather';
 import { getPortCoordsByUnlocodes } from '@/app/actions/port';
+import { auth } from '@/auth';
 import VoyagesClient from './VoyagesClient';
 import type { DisplayVoyage } from './VoyagesClient';
 import styles from './page.module.css';
@@ -17,7 +18,8 @@ function formatShortDate(dateStr: string | null | undefined): string | null {
 }
 
 export default async function VoyagesPage() {
-  const result = await getVoyages();
+  const [session, result] = await Promise.all([auth(), getVoyages()]);
+  const isDemo = (session?.user as any)?.role === 'DEMO_AGENT';
   const voyages = result.success ? result.data : [];
 
   // Collect unique (city/portName, country, etaDate) combos for forecast lookup
@@ -98,7 +100,13 @@ export default async function VoyagesPage() {
             <h1 className={styles.pageTitle}>Voyages</h1>
             <p className={styles.pageSubtitle}>{displayVoyages.length} voyages</p>
           </div>
-          <Link href="/voyages/new" className={styles.btnPrimary}>+ New Voyage</Link>
+          {isDemo ? (
+            <button className={styles.btnPrimary} disabled title="Not available in demo mode">
+              + New Voyage
+            </button>
+          ) : (
+            <Link href="/voyages/new" className={styles.btnPrimary}>+ New Voyage</Link>
+          )}
         </div>
 
         <VoyagesClient voyages={displayVoyages} />

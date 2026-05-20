@@ -148,7 +148,7 @@ export default async function VoyageDetailPage({
                 Open Stowage Plan
               </Link>
             )}
-            {!isClosed && (
+            {!isClosed && canEdit && (
               <Link href={`/stowage-plans/new?voyageId=${id}`} className={styles.btnSecondary}>
                 + New Plan
               </Link>
@@ -212,7 +212,7 @@ export default async function VoyageDetailPage({
         <div className={styles.card}>
           <div className={styles.cardHeader}>
             <h2 className={styles.cardTitle}>Stowage Plans</h2>
-            {!isClosed && (
+            {!isClosed && canEdit && (
               <Link href={`/stowage-plans/new?voyageId=${id}`} className={styles.btnSecondary}>
                 + New Plan
               </Link>

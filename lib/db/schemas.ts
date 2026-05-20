@@ -756,7 +756,7 @@ const UserSchema = new Schema({
   role: {
     type: String,
     required: true,
-    enum: ['SUPERUSER', 'ADMIN', 'SHIPPING_PLANNER', 'STEVEDORE', 'CHECKER', 'EXPORTER', 'VIEWER'],
+    enum: ['SUPERUSER', 'ADMIN', 'SHIPPING_PLANNER', 'DEMO_AGENT', 'STEVEDORE', 'CHECKER', 'EXPORTER', 'VIEWER'],
   },
   passwordHash: { type: String, select: false },
   company: { type: String },

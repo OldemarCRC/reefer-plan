@@ -2134,6 +2134,7 @@ function ServicesTab({ initialServices, vessels }: { initialServices: AdminServi
 const USER_ROLES = [
   { value: 'ADMIN',            label: 'Admin' },
   { value: 'SHIPPING_PLANNER', label: 'Shipping Planner' },
+  { value: 'DEMO_AGENT',       label: 'Demo Agent' },
   { value: 'STEVEDORE',        label: 'Stevedore' },
   { value: 'CHECKER',          label: 'Checker' },
   { value: 'EXPORTER',         label: 'Shipper' },

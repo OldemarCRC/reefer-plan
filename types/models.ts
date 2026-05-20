@@ -751,6 +751,7 @@ export type UserRole =
   | 'SUPERUSER'
   | 'ADMIN'
   | 'SHIPPING_PLANNER'
+  | 'DEMO_AGENT'
   | 'STEVEDORE'
   | 'CHECKER'
   | 'EXPORTER'

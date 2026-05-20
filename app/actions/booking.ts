@@ -1000,7 +1000,7 @@ export async function getAdminBookings(includeArchived = false) {
     const session = await auth();
     if (!session?.user) return { success: false, data: [], error: 'Unauthorized' };
     const role = (session.user as any).role;
-    if (role !== 'ADMIN' && role !== 'SHIPPING_PLANNER') return { success: false, data: [], error: 'Forbidden' };
+    if (!['ADMIN', 'SHIPPING_PLANNER', 'DEMO_AGENT'].includes(role)) return { success: false, data: [], error: 'Forbidden' };
 
     await connectDB();
 

@@ -124,6 +124,7 @@ const SENT_OR_LOCKED_STATUSES = [
   'IN_REVISION', 'READY_FOR_EXECUTION', 'IN_EXECUTION', 'COMPLETED',
 ];
 
+// DEMO_AGENT is intentionally excluded — all write buttons are gated on canEdit / CAN_EDIT_ROLES.
 const CAN_EDIT_ROLES = ['ADMIN', 'SHIPPING_PLANNER'];
 
 // Captain response buttons — shown when plan is EMAIL_SENT and user can edit

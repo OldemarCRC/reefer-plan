@@ -1,5 +1,6 @@
 import AppShell from '@/components/layout/AppShell';
 import { getStowagePlans } from '@/app/actions/stowage-plan';
+import { auth } from '@/auth';
 import AutoGenerateButton from './AutoGenerateButton';
 import AdvancedOptimizeButton from './AdvancedOptimizeButton';
 import CapacityBar from '@/components/ui/CapacityBar/CapacityBar';
@@ -30,7 +31,8 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default async function StowagePlansPage() {
-  const result = await getStowagePlans();
+  const [session, result] = await Promise.all([auth(), getStowagePlans()]);
+  const isDemo = (session?.user as any)?.role === 'DEMO_AGENT';
   const plans = result.success ? result.data : [];
 
   const displayPlans = plans.map((p: any) => {
@@ -79,11 +81,17 @@ export default async function StowagePlansPage() {
             <h1 className={styles.pageTitle}>Stowage Plans</h1>
             <p className={styles.pageSubtitle}>{displayPlans.length} plans</p>
           </div>
-          <AutoGenerateButton />
-          <AdvancedOptimizeButton />
-          <Link href={`/stowage-plans/new/`} className={styles.btnGhost}>
-            + New Plan
-          </Link>
+          <AutoGenerateButton isDemo={isDemo} />
+          <AdvancedOptimizeButton isDemo={isDemo} />
+          {isDemo ? (
+            <button className={styles.btnGhost} disabled title="Not available in demo mode">
+              + New Plan
+            </button>
+          ) : (
+            <Link href={`/stowage-plans/new/`} className={styles.btnGhost}>
+              + New Plan
+            </Link>
+          )}
         </div>
 
         <div className={styles.planList}>

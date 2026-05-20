@@ -6,7 +6,7 @@ import styles from './page.module.css';
 
 type ServiceStatus = 'checking' | 'online' | 'offline';
 
-export default function AdvancedOptimizeButton() {
+export default function AdvancedOptimizeButton({ isDemo = false }: { isDemo?: boolean }) {
   const [status, setStatus] = useState<ServiceStatus>('checking');
   const router = useRouter();
 
@@ -36,7 +36,9 @@ export default function AdvancedOptimizeButton() {
     ? '#ef4444'
     : '#94a3b8';
 
-  const tooltip = status === 'online'
+  const tooltip = isDemo
+    ? 'Not available in demo mode'
+    : status === 'online'
     ? 'OR-Tools optimizer service running'
     : status === 'offline'
     ? 'Service offline — run: cd stowage-optimizer && venv\\Scripts\\activate && uvicorn api:app --port 8001'
@@ -46,7 +48,7 @@ export default function AdvancedOptimizeButton() {
     <button
       className={styles.btnOptimize}
       onClick={() => router.push('/stowage-plans/optimize')}
-      disabled={status === 'offline'}
+      disabled={isDemo || status === 'offline'}
       title={tooltip}
     >
       <span
