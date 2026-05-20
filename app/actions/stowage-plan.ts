@@ -2167,6 +2167,7 @@ export async function autoGenerateSinglePlan(
     }).lean();
 
     // ── Step 2: SpaceForecasts for this voyage (PENDING_REVIEW or INCORPORATED)
+    // EXPIRED forecasts are intentionally excluded — they must not feed into new plans.
     const activeForecasts = await SpaceForecastModel.find({
       voyageId: voyage._id,
       planImpact: { $in: ['PENDING_REVIEW', 'INCORPORATED'] },

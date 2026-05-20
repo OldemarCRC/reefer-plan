@@ -3,10 +3,10 @@
 import React, { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { deleteVoyage, updatePortRotation, resequencePortCallsByEta, closeVoyage } from '@/app/actions/voyage';
+import { deleteVoyage, updatePortRotation, resequencePortCallsByEta, closeVoyage, updateVoyageDeadline } from '@/app/actions/voyage';
 import { updateBookingDestination } from '@/app/actions/booking';
 import { deleteStowagePlan, markCaptainResponse } from '@/app/actions/stowage-plan';
-import { createSpaceForecast, createContractDefaultForecasts, markForecastIncorporated } from '@/app/actions/space-forecast';
+import { createSpaceForecast, createContractDefaultForecasts, markForecastIncorporated, expireForecasts } from '@/app/actions/space-forecast';
 import styles from './page.module.css';
 import clientStyles from './VoyageDetailClient.module.css';
 
@@ -1761,6 +1761,146 @@ export function UnifiedContractsPanel({
             </tbody>
           </table>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Booking Deadline Editor
+// Displays and allows editing of the voyage's bookingDeadline.
+// Shows an "Expire Estimates" button when the deadline has passed.
+// ---------------------------------------------------------------------------
+
+export function BookingDeadlineEditor({
+  voyageId,
+  bookingDeadline,
+  canEdit,
+}: {
+  voyageId: string;
+  bookingDeadline: string | null;
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [dateValue, setDateValue] = useState(
+    bookingDeadline ? new Date(bookingDeadline).toISOString().slice(0, 10) : ''
+  );
+  const [isSaving, startSaveTransition] = useTransition();
+  const [isExpiring, startExpireTransition] = useTransition();
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const deadlinePassed = bookingDeadline ? new Date(bookingDeadline) < new Date() : false;
+
+  const handleSave = () => {
+    startSaveTransition(async () => {
+      const result = await updateVoyageDeadline(
+        voyageId,
+        dateValue ? new Date(dateValue) : null
+      );
+      if (result.success) {
+        setEditing(false);
+        setMsg({ type: 'success', text: 'Deadline saved' });
+        setTimeout(() => setMsg(null), 3000);
+        router.refresh();
+      } else {
+        setMsg({ type: 'error', text: result.error ?? 'Failed to save' });
+        setTimeout(() => setMsg(null), 3000);
+      }
+    });
+  };
+
+  const handleExpire = () => {
+    startExpireTransition(async () => {
+      const result = await expireForecasts(voyageId);
+      if (result.success) {
+        setMsg({
+          type: 'success',
+          text: result.expiredCount > 0
+            ? `${result.expiredCount} estimate(s) expired`
+            : 'No estimates to expire',
+        });
+        setTimeout(() => setMsg(null), 4000);
+        router.refresh();
+      } else {
+        setMsg({ type: 'error', text: result.error ?? 'Failed to expire estimates' });
+        setTimeout(() => setMsg(null), 3000);
+      }
+    });
+  };
+
+  const formattedDeadline = bookingDeadline
+    ? new Date(bookingDeadline).toLocaleDateString('en-GB', {
+        day: 'numeric', month: 'short', year: 'numeric',
+      })
+    : null;
+
+  return (
+    <div className={clientStyles.deadlineRow}>
+      <span className={clientStyles.deadlineLabel}>Booking Deadline</span>
+
+      {editing ? (
+        <>
+          <input
+            type="date"
+            className={clientStyles.deadlineInput}
+            value={dateValue}
+            onChange={e => setDateValue(e.target.value)}
+            disabled={isSaving}
+          />
+          <button
+            className={clientStyles.btnSave}
+            onClick={handleSave}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            className={clientStyles.btnCancelEdit}
+            onClick={() => {
+              setEditing(false);
+              setDateValue(bookingDeadline ? new Date(bookingDeadline).toISOString().slice(0, 10) : '');
+            }}
+            disabled={isSaving}
+          >
+            Cancel
+          </button>
+        </>
+      ) : (
+        <>
+          <span className={deadlinePassed ? clientStyles.deadlineValuePast : clientStyles.deadlineValue}>
+            {formattedDeadline ?? 'Not set'}
+          </span>
+          {canEdit && (
+            <button
+              className={clientStyles.btnGhostSm}
+              onClick={() => setEditing(true)}
+            >
+              {formattedDeadline ? 'Edit' : 'Set deadline'}
+            </button>
+          )}
+          {canEdit && deadlinePassed && (
+            <button
+              className={clientStyles.btnExpire}
+              onClick={handleExpire}
+              disabled={isExpiring}
+              title="Mark all unbooked estimates as expired"
+            >
+              {isExpiring ? 'Expiring…' : '⏱ Expire Estimates'}
+            </button>
+          )}
+        </>
+      )}
+
+      {msg && (
+        <span
+          style={{
+            fontSize: '0.78rem',
+            color: msg.type === 'success' ? 'var(--color-success)' : 'var(--color-danger)',
+          }}
+        >
+          {msg.text}
+        </span>
       )}
     </div>
   );

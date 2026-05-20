@@ -7,7 +7,7 @@ import { getSpaceForecasts } from '@/app/actions/space-forecast';
 import { auth } from '@/auth';
 import Link from 'next/link';
 import styles from './page.module.css';
-import { PortCallsEditor, DeletePlanButton, CloseVoyageButton, UnifiedContractsPanel } from './VoyageDetailClient';
+import { PortCallsEditor, DeletePlanButton, CloseVoyageButton, UnifiedContractsPanel, BookingDeadlineEditor } from './VoyageDetailClient';
 
 const statusStyles: Record<string, { bg: string; color: string }> = {
   PLANNED:     { bg: 'var(--color-blue-muted)',     color: 'var(--color-blue-light)'    },
@@ -161,6 +161,18 @@ export default async function VoyageDetailPage({
               />
             )}
           </div>
+        </div>
+
+        {/* Booking Deadline */}
+        <div className={styles.card}>
+          <div className={styles.cardHeader}>
+            <h2 className={styles.cardTitle}>Booking Deadline</h2>
+          </div>
+          <BookingDeadlineEditor
+            voyageId={id}
+            bookingDeadline={(voyage as any).bookingDeadline ?? null}
+            canEdit={canEdit}
+          />
         </div>
 
         {/* Port Calls (editable) */}

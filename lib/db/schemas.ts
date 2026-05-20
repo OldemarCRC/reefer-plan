@@ -123,7 +123,8 @@ const VoyageSchema = new Schema({
   estimatedArrivalDate: { type: Date },
   estimatedEndDate: { type: Date },
   actualEndDate: { type: Date },
-  
+  bookingDeadline: { type: Date },
+
   portCalls: [VoyagePortCallSchema],
   status: {
     type: String,
@@ -701,6 +702,7 @@ const StowagePlanSchema = new Schema({
   },
   pendingForecastUpdates: [{ type: String }],
   pendingBookingReplacements: [{ type: String }],
+  expiredForecasts: [{ type: Schema.Types.ObjectId, ref: 'SpaceForecast' }],
   createdBy: { type: String, default: 'SYSTEM' },
 }, {
   timestamps: true,
@@ -842,7 +844,7 @@ const SpaceForecastSchema = new Schema({
   source:               { type: String, required: true, enum: ['SHIPPER_PORTAL', 'PLANNER_ENTRY', 'CONTRACT_DEFAULT', 'NO_CARGO'] },
   submittedBy:          { type: String, required: true, trim: true },
   submittedAt:          { type: Date, required: true, default: Date.now },
-  planImpact:           { type: String, required: true, enum: ['PENDING_REVIEW', 'INCORPORATED', 'SUPERSEDED', 'NO_CHANGE', 'REPLACED_BY_BOOKING'], default: 'PENDING_REVIEW' },
+  planImpact:           { type: String, required: true, enum: ['PENDING_REVIEW', 'INCORPORATED', 'SUPERSEDED', 'NO_CHANGE', 'REPLACED_BY_BOOKING', 'EXPIRED'], default: 'PENDING_REVIEW' },
   incorporatedInPlanId: { type: Schema.Types.ObjectId, ref: 'StowagePlan' },
   reviewedBy:           { type: String, trim: true },
   reviewedAt:           { type: Date },

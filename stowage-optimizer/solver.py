@@ -134,6 +134,8 @@ def load_bookings(db, voyage_id):
     }))
 
 def load_forecasts(db, voyage_id):
+    # planImpact: 'INCORPORATED' — EXPIRED, SUPERSEDED, REPLACED_BY_BOOKING, and
+    # PENDING_REVIEW forecasts are intentionally excluded from optimizer input.
     return list(db.spaceforecasts.find({
         'voyageId': ObjectId(voyage_id),
         'source': {'$in': ['PLANNER_ENTRY', 'SHIPPER_PORTAL', 'CONTRACT_DEFAULT']},

@@ -1414,3 +1414,28 @@ export async function getFleetStatus(serviceFilter: string[] = []): Promise<{
     return { inTransit: 0, planned: 0 };
   }
 }
+
+// ----------------------------------------------------------------------------
+// UPDATE VOYAGE BOOKING DEADLINE
+// ----------------------------------------------------------------------------
+
+export async function updateVoyageDeadline(
+  voyageId: string,
+  bookingDeadline: Date | null
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) {
+      return { success: false, error: 'Forbidden' };
+    }
+    await connectDB();
+    await VoyageModel.findByIdAndUpdate(voyageId, {
+      $set: { bookingDeadline: bookingDeadline ?? null },
+    });
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message ?? 'Failed to update booking deadline' };
+  }
+}

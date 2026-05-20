@@ -12,6 +12,7 @@ import {
   VoyageModel,
   ContractModel,
   StowagePlanModel,
+  BookingModel,
 } from '@/lib/db/schemas';
 import type { SpaceForecast, SpaceForecastSource, SpaceForecastPlanImpact } from '@/types/models';
 import { auth } from '@/auth';
@@ -435,5 +436,108 @@ export async function dismissBookingReplacement(
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message ?? 'Failed to dismiss booking replacement' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// expireForecasts — ADMIN or SHIPPING_PLANNER only
+// Marks active forecasts as EXPIRED once the voyage's bookingDeadline has passed,
+// skipping any shipper that already has a confirmed booking.
+// ----------------------------------------------------------------------------
+
+export async function expireForecasts(voyageId: string): Promise<{
+  success: boolean;
+  expiredCount: number;
+  error?: string;
+}> {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, expiredCount: 0, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) {
+      return { success: false, expiredCount: 0, error: 'Forbidden' };
+    }
+
+    await connectDB();
+
+    const voyage = await VoyageModel.findById(voyageId).lean();
+    if (!voyage) return { success: false, expiredCount: 0, error: 'Voyage not found' };
+
+    const deadline = (voyage as any).bookingDeadline as Date | null | undefined;
+    if (!deadline) {
+      return { success: false, expiredCount: 0, error: 'No booking deadline set for this voyage' };
+    }
+    if (new Date(deadline) > new Date()) {
+      return { success: false, expiredCount: 0, error: 'Booking deadline has not passed yet' };
+    }
+
+    const activeForecasts = await SpaceForecastModel.find({
+      voyageId,
+      planImpact: { $in: ['PENDING_REVIEW', 'INCORPORATED'] },
+    }).select('_id contractId shipperId').lean();
+
+    if (activeForecasts.length === 0) {
+      return { success: true, expiredCount: 0 };
+    }
+
+    const toExpireIds: string[] = [];
+    for (const fc of activeForecasts as any[]) {
+      const booking = await BookingModel.findOne({
+        contractId: fc.contractId,
+        voyageId,
+        shipperId: fc.shipperId,
+        status: { $in: ['CONFIRMED', 'PARTIAL', 'PENDING'] },
+      }).select('_id').lean();
+      if (!booking) {
+        toExpireIds.push(fc._id.toString());
+      }
+    }
+
+    if (toExpireIds.length === 0) {
+      return { success: true, expiredCount: 0 };
+    }
+
+    await SpaceForecastModel.updateMany(
+      { _id: { $in: toExpireIds } },
+      { $set: { planImpact: 'EXPIRED' } }
+    );
+
+    await StowagePlanModel.updateMany(
+      { voyageId, status: { $nin: ['COMPLETED', 'CANCELLED'] } },
+      { $addToSet: { expiredForecasts: { $each: toExpireIds } } }
+    );
+
+    return { success: true, expiredCount: toExpireIds.length };
+  } catch (err: any) {
+    return { success: false, expiredCount: 0, error: err.message ?? 'Failed to expire forecasts' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// dismissExpiredForecasts — ADMIN or SHIPPING_PLANNER only
+// Clears the expiredForecasts list on a plan after the planner has acknowledged
+// the banner. planImpact on the SpaceForecast documents stays EXPIRED.
+// ----------------------------------------------------------------------------
+
+export async function dismissExpiredForecasts(
+  planId: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    const role = (session.user as any).role as string;
+    if (!['ADMIN', 'SHIPPING_PLANNER'].includes(role)) {
+      return { success: false, error: 'Forbidden' };
+    }
+
+    await connectDB();
+
+    await StowagePlanModel.findByIdAndUpdate(planId, {
+      $set: { expiredForecasts: [] },
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message ?? 'Failed to dismiss expired forecasts' };
   }
 }

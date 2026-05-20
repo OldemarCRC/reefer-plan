@@ -9,6 +9,7 @@ import { useSession } from 'next-auth/react';
 import AppShell from '@/components/layout/AppShell';
 import VesselProfile from '@/components/vessel/VesselProfile';
 import { getStowagePlanById, deleteStowagePlan, saveCargoAssignments, updatePlanStatus, copyStowagePlan, replanAfterTemperatureOverride } from '@/app/actions/stowage-plan';
+import { dismissExpiredForecasts } from '@/app/actions/space-forecast';
 import MarkSentModal from '@/components/stowage/MarkSentModal';
 import { getConfirmedBookingsForVoyage } from '@/app/actions/booking';
 
@@ -62,6 +63,11 @@ export default function StowagePlanDetailPage() {
   const [highlightedSectionIds, setHighlightedSectionIds] = useState<string[]>([]);
   const [showReplanBanner, setShowReplanBanner] = useState(false);
   const [isReplanning, startReplanTransition] = useTransition();
+
+  // Expired forecasts banner
+  const [expiredForecasts, setExpiredForecasts] = useState<string[]>([]);
+  const [expiredShipperNames, setExpiredShipperNames] = useState<string[]>([]);
+  const [isDismissingExpired, startDismissExpiredTransition] = useTransition();
 
   // Plan header info — populated from DB on mount
   const [plan, setPlan] = useState({
@@ -186,6 +192,22 @@ export default function StowagePlanDetailPage() {
         setEngineConflicts((p as any).conflicts ?? []);
         setStabilityIndicators((p as any).stabilityIndicators ?? []);
         setGenerationMethod((p as any).generationMethod ?? 'MANUAL');
+
+        // Expired forecasts banner
+        const expiredIds: string[] = ((p as any).expiredForecasts ?? []).map((id: any) => id.toString());
+        setExpiredForecasts(expiredIds);
+        if (expiredIds.length > 0) {
+          const positions: any[] = p.cargoPositions ?? [];
+          const names = [...new Set(
+            expiredIds.flatMap(fid =>
+              positions
+                .filter((pos: any) => String(pos.bookingId ?? '') === `FORECAST-${fid}`)
+                .map((pos: any) => (pos.shipperName as string | undefined) ?? '')
+                .filter(Boolean)
+            )
+          )] as string[];
+          setExpiredShipperNames(names);
+        }
 
         // Load confirmed bookings for this voyage
         const voyageId = typeof p.voyageId === 'object' ? p.voyageId?._id : p.voyageId;
@@ -987,6 +1009,42 @@ export default function StowagePlanDetailPage() {
             {isReplanning ? 'Reassigning…' : '⚡ Auto-Reassign Bookings'}
           </button>
           <button className={styles.modalClose} onClick={() => setShowReplanBanner(false)} title="Dismiss">✕</button>
+        </div>
+      )}
+
+      {/* Expired Forecasts Banner */}
+      {expiredForecasts.length > 0 && canEdit && (
+        <div className={styles.expiredBanner}>
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" style={{ flexShrink: 0 }}>
+            <circle cx="10" cy="10" r="8" stroke="#d97706" strokeWidth="1.5"/>
+            <path d="M10 6v4l2.5 2.5" stroke="#d97706" strokeWidth="1.8" strokeLinecap="round"/>
+          </svg>
+          <span className={styles.expiredBannerMsg}>
+            {expiredForecasts.length} estimate{expiredForecasts.length > 1 ? 's' : ''} expired
+            {expiredShipperNames.length > 0 && ` — cargo from ${expiredShipperNames.join(', ')}`}
+            {' '}will not be included in the next revision. Create a new revision to update the plan.
+          </span>
+          <button
+            className={styles.btnReplan}
+            onClick={handleNewDraft}
+            disabled={isCopying || isLocked}
+          >
+            {isCopying ? 'Creating…' : '+ Create New Revision'}
+          </button>
+          <button
+            className={styles.modalClose}
+            disabled={isDismissingExpired}
+            onClick={() => {
+              startDismissExpiredTransition(async () => {
+                await dismissExpiredForecasts(planId);
+                setExpiredForecasts([]);
+                setExpiredShipperNames([]);
+              });
+            }}
+            title="Dismiss"
+          >
+            ✕
+          </button>
         </div>
       )}
 
