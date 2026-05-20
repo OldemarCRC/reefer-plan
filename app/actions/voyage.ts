@@ -951,7 +951,7 @@ export async function getVoyages() {
     }
 
     const voyages = await VoyageModel.find(voyageQuery)
-      .populate('vesselId', 'name imoNumber capacity')
+      .populate('vesselId', 'name imoNumber capacity temperatureZones')
       .populate('serviceId', 'serviceCode serviceName')
       .sort({ weekNumber: 1, departureDate: 1 })
       .lean();
@@ -989,7 +989,15 @@ export async function getVoyages() {
     const enriched = voyages.map((v: any) => ({
       ...v,
       palletsBooked:         bookingMap[v._id.toString()]?.confirmedPallets ?? 0,
-      palletsCapacity:       (v.vesselId as any)?.capacity?.totalPallets ?? 0,
+      palletsCapacity: (() => {
+        const vessel = v.vesselId as any;
+        if (!vessel?.temperatureZones) return vessel?.capacity?.totalPallets ?? 0;
+        return vessel.temperatureZones.reduce((sum: number, zone: any) =>
+          sum + (zone.coolingSections ?? []).reduce((s: number, sec: any) =>
+            s + Math.floor((sec.sqm ?? 0) / (sec.designStowageFactor ?? 1.32)),
+          0),
+        0);
+      })(),
       bookingsCount:         bookingMap[v._id.toString()]?.bookingCount ?? 0,
       estimatedPalletsTotal: forecastMap[v._id.toString()] ?? 0,
     }));
@@ -1365,7 +1373,7 @@ export async function getAdminVoyages() {
     await connectDB();
 
     const voyages = await VoyageModel.find()
-      .populate('vesselId', 'name imoNumber capacity')
+      .populate('vesselId', 'name imoNumber capacity temperatureZones')
       .populate('serviceId', 'serviceCode serviceName')
       .sort({ weekNumber: 1, departureDate: 1 })
       .lean();
@@ -1392,7 +1400,15 @@ export async function getAdminVoyages() {
       planCount:       planMap[v._id.toString()] ?? 0,
       bookingCount:    bookingMap[v._id.toString()]?.count ?? 0,
       palletsBooked:   bookingMap[v._id.toString()]?.confirmedPallets ?? 0,
-      palletsCapacity: (v.vesselId as any)?.capacity?.totalPallets ?? 0,
+      palletsCapacity: (() => {
+        const vessel = v.vesselId as any;
+        if (!vessel?.temperatureZones) return vessel?.capacity?.totalPallets ?? 0;
+        return vessel.temperatureZones.reduce((sum: number, zone: any) =>
+          sum + (zone.coolingSections ?? []).reduce((s: number, sec: any) =>
+            s + Math.floor((sec.sqm ?? 0) / (sec.designStowageFactor ?? 1.32)),
+          0),
+        0);
+      })(),
     }));
 
     return { success: true, data: JSON.parse(JSON.stringify(data)) };
