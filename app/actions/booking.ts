@@ -30,12 +30,7 @@ import { buildServiceFilter } from '@/lib/utils/accessFilter';
 
 const BookingIdSchema = z.string().min(1, 'Booking ID is required');
 
-const CargoTypeSchema = z.enum([
-  'BANANAS', 'ORGANIC_BANANAS', 'PLANTAINS', 'FROZEN_FISH', 'TABLE_GRAPES',
-  'CITRUS', 'AVOCADOS', 'BERRIES', 'KIWIS', 'PINEAPPLES', 'CHERRIES',
-  'BLUEBERRIES', 'PLUMS', 'PEACHES', 'APPLES', 'PEARS', 'PAPAYA',
-  'MANGOES', 'OTHER_FROZEN', 'OTHER_CHILLED',
-]);
+const CargoTypeSchema = z.string().min(1, 'Cargo type is required');
 
 const CreateBookingFromContractSchema = z.object({
   contractId:             z.string().min(1, 'Contract ID is required'),

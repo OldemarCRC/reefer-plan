@@ -833,12 +833,7 @@ const SpaceForecastSchema = new Schema({
   shipperName:          { type: String, required: true, trim: true },
   consigneeName:        { type: String, required: true, trim: true },
   consigneeCode:        { type: String, required: true, trim: true },
-  cargoType: { type: String, required: true, enum: [
-    'BANANAS', 'ORGANIC_BANANAS', 'PLANTAINS', 'FROZEN_FISH', 'TABLE_GRAPES',
-    'CITRUS', 'AVOCADOS', 'BERRIES', 'KIWIS', 'PINEAPPLES', 'CHERRIES',
-    'BLUEBERRIES', 'PLUMS', 'PEACHES', 'APPLES', 'PEARS', 'PAPAYA',
-    'MANGOES', 'OTHER_FROZEN', 'OTHER_CHILLED',
-  ]},
+  cargoType: { type: String, required: true },
   polPortCode:          { type: String, required: true, trim: true, uppercase: true },
   podPortCode:          { type: String, required: true, trim: true, uppercase: true },
   estimatedPallets:     { type: Number, required: true, min: 0 },
