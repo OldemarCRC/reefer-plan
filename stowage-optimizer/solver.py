@@ -366,17 +366,53 @@ def solve(cargo_items, sections, config, time_limit=30):
 
     obj = []
 
-    # Balance: |fwd_pallets − aft_pallets|
-    fwd_js = [j for j in range(n_s) if sections[j]['holdNumber'] in {1, 2}]
-    aft_js = [j for j in range(n_s) if sections[j]['holdNumber'] in {3, 4}]
-    if fwd_js and aft_js:
-        fwd_v = model.NewIntVar(0, total_cap, 'fwd')
-        aft_v = model.NewIntVar(0, total_cap, 'aft')
-        model.Add(fwd_v == sum(x[i, j] for i in range(n_c) for j in fwd_js))
-        model.Add(aft_v == sum(x[i, j] for i in range(n_c) for j in aft_js))
-        bal = model.NewIntVar(0, total_cap, 'bal')
-        model.AddAbsEquality(bal, fwd_v - aft_v)
-        obj.append(W_BAL * bal)
+    # Balance: fill-ratio variance across all holds per loading-port departure.
+    # For each polSeq departure, cargo aboard = all cargo with polSeq <= current.
+    # Cross-multiply to avoid floating-point:
+    #   diff_scaled_h = hold_pallets[h] * total_capacity - total_aboard * cap_h
+    # This equals (fill_ratio_h - avg_fill_ratio) * cap_h * total_capacity.
+    # Normalize by dividing by total_capacity to get pallet-scale deviation:
+    #   deviation_h ≈ |fill_ratio_h - avg_fill_ratio| * cap_h  (in pallets)
+    # This keeps balance terms comparable in magnitude to other objective terms.
+    hold_capacities = {}
+    for j, sec in enumerate(sections):
+        h = sec['holdNumber']
+        hold_capacities[h] = hold_capacities.get(h, 0) + sec['capacity']
+    total_capacity = sum(hold_capacities.values())
+
+    balance_terms = []
+    unique_pol_seqs = sorted(set(c['polSeq'] for c in cargo_items))
+
+    for pol in unique_pol_seqs:
+        hold_pallets = {h: model.NewIntVar(0, hold_capacities[h], f'hp_{pol}_{h}')
+                        for h in hold_capacities}
+        for h in hold_capacities:
+            model.Add(hold_pallets[h] == sum(
+                x[i, j]
+                for i, cargo in enumerate(cargo_items)
+                if cargo['polSeq'] <= pol
+                for j, sec in enumerate(sections)
+                if sec['holdNumber'] == h
+                and (i, j) in compat
+            ))
+        total_aboard = model.NewIntVar(0, total_capacity, f'total_{pol}')
+        model.Add(total_aboard == sum(hold_pallets.values()))
+
+        for h in hold_capacities:
+            cap_h = hold_capacities[h]
+            # diff_scaled = (fill_ratio_h - avg_fill_ratio) * cap_h * total_capacity
+            diff_scaled = model.NewIntVar(-(cap_h * total_capacity), cap_h * total_capacity,
+                                          f'diff_{pol}_{h}')
+            model.Add(diff_scaled == hold_pallets[h] * total_capacity - total_aboard * cap_h)
+            dev_scaled = model.NewIntVar(0, cap_h * total_capacity, f'devs_{pol}_{h}')
+            model.AddAbsEquality(dev_scaled, diff_scaled)
+            # Normalize to pallet scale: deviation ≈ |fill_ratio_h - avg| * cap_h
+            deviation = model.NewIntVar(0, cap_h, f'dev_{pol}_{h}')
+            model.AddDivisionEquality(deviation, dev_scaled, total_capacity)
+            balance_terms.append(deviation)
+
+    if balance_terms:
+        obj.append(W_BAL * sum(balance_terms))
 
     # Compactness: penalize pallets in shallow sections when deeper sections empty
     for hold_num, h_secs in holds_map.items():
@@ -442,11 +478,20 @@ def compute_metrics(assignments, cargo_items, sections):
     total_pal = sum(c['pallets'] for c in cargo_items)
     placed    = sum(a['quantity'] for a in assignments)
 
-    fwd = sum(a['quantity'] for a in assignments
-              if sections[a['sectionIdx']]['holdNumber'] in {1, 2})
-    aft = sum(a['quantity'] for a in assignments
-              if sections[a['sectionIdx']]['holdNumber'] in {3, 4})
-    balance_dev = abs(fwd - aft)
+    hold_capacities = {}
+    for j, sec in enumerate(sections):
+        h = sec['holdNumber']
+        hold_capacities[h] = hold_capacities.get(h, 0) + sec['capacity']
+
+    hold_fills = {h: 0 for h in hold_capacities}
+    for a in assignments:
+        h = sections[a['sectionIdx']]['holdNumber']
+        hold_fills[h] = hold_fills.get(h, 0) + a['quantity']
+
+    fill_ratios = [hold_fills[h] / hold_capacities[h] for h in sorted(hold_capacities)]
+    avg_ratio   = sum(fill_ratios) / len(fill_ratios) if fill_ratios else 0
+    balance_dev = (sum(abs(r - avg_ratio) for r in fill_ratios) / len(fill_ratios)
+                   if fill_ratios else 0)
 
     # Overstow: late-POL cargo sitting below early-POL cargo in same hold
     overstow = 0
@@ -477,6 +522,8 @@ def compute_metrics(assignments, cargo_items, sections):
         'placedPct':       placed / total_pal * 100 if total_pal else 0,
         'overstowViolations': overstow,
         'balanceDev':      balance_dev,
+        'holdFillRatios':  {h: hold_fills[h] / hold_capacities[h]
+                            for h in sorted(hold_capacities)},
         'compactnessPct':  compact_pct,
         'sectionsUsed':    secs_used,
         'totalSections':   len(sections),
@@ -663,10 +710,15 @@ def build_and_solve(data: dict) -> list:
 
         metrics = compute_metrics(assignments, cargo_items, sections)
         m = metrics
+        fill_str = ' | '.join(
+            f'Hold {h}: {r*100:.1f}%'
+            for h, r in m.get('holdFillRatios', {}).items()
+        )
         print(f'  Solution {idx}/5: {cfg["label"]}  [{sname}]')
         print(f'  +-- Pallets placed: {m["placedPallets"]}/{m["totalPallets"]} ({m["placedPct"]:.1f}%)')
         print(f'  +-- OVERSTOW violations: {m["overstowViolations"]}')
-        print(f'  +-- Balance score (avg deviation per port): {m["balanceDev"]} pallets')
+        print(f'  +-- {fill_str}')
+        print(f'  +-- Balance deviation: {m["balanceDev"]*100:.2f}%')
         print(f'  +-- Compactness score: {m["compactnessPct"]:.1f}% lower levels filled')
         print(f'  +-- Sections used: {m["sectionsUsed"]}/{m["totalSections"]}')
         print()
