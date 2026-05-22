@@ -27,6 +27,17 @@ from openpyxl.utils import get_column_letter
 LEVEL_DEPTH = {'FC': 0, 'UPD': 1, 'A': 2, 'B': 3, 'C': 4, 'D': 5}
 
 CARGO_TEMP_RANGES = {
+    # Short codes (current CargoProduct.code values)
+    'BAN':              (12,    14),
+    'OBAN':             (12,    14),
+    'PLAN':             (12,    14),
+    'PINE':             (7,    10),
+    'PAPA':             (7,    10),
+    'MANGO':            (7,    10),
+    'AVOC':             (5,     8),
+    'CITRUS':           (4,    10),
+    'GRAPE':            (-0.5,  0.5),
+    # Legacy names (kept for backwards compatibility)
     'BANANAS':          (12,    14),
     'ORGANIC_BANANAS':  (12,    14),
     'PLANTAINS':        (12,    14),
@@ -36,7 +47,6 @@ CARGO_TEMP_RANGES = {
     'BERRIES':          (-0.5,  1.0),
     'CHERRIES':         (-0.5,  0.5),
     'BLUEBERRIES':      (-0.5,  1.0),
-    'CITRUS':           (4,    10),
     'AVOCADOS':         (5,     8),
     'PINEAPPLES':       (7,    10),
     'PAPAYA':           (7,    10),
