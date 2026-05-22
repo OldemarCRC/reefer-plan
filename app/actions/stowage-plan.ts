@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { StowagePlanModel, VesselModel, VoyageModel, BookingModel, ContractModel, ServiceModel, SpaceForecastModel } from '@/lib/db/schemas';
+import { StowagePlanModel, VesselModel, VoyageModel, BookingModel, ContractModel, ServiceModel, SpaceForecastModel, CargoProductModel } from '@/lib/db/schemas';
 import type { StowagePlan, StowagePlanStatus } from '@/types/models';
 import { sendPlanNotification } from '@/lib/email';
 import { generatePlanPdf } from '@/lib/generate-plan-pdf';
@@ -2589,6 +2589,50 @@ export async function savePythonPlan(
 
     const genMethod = `PYTHON_OPTIMIZER_${solution.label.toUpperCase().replace(/ /g, '_')}`;
 
+    // Build zone temperature assignments from cargo product temperatures (MAJORITY_RULE by pallet weight)
+    const cargoProducts = await CargoProductModel.find({ active: true })
+      .select('code temperature').lean();
+    const productTempMap = new Map(
+      cargoProducts.map((p: any) => [p.code as string, p.temperature as number])
+    );
+
+    const vesselDoc = await VesselModel.findById(vessel._id)
+      .select('temperatureZones').lean() as any;
+
+    const coolingSectionStatus = (vesselDoc?.temperatureZones ?? []).map((zone: any) => {
+      const zoneSectionIds: string[] = (zone.coolingSections ?? [])
+        .map((s: any) => s.sectionId as string);
+
+      const zonePositions = cargoPositions.filter((cp: any) =>
+        zoneSectionIds.includes(cp.compartment?.id ?? '')
+      );
+
+      const tempVotes = new Map<number, number>();
+      for (const pos of zonePositions) {
+        const temp = productTempMap.get(pos.cargoType ?? '');
+        if (temp !== undefined) {
+          tempVotes.set(temp, (tempVotes.get(temp) ?? 0) + (pos.quantity ?? 0));
+        }
+      }
+
+      let assignedTemperature: number | undefined;
+      let maxVotes = 0;
+      for (const [temp, votes] of tempVotes) {
+        if (votes > maxVotes) {
+          maxVotes = votes;
+          assignedTemperature = temp;
+        }
+      }
+
+      return {
+        zoneId:            zone.zoneId,
+        coolingSectionIds: zoneSectionIds,
+        assignedTemperature,
+        locked:            false,
+        temperatureSource: assignedTemperature !== undefined ? 'MAJORITY_RULE' : undefined,
+      };
+    });
+
     const newPlan = await StowagePlanModel.create({
       planNumber,
       voyageId,
@@ -2598,6 +2642,7 @@ export async function savePythonPlan(
       status:       'ESTIMATED',
       generationMethod: genMethod,
       cargoPositions,
+      coolingSectionStatus,
       conflicts:                  [],
       stabilityIndicators:        [],
       overstowViolations:         [],
