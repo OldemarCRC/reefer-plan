@@ -99,7 +99,7 @@ def parse_section_id(sid):
     return 0, 'A'
 
 def get_temp_range(cargo_type):
-    return CARGO_TEMP_RANGES.get(cargo_type, (0, 4))
+    return CARGO_TEMP_RANGES.get(cargo_type, (0, 25))
 
 def get_zone_temperature(zone):
     t = zone.get('currentTemperature')
@@ -179,7 +179,12 @@ def build_sections(vessel):
             })
     return sections
 
-def build_cargo_items(bookings, forecasts, port_seq_map):
+def build_cargo_items(bookings, forecasts, port_seq_map, cargo_temp_map=None):
+    def _get_temp(code):
+        if cargo_temp_map and code in cargo_temp_map:
+            return cargo_temp_map[code]
+        return CARGO_TEMP_RANGES.get(code, (0, 25))
+
     items = []
     for b in bookings:
         pallets = int(b.get('confirmedQuantity') or 0)
@@ -187,7 +192,7 @@ def build_cargo_items(bookings, forecasts, port_seq_map):
             continue
         pol = b.get('pol', {}).get('portCode', '')
         pod = b.get('pod', {}).get('portCode', '')
-        tmin, tmax = get_temp_range(b.get('cargoType', ''))
+        tmin, tmax = _get_temp(b.get('cargoType', ''))
         items.append({
             'id':            str(b['_id']),
             'bookingId':     str(b['_id']),
@@ -210,7 +215,7 @@ def build_cargo_items(bookings, forecasts, port_seq_map):
             continue
         pol = f.get('polPortCode', '')
         pod = f.get('podPortCode', '')
-        tmin, tmax = get_temp_range(f.get('cargoType', ''))
+        tmin, tmax = _get_temp(f.get('cargoType', ''))
         items.append({
             'id':            f'FORECAST-{f["_id"]}',
             'bookingId':     f'FORECAST-{f["_id"]}',
@@ -603,7 +608,15 @@ def load_voyage_data(voyage_id: str):
     forecasts    = load_forecasts(db, voyage_id)
     port_seq_map = build_port_seq_map(voyage.get('portCalls', []))
     sections     = build_sections(vessel)
-    cargo_items  = build_cargo_items(bookings, forecasts, port_seq_map)
+
+    # Load cargo product temperatures from DB; range = (temp - 1, temp + 1)
+    cargo_temp_map = {}
+    for p in db['cargoProducts'].find({'active': True}, {'code': 1, 'temperature': 1}):
+        t = p.get('temperature')
+        if t is not None:
+            cargo_temp_map[p['code']] = (t - 1, t + 1)
+
+    cargo_items  = build_cargo_items(bookings, forecasts, port_seq_map, cargo_temp_map)
 
     return {
         'voyageId':    voyage_id,
@@ -612,6 +625,7 @@ def load_voyage_data(voyage_id: str):
         'portCalls':   voyage.get('portCalls', []),
         'sections':    sections,
         'cargoItems':  cargo_items,
+        'cargoTempMap': cargo_temp_map,
         'bookings':    bookings,
         'forecasts':   forecasts,
         'voyage':      voyage,   # raw doc — used by print_loading_summary in CLI
