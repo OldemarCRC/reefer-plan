@@ -64,6 +64,7 @@ const UpdateCargoProductSchema = z.object({
   name:                 z.string().min(1, 'Name is required').max(200).optional(),
   shortLabel:           z.string().min(1, 'Short label is required').max(4, 'Short label must be at most 4 characters').optional(),
   compatibilityGroupId: z.string().min(1, 'Compatibility group is required').optional(),
+  temperature:          z.number().optional(),
   notes:                z.string().max(500).optional(),
   active:               z.boolean().optional(),
 });
@@ -253,10 +254,11 @@ export async function updateCargoProduct(id: string, data: unknown) {
     await connectDB();
 
     const setFields: Record<string, unknown> = {};
-    if (validated.name       !== undefined) setFields.name       = toTitleCase(validated.name);
-    if (validated.shortLabel !== undefined) setFields.shortLabel = toUpperCode(validated.shortLabel);
-    if (validated.notes      !== undefined) setFields.notes      = validated.notes.trim();
-    if (validated.active     !== undefined) setFields.active     = validated.active;
+    if (validated.name        !== undefined) setFields.name        = toTitleCase(validated.name);
+    if (validated.shortLabel  !== undefined) setFields.shortLabel  = toUpperCode(validated.shortLabel);
+    if (validated.temperature !== undefined) setFields.temperature = validated.temperature;
+    if (validated.notes       !== undefined) setFields.notes       = validated.notes.trim();
+    if (validated.active      !== undefined) setFields.active      = validated.active;
 
     // If group is changing, re-resolve the denormalized code
     if (validated.compatibilityGroupId !== undefined) {

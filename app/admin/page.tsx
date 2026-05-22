@@ -10,12 +10,13 @@ import { getPorts, getUnecePorts } from '@/app/actions/port';
 import { getShippers } from '@/app/actions/shipper';
 import { getAdminBookings } from '@/app/actions/booking';
 import { getCustomers } from '@/app/actions/customer';
+import { getCargoProducts } from '@/app/actions/cargo-product';
 import AdminClient from './AdminClient';
 import type { DisplayContract } from '@/app/contracts/ContractsClient';
 
 export const metadata = { title: 'Admin — Reefer Planner' };
 
-const VALID_TABS = ['voyages','contracts','plans','vessels','services','users','ports','shippers','offices','bookings','customers'];
+const VALID_TABS = ['voyages','contracts','plans','vessels','services','users','ports','shippers','offices','bookings','customers','cargo-products'];
 
 const ARCHIVED_STATUSES = ['CANCELLED', 'REJECTED'];
 
@@ -24,7 +25,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const initialTab = VALID_TABS.includes(tab ?? '') ? tab! : 'voyages';
   const bookingStatusParam = statusParam ?? '';
   const showArchivedBookings = archivedBookings === 'true' || ARCHIVED_STATUSES.includes(bookingStatusParam);
-  const [voyagesResult, contractsRes, officesRes, servicesRes, plansRes, vesselsRes, usersRes, portsRes, shippersRes, unecePortsRes, bookingsRes, customersRes] = await Promise.all([
+  const [voyagesResult, contractsRes, officesRes, servicesRes, plansRes, vesselsRes, usersRes, portsRes, shippersRes, unecePortsRes, bookingsRes, customersRes, cargoProductsRes] = await Promise.all([
     getAdminVoyages(),
     getContracts(),
     getOffices(),
@@ -37,6 +38,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     getUnecePorts(),
     getAdminBookings(showArchivedBookings),
     getCustomers(),
+    getCargoProducts(),
   ]);
 
   const voyages  = voyagesResult.success ? voyagesResult.data : [];
@@ -49,8 +51,16 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const ports    = portsRes.success     ? portsRes.data     : [];
   const shippers   = shippersRes.success   ? shippersRes.data   : [];
   const unecePorts = unecePortsRes.success ? unecePortsRes.data : [];
-  const bookings   = bookingsRes.success   ? bookingsRes.data   : [];
-  const customers  = customersRes.success  ? customersRes.data  : [];
+  const bookings      = bookingsRes.success      ? bookingsRes.data      : [];
+  const customers     = customersRes.success     ? customersRes.data     : [];
+  const cargoProducts = cargoProductsRes.success ? cargoProductsRes.data.map((p: any) => ({
+    _id:         p._id,
+    code:        p.code,
+    name:        p.name,
+    shortLabel:  p.shortLabel,
+    temperature: p.temperature,
+    active:      p.active,
+  })) : [];
 
   const displayContracts: DisplayContract[] = contracts.map((c: any) => {
     const legacyCps = c.client?.type === 'SHIPPER' ? c.consignees : c.shippers;
@@ -101,6 +111,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         unecePorts={unecePorts}
         bookings={bookings}
         customers={customers}
+        cargoProducts={cargoProducts}
         initialTab={initialTab}
         showArchivedBookings={showArchivedBookings}
         initialBookingStatusFilter={bookingStatusParam}

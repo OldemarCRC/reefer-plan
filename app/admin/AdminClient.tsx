@@ -13,6 +13,7 @@ import { createShipper, updateShipper, deactivateShipper } from '@/app/actions/s
 import { createOffice, updateOffice, deleteOffice } from '@/app/actions/office';
 import { approveBooking, rejectBooking, cancelBooking } from '@/app/actions/booking';
 import { createCustomer, updateCustomer, deactivateCustomer } from '@/app/actions/customer';
+import { getCargoProducts, updateCargoProduct } from '@/app/actions/cargo-product';
 import { getCountries } from '@/app/actions/country';
 import CountrySelect from '@/components/ui/CountrySelect';
 import ContractsClient from '@/app/contracts/ContractsClient';
@@ -221,6 +222,15 @@ interface AdminCustomer {
   createdAt: string | null;
 }
 
+interface AdminCargoProduct {
+  _id: string;
+  code: string;
+  name: string;
+  shortLabel: string;
+  temperature: number;
+  active: boolean;
+}
+
 const BOOKING_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   CONFIRMED: { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
   PENDING:   { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)' },
@@ -243,7 +253,7 @@ function fmtCargo(type: string): string {
   return type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 }
 
-type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users' | 'ports' | 'shippers' | 'offices' | 'bookings' | 'customers';
+type Tab = 'voyages' | 'contracts' | 'plans' | 'vessels' | 'services' | 'users' | 'ports' | 'shippers' | 'offices' | 'bookings' | 'customers' | 'cargo-products';
 
 type ConfirmAction =
   | { type: 'cancel'; voyage: AdminVoyage }
@@ -3886,17 +3896,18 @@ function OfficesTab({ initialOffices, allServices }: { initialOffices: AdminOffi
 // ---------------------------------------------------------------------------
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'voyages',   label: 'Voyages'       },
-  { id: 'contracts', label: 'Contracts'     },
-  { id: 'plans',     label: 'Stowage Plans' },
-  { id: 'vessels',   label: 'Vessels'       },
-  { id: 'services',  label: 'Services'      },
-  { id: 'users',     label: 'Users'         },
-  { id: 'ports',     label: 'Ports'         },
-  { id: 'shippers',  label: 'Shippers'      },
-  { id: 'offices',   label: 'Offices'       },
-  { id: 'bookings',  label: 'Bookings'      },
-  { id: 'customers', label: 'Customers'     },
+  { id: 'voyages',        label: 'Voyages'        },
+  { id: 'contracts',      label: 'Contracts'      },
+  { id: 'plans',          label: 'Stowage Plans'  },
+  { id: 'vessels',        label: 'Vessels'        },
+  { id: 'services',       label: 'Services'       },
+  { id: 'users',          label: 'Users'          },
+  { id: 'ports',          label: 'Ports'          },
+  { id: 'shippers',       label: 'Shippers'       },
+  { id: 'offices',        label: 'Offices'        },
+  { id: 'bookings',       label: 'Bookings'       },
+  { id: 'customers',      label: 'Customers'      },
+  { id: 'cargo-products', label: 'Cargo Products' },
 ];
 
 interface AdminClientProps {
@@ -3912,12 +3923,13 @@ interface AdminClientProps {
   unecePorts: UnecePort[];
   bookings: AdminBooking[];
   customers: AdminCustomer[];
+  cargoProducts: AdminCargoProduct[];
   initialTab?: string;
   showArchivedBookings?: boolean;
   initialBookingStatusFilter?: string;
 }
 
-export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports, shippers, unecePorts, bookings, customers, initialTab = 'voyages', showArchivedBookings = false, initialBookingStatusFilter = '' }: AdminClientProps) {
+export default function AdminClient({ voyages, contracts, offices, services, plans, vessels, users, ports, shippers, unecePorts, bookings, customers, cargoProducts, initialTab = 'voyages', showArchivedBookings = false, initialBookingStatusFilter = '' }: AdminClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>((initialTab as Tab) || 'voyages');
 
@@ -3963,7 +3975,8 @@ export default function AdminClient({ voyages, contracts, offices, services, pla
           initialStatusFilter={initialBookingStatusFilter}
         />
       )}
-      {activeTab === 'customers' && <CustomersTab initialCustomers={customers} />}
+      {activeTab === 'customers'      && <CustomersTab initialCustomers={customers} />}
+      {activeTab === 'cargo-products' && <CargoProductsTab initialProducts={cargoProducts} />}
     </div>
   );
 }
@@ -5030,6 +5043,161 @@ function AdminCancelModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Cargo Products Tab
+// ---------------------------------------------------------------------------
+
+function EditCargoProductModal({ product, onClose, onUpdated }: {
+  product: AdminCargoProduct;
+  onClose: () => void;
+  onUpdated: (p: AdminCargoProduct) => void;
+}) {
+  const [name, setName]           = useState(product.name);
+  const [temperature, setTemp]    = useState(String(product.temperature));
+  const [active, setActive]       = useState(product.active);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError]         = useState<string | null>(null);
+
+  const handleSave = () => {
+    const tempNum = parseFloat(temperature);
+    if (!name.trim()) { setError('Name is required'); return; }
+    if (isNaN(tempNum)) { setError('Temperature must be a number'); return; }
+    setError(null);
+    startTransition(async () => {
+      const result = await updateCargoProduct(product._id, { name: name.trim(), temperature: tempNum, active });
+      if (result.success) {
+        onUpdated(result.data as AdminCargoProduct);
+      } else {
+        setError((result as any).error ?? 'Failed to update');
+      }
+    });
+  };
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
+        <h3 className={styles.modalTitle}>Edit Cargo Product — <code>{product.code}</code></h3>
+        <div className={styles.formGrid}>
+          <div className={styles.formGroupFull}>
+            <label className={styles.formLabel}>Name *</label>
+            <input
+              className={styles.formInput}
+              value={name}
+              onChange={e => setName(e.target.value)}
+              maxLength={200}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Transport Temperature (°C) *</label>
+            <input
+              className={styles.formInput}
+              type="number"
+              step="0.5"
+              value={temperature}
+              onChange={e => setTemp(e.target.value)}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Status</label>
+            <select className={styles.formInput} value={active ? 'true' : 'false'} onChange={e => setActive(e.target.value === 'true')}>
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
+            </select>
+          </div>
+        </div>
+        {error && <div className={styles.modalError}>{error}</div>}
+        <div className={styles.modalActions}>
+          <button className={styles.btnModalCancel} onClick={onClose} disabled={isPending}>Cancel</button>
+          <button className={styles.btnPrimary} onClick={handleSave} disabled={isPending || !name.trim()}>
+            {isPending ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CargoProductsTab({ initialProducts }: { initialProducts: AdminCargoProduct[] }) {
+  const router = useRouter();
+  const [products, setProducts]       = useState<AdminCargoProduct[]>(initialProducts);
+  const [editing, setEditing]         = useState<AdminCargoProduct | null>(null);
+  const [showInactive, setShowInactive] = useState(false);
+
+  const filtered = showInactive ? products : products.filter(p => p.active);
+
+  return (
+    <div className={styles.tabContent}>
+      <div className={styles.tableHeader}>
+        <div>
+          <h2 className={styles.tableTitle}>Cargo Products</h2>
+          <p className={styles.tableSubtitle}>{filtered.length} product{filtered.length !== 1 ? 's' : ''}</p>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <label style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', display: 'flex', gap: '0.375rem', alignItems: 'center', cursor: 'pointer' }}>
+            <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} />
+            Show inactive
+          </label>
+        </div>
+      </div>
+
+      <div className={styles.tableWrapper}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th className={styles.th}>Code</th>
+              <th className={styles.th}>Name</th>
+              <th className={styles.th}>Short Label</th>
+              <th className={styles.th} style={{ textAlign: 'right' }}>Temp (°C)</th>
+              <th className={styles.th}>Status</th>
+              <th className={styles.th}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(p => (
+              <tr key={p._id} className={styles.tr}>
+                <td className={styles.cellMono}>{p.code}</td>
+                <td>{p.name}</td>
+                <td className={styles.cellMono}>{p.shortLabel}</td>
+                <td className={styles.cellNum}>{p.temperature >= 0 ? `+${p.temperature}` : p.temperature}°C</td>
+                <td>
+                  <span className={styles.badge} style={{
+                    background: p.active ? 'var(--color-success-muted)' : 'var(--color-bg-tertiary)',
+                    color: p.active ? 'var(--color-success)' : 'var(--color-text-tertiary)',
+                  }}>
+                    {p.active ? 'Active' : 'Inactive'}
+                  </span>
+                </td>
+                <td onClick={e => e.stopPropagation()}>
+                  <div className={styles.rowActions}>
+                    <button
+                      className={`${styles.btnSmall} ${styles.btnSmallEdit}`}
+                      onClick={() => setEditing(p)}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {editing && (
+        <EditCargoProductModal
+          product={editing}
+          onClose={() => setEditing(null)}
+          onUpdated={updated => {
+            setProducts(prev => prev.map(p => p._id === updated._id ? updated : p));
+            setEditing(null);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

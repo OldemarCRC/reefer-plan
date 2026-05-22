@@ -740,6 +740,7 @@ const CargoProductSchema = new Schema({
   compatibilityGroupCode: { type: String, required: true },                               // denormalized for fast access
   notes:                  { type: String },
   active:                 { type: Boolean, default: true },
+  temperature:            { type: Number, required: true },  // °C transport temperature
   createdBy:              { type: String, required: true },
 }, { timestamps: true });
 

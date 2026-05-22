@@ -4,10 +4,10 @@ import { useState, useMemo, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createContract, updateContract, deactivateContract, activateContract, getContractById } from '@/app/actions/contract';
+import { getCargoProducts } from '@/app/actions/cargo-product';
 import ContractShippersPanel from '@/app/contracts/[id]/ContractShippersPanel';
 import CountrySelect from '@/components/ui/CountrySelect';
 import styles from './page.module.css';
-import type { CargoType } from '@/types/models';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -85,6 +85,14 @@ interface CustomerOption {
   active: boolean;
 }
 
+interface CargoProductOption {
+  _id: string;
+  code: string;
+  name: string;
+  shortLabel: string;
+  temperature: number;
+}
+
 interface ContractsClientProps {
   contracts: DisplayContract[];
   offices: OfficeOption[];
@@ -94,17 +102,6 @@ interface ContractsClientProps {
   /** When true, row clicks open an inline detail panel instead of navigating to /contracts/[id] */
   adminMode?: boolean;
 }
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const CARGO_TYPES: CargoType[] = [
-  'BANANAS', 'ORGANIC_BANANAS', 'PLANTAINS', 'FROZEN_FISH', 'TABLE_GRAPES',
-  'CITRUS', 'AVOCADOS', 'BERRIES', 'KIWIS', 'PINEAPPLES', 'CHERRIES',
-  'BLUEBERRIES', 'PLUMS', 'PEACHES', 'APPLES', 'PEARS', 'PAPAYA',
-  'MANGOES', 'OTHER_FROZEN', 'OTHER_CHILLED',
-];
 
 const statusStyles: Record<string, { bg: string; color: string }> = {
   ACTIVE: { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
@@ -182,13 +179,20 @@ function CreateContractModal({
   const [officeId, setOfficeId] = useState('');
   const [clientType, setClientType] = useState<'SHIPPER' | 'CONSIGNEE' | 'AGENT'>('SHIPPER');
   const [notes, setNotes] = useState('');
-  const [cargoType, setCargoType] = useState<CargoType | ''>('');
+  const [cargoType, setCargoType] = useState('');
   const [weeklyPallets, setWeeklyPallets] = useState('');
   const [serviceId, setServiceId] = useState('');
   const [originPort, setOriginPort] = useState('');
   const [destinationPort, setDestinationPort] = useState('');
   const [validFrom, setValidFrom] = useState('');
   const [validTo, setValidTo] = useState('');
+
+  const [cargoProducts, setCargoProducts] = useState<CargoProductOption[]>([]);
+  useEffect(() => {
+    getCargoProducts().then(r => {
+      if (r.success && r.data) setCargoProducts(r.data as CargoProductOption[]);
+    });
+  }, []);
 
   // SHIPPER contract: free-text consignees
   const [counterparties, setCounterparties] = useState<CounterpartyForm[]>([emptyCounterparty()]);
@@ -294,7 +298,7 @@ function CreateContractModal({
       officeId,
       customerId,
       client: { type: clientType },
-      ...(cargoType ? { cargoType: cargoType as CargoType } : {}),
+      ...(cargoType ? { cargoType } : {}),
       ...(weeklyPallets ? { weeklyPallets: parseInt(weeklyPallets) } : {}),
       ...(notes.trim() ? { notes: notes.trim() } : {}),
       counterparties: clientType === 'CONSIGNEE'
@@ -420,10 +424,10 @@ function CreateContractModal({
             <div className={styles.formGrid2}>
               <div className={styles.formRow}>
                 <label className={styles.formLabel}>Primary Cargo Type *</label>
-                <select className={styles.formSelect} value={cargoType} onChange={(e) => setCargoType(e.target.value as CargoType)}>
+                <select className={styles.formSelect} value={cargoType} onChange={(e) => setCargoType(e.target.value)}>
                   <option value="">Select cargo...</option>
-                  {CARGO_TYPES.map((ct) => (
-                    <option key={ct} value={ct}>{formatCargo(ct)}</option>
+                  {cargoProducts.map(p => (
+                    <option key={p.code} value={p.code}>{p.name} · {p.temperature}°C</option>
                   ))}
                 </select>
               </div>
@@ -621,11 +625,16 @@ function EditContractModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [counterparties, setCounterparties] = useState<any[]>([]);
 
+  const [cargoProducts, setCargoProducts] = useState<CargoProductOption[]>([]);
+
   useEffect(() => {
     getContractById(contract._id).then(res => {
       if (res.success && (res.data as any)?.counterparties) {
         setCounterparties((res.data as any).counterparties);
       }
+    });
+    getCargoProducts().then(r => {
+      if (r.success && r.data) setCargoProducts(r.data as CargoProductOption[]);
     });
   }, [contract._id]);
 
@@ -633,7 +642,7 @@ function EditContractModal({
   const [clientContact, setClientContact] = useState(contract.clientContact);
   const [clientEmail, setClientEmail] = useState(contract.clientEmail);
   const [clientCountry, setClientCountry] = useState(contract.clientCountry);
-  const [cargoType, setCargoType] = useState<CargoType | ''>(contract.cargoType as CargoType || '');
+  const [cargoType, setCargoType] = useState(contract.cargoType || '');
   const [weeklyPallets, setWeeklyPallets] = useState(String(contract.weeklyPallets || ''));
   const [validFrom, setValidFrom] = useState(contract.validFrom ? contract.validFrom.slice(0, 10) : '');
   const [validTo, setValidTo] = useState(contract.validTo ? contract.validTo.slice(0, 10) : '');
@@ -739,10 +748,10 @@ function EditContractModal({
           <div className={styles.formGrid2}>
             <div className={styles.formRow}>
               <label className={styles.formLabel}>Primary Cargo Type</label>
-              <select className={styles.formSelect} value={cargoType} onChange={(e) => setCargoType(e.target.value as CargoType)}>
+              <select className={styles.formSelect} value={cargoType} onChange={(e) => setCargoType(e.target.value)}>
                 <option value="">Select cargo...</option>
-                {CARGO_TYPES.map((ct) => (
-                  <option key={ct} value={ct}>{formatCargo(ct)}</option>
+                {cargoProducts.map(p => (
+                  <option key={p.code} value={p.code}>{p.name} · {p.temperature}°C</option>
                 ))}
               </select>
             </div>
