@@ -18,12 +18,7 @@ import { toTitleCase, toLower } from '@/lib/utils/normalize';
 
 const ContractIdSchema = z.string().min(1, 'Contract ID is required');
 
-const CargoTypeSchema = z.enum([
-  'BANANAS', 'ORGANIC_BANANAS', 'PLANTAINS', 'FROZEN_FISH', 'TABLE_GRAPES',
-  'CITRUS', 'AVOCADOS', 'BERRIES', 'KIWIS', 'PINEAPPLES', 'CHERRIES',
-  'BLUEBERRIES', 'PLUMS', 'PEACHES', 'APPLES', 'PEARS', 'PAPAYA',
-  'MANGOES', 'OTHER_FROZEN', 'OTHER_CHILLED',
-]);
+const CargoTypeSchema = z.string().min(1, 'Cargo type is required');
 
 const PortInfoSchema = z.object({
   portCode: z.string().min(4).max(6),
