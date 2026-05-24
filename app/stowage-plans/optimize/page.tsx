@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/layout/AppShell';
 import { getVoyagesForPlanWizard } from '@/app/actions/voyage';
-import { savePythonPlan } from '@/app/actions/stowage-plan';
+import { savePythonPlan, getLatestPlanInfoForVoyages } from '@/app/actions/stowage-plan';
+import type { LatestPlanInfo } from '@/app/actions/stowage-plan';
 import { getPodColor } from '@/lib/constants/pod-colors';
 import styles from './optimize.module.css';
 
@@ -202,16 +203,26 @@ export default function OptimizePage() {
   const [healthOk, setHealthOk]   = useState(false);
   const [saving, setSaving]       = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [latestPlanMap, setLatestPlanMap] = useState<Record<string, LatestPlanInfo>>({});
 
   const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortRef   = useRef<AbortController | null>(null);
 
-  // Load voyages on mount
+  // Load voyages on mount; fetch plan info to determine first-version eligibility
   useEffect(() => {
     getVoyagesForPlanWizard().then(res => {
       if (res.success && res.data) {
-        setVoyages(res.data as Voyage[]);
-        if (res.data.length > 0) setSelectedId((res.data[0] as Voyage)._id);
+        const fetchedVoyages = res.data as Voyage[];
+        setVoyages(fetchedVoyages);
+        if (fetchedVoyages.length > 0) {
+          const ids = fetchedVoyages.map(v => v._id);
+          getLatestPlanInfoForVoyages(ids).then(planMap => {
+            setLatestPlanMap(planMap);
+            // Auto-select the first voyage that has no existing plan; fall back to first overall
+            const firstFree = fetchedVoyages.find(v => !planMap[v._id]);
+            setSelectedId(firstFree ? firstFree._id : fetchedVoyages[0]._id);
+          });
+        }
       }
     });
   }, []);
@@ -228,6 +239,22 @@ export default function OptimizePage() {
 
   const runOptimizer = useCallback(async () => {
     if (!selectedId) return;
+
+    // Guard: Advanced Optimize is only available for the first plan version.
+    // If a voyage already has any non-cancelled plan, reject here before calling the engine.
+    // Subsequent revisions must be created manually via the plan detail page (copyStowagePlan).
+    const existingPlan = latestPlanMap[selectedId];
+    if (existingPlan) {
+      const voy = voyages.find(v => v._id === selectedId);
+      setErrorMsg(
+        `Voyage ${voy?.voyageNumber ?? selectedId} already has plan ` +
+        `${existingPlan.planNumber}. ` +
+        `Use manual revision from the plan detail page to create a new version.`,
+      );
+      setPhase('error');
+      return;
+    }
+
     setPhase('loading');
     setHealthOk(false);
     setSaveError('');
@@ -276,7 +303,7 @@ export default function OptimizePage() {
       );
       setPhase('error');
     }
-  }, [selectedId, stopPolling]);
+  }, [selectedId, stopPolling, latestPlanMap, voyages]);
 
   const handleSave = useCallback(async () => {
     const sol = solutions[currentIdx];
@@ -324,11 +351,13 @@ export default function OptimizePage() {
               >
                 {voyages.length === 0 && <option value="">Loading…</option>}
                 {voyages.map(v => {
-                  const vessel = (v.vesselId as any)?.name ?? v.vesselName ?? '—';
-                  const dep    = fmtDate(v.departureDate);
+                  const vessel  = (v.vesselId as any)?.name ?? v.vesselName ?? '—';
+                  const dep     = fmtDate(v.departureDate);
+                  const hasPlan = !!latestPlanMap[v._id];
                   return (
-                    <option key={v._id} value={v._id}>
-                      {v.voyageNumber} · {vessel}{dep ? ` · ${dep}` : ''}
+                    <option key={v._id} value={v._id} disabled={hasPlan}>
+                      {hasPlan ? '⚠ ' : ''}{v.voyageNumber} · {vessel}{dep ? ` · ${dep}` : ''}
+                      {hasPlan ? ` (${latestPlanMap[v._id].planNumber} — manual revision only)` : ''}
                     </option>
                   );
                 })}
@@ -338,10 +367,16 @@ export default function OptimizePage() {
               Runs all 5 objective configurations (Balanced, Max Balance, Max Compactness,
               POD-Friendly, Max Utilization) with a 30 s solver limit each.
             </p>
+            {latestPlanMap[selectedId] && (
+              <p className={styles.hint} style={{ color: 'var(--color-warning)' }}>
+                This voyage already has plan <strong>{latestPlanMap[selectedId].planNumber}</strong>.
+                Open the plan to create a manual revision.
+              </p>
+            )}
             <button
               className={styles.runBtn}
               onClick={runOptimizer}
-              disabled={!selectedId || phase === 'loading'}
+              disabled={!selectedId || phase === 'loading' || !!latestPlanMap[selectedId]}
             >
               {phase === 'loading' ? 'Running…' : 'Run Optimizer'}
             </button>

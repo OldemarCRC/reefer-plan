@@ -2554,6 +2554,22 @@ export async function savePythonPlan(
     const vessel = voyage.vesselId as any;
     if (!vessel) return { success: false, error: 'Vessel not found' };
 
+    // Defense in depth: Advanced Optimize is only allowed for the first plan version.
+    // Reject here even if the UI guard was bypassed.
+    const existingPlan = await StowagePlanModel.findOne({
+      voyageId,
+      status: { $nin: ['CANCELLED'] },
+    })
+      .sort({ planNumber: -1 })
+      .select('planNumber')
+      .lean();
+    if (existingPlan) {
+      return {
+        success: false,
+        error: `A plan already exists for this voyage (${(existingPlan as any).planNumber}). Use manual revision instead.`,
+      };
+    }
+
     // Build port-sequence map for polSeq / podSeq on each position
     const portSeqMap: Record<string, number> = {};
     for (const pc of voyage.portCalls ?? []) {
