@@ -17,7 +17,7 @@ import {
 // ============================================================================
 
 const SVG_W = 960;
-const SVG_H = 430;
+const SVG_H = 480;
 const MARGIN = { top: 0, right: 30, bottom: 50, left: 30 };
 
 // Hull shape
@@ -35,9 +35,8 @@ const SUPERSTRUCTURE_X = HULL_X_STERN - 110; // Bridge/superstructure
 
 // Height budget for all levels in a hold (px)
 const HOLD_HEIGHT_BUDGET = SVG_H - MARGIN.bottom;
+const HULL_LABEL_AREA_H = 28;  // top margin inside hull SVG for hold labels
 const MIN_LEVEL_H = 60;  // minimum height per level for readability
-const DECK_STRIP_H = 66;   // height of the above-deck SVG strip
-const DECK_LEVEL_H = 40;   // height of each FC/UPD cell in the strip
 
 // Cell data-overlay layout constants
 const CELL_HEADER_H = 16;    // top strip: capacity / loaded / available
@@ -117,10 +116,6 @@ function buildCompartmentRects(
   const rects: CompartmentRect[] = [];
   const assignMap = new Map(assignments.map((a) => [a.compartmentId, a]));
 
-  const SPECIAL_LEVELS = new Set(['FC', 'UPD']);
-  const ABOVE_DECK = new Set(['FC', 'UPD']);
-  const SPECIAL_HEIGHT_RATIO = 0.6;
-  const FC_WIDTH_RATIO = 0.6;
   const UPD_WIDTH_RATIO = 0.5;
 
   // Collect all unique levels across all holds, preserving LEVEL_DISPLAY_ORDER
@@ -132,28 +127,19 @@ function buildCompartmentRects(
   }
   const orderedLevels = LEVEL_DISPLAY_ORDER.filter(l => allLevels.has(l));
 
-  // Hull levels only (exclude FC/UPD — those go in the deck strip)
-  const hullLevels = orderedLevels.filter(l => !ABOVE_DECK.has(l));
+  // All levels render in the hull SVG (FC/UPD no longer separate)
+  const gaps = (orderedLevels.length - 1) * 1;
+  const budget = HOLD_HEIGHT_BUDGET - HULL_LABEL_AREA_H - gaps;
+  const normalH = budget / orderedLevels.length;
 
-  // Compute global row heights using hull levels only
-  const gaps = (hullLevels.length - 1) * 1;
-  const budget = HOLD_HEIGHT_BUDGET - gaps;
-  const normalH = budget / hullLevels.length;
-
-  // Build global y positions keyed by level name (hull levels only)
+  // Build global y positions keyed by level name
   const levelY: Record<string, number> = {};
   const levelH: Record<string, number> = {};
-  let y = HULL_Y_TOP + 2;
-  for (const level of hullLevels) {
+  let y = HULL_Y_TOP + HULL_LABEL_AREA_H;
+  for (const level of orderedLevels) {
     levelY[level] = y;
     levelH[level] = normalH;
     y += normalH + 1;
-  }
-
-  // Above-deck levels get a fixed height (used by deck strip renderer)
-  for (const level of orderedLevels.filter(l => ABOVE_DECK.has(l))) {
-    levelH[level] = normalH * SPECIAL_HEIGHT_RATIO;
-    levelY[level] = -1; // sentinel: rendered in deck strip, not hull
   }
 
   for (const hold of layout.holds) {
@@ -264,12 +250,6 @@ export default function VesselProfile({
     });
   }
 
-  // Separate above-deck levels (FC, UPD) from below-deck levels
-  const ABOVE_DECK_LEVELS = new Set(['FC', 'UPD']);
-  const deckCompartments = compartments.filter(c => ABOVE_DECK_LEVELS.has(c.level));
-  const hullCompartments = compartments.filter(c => !ABOVE_DECK_LEVELS.has(c.level));
-  const hasDeckLevels = deckCompartments.length > 0;
-
   const hovered = hoveredId ? compartments.find((c) => c.id === hoveredId) : null;
   const selected = selectedId ? compartments.find((c) => c.id === selectedId) : null;
   const detail = selected || hovered;
@@ -311,210 +291,6 @@ export default function VesselProfile({
       </div>
 
       <div className={styles.svgWrap}>
-        {/* Above-deck strip — FC / UPD compartments */}
-        {(
-          <svg
-            viewBox={`0 0 ${SVG_W} ${DECK_STRIP_H}`}
-            className={styles.deckStrip}
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            {/* Ghost outlines for all hold columns */}
-            {hasDeckLevels && holdPositions.map((h) => (
-              <rect
-                key={`deck-ghost-${h.holdNumber}`}
-                x={h.x}
-                y={DECK_STRIP_H - DECK_LEVEL_H - 2}
-                width={h.w}
-                height={DECK_LEVEL_H}
-                rx={2}
-                fill="none"
-                stroke="#1E3A5F"
-                strokeWidth={0.8}
-                strokeDasharray="4,3"
-                opacity={0.4}
-              />
-            ))}
-            {/* Hold labels */}
-            {holdPositions.map((h) => (
-              <text
-                key={`deck-label-h${h.holdNumber}`}
-                x={h.x + h.w / 2}
-                y={10}
-                textAnchor="middle"
-                className={styles.holdLabel}
-              >
-                Hold {h.holdNumber}
-              </text>
-            ))}
-            {/* Hold totals: loaded / capacity */}
-            {holdPositions.map((h) => {
-              const totals = holdTotals.get(h.holdNumber);
-              if (!totals || (totals.loaded === 0 && totals.capacity === 0)) return null;
-              return (
-                <text
-                  key={`deck-totals-h${h.holdNumber}`}
-                  x={h.x + h.w / 2}
-                  y={22}
-                  textAnchor="middle"
-                  style={{ fontSize: '9px', fill: 'var(--color-text-muted)', fontFamily: 'monospace' }}
-                >
-                  {String(totals.loaded)} / {String(totals.capacity)}
-                </text>
-              );
-            })}
-            {/* Actual FC/UPD compartments */}
-            {hasDeckLevels && deckCompartments.map((comp) => {
-              const pos = holdPositions.find(p => p.holdNumber === comp.holdNumber);
-              if (!pos) return null;
-              const effectiveColor = comp.assignment?.podColor || comp.assignment?.zoneColor || '#1E3A5F';
-              const loaded = comp.assignment?.palletsLoaded ?? 0;
-              const capacity = comp.assignment?.palletsCapacity ?? 0;
-              const available = capacity - loaded;
-              const fillPct = capacity > 0 ? loaded / capacity : 0;
-              const isHovered = hoveredId === comp.id;
-              const isSelected = selectedId === comp.id;
-              const cellY = DECK_STRIP_H - DECK_LEVEL_H - 2;
-              const isEstimated = comp.assignment?.confidence === 'ESTIMATED';
-
-              return (
-                <g
-                  key={comp.id}
-                  onMouseEnter={() => setHoveredId(comp.id)}
-                  onMouseLeave={() => setHoveredId(null)}
-                  onClick={() => {
-                    setSelectedId(selectedId === comp.id ? null : comp.id);
-                    onCompartmentClick?.(comp.id);
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    onCompartmentContextMenu?.(comp.id, comp.assignment, { x: e.clientX, y: e.clientY });
-                  }}
-                  style={{ cursor: 'pointer' }}
-                >
-                  {/* Background */}
-                  <rect
-                    x={pos.x}
-                    y={cellY}
-                    width={pos.w}
-                    height={DECK_LEVEL_H}
-                    rx={2}
-                    fill={comp.assignment?.cargoType ? effectiveColor : '#111E33'}
-                    opacity={isSelected ? 0.5 : isHovered ? 0.4 : 0.15}
-                    stroke={isSelected ? '#FCD34D' : isHovered ? '#fff' : effectiveColor}
-                    strokeWidth={isSelected ? 2 : isHovered ? 1.5 : 0.8}
-                  />
-                  {/* Cargo fill bar */}
-                  {fillPct > 0 && (
-                    <rect
-                      x={pos.x + 1}
-                      y={cellY + DECK_LEVEL_H * (1 - fillPct)}
-                      width={pos.w - 2}
-                      height={DECK_LEVEL_H * fillPct - 1}
-                      rx={1}
-                      fill={effectiveColor}
-                      opacity={isSelected ? 0.7 : isHovered ? 0.6 : 0.35}
-                    />
-                  )}
-                  {/* Hatch for estimated */}
-                  {fillPct > 0 && isEstimated && (
-                    <rect
-                      x={pos.x + 1}
-                      y={cellY + DECK_LEVEL_H * (1 - fillPct)}
-                      width={pos.w - 2}
-                      height={DECK_LEVEL_H * fillPct - 1}
-                      rx={1}
-                      fill="url(#hatch-estimated)"
-                      opacity={0.6}
-                    />
-                  )}
-                  {/* Thin capacity progress bar — bottom edge */}
-                  <rect
-                    x={pos.x + 1}
-                    y={cellY + DECK_LEVEL_H - 4}
-                    width={pos.w - 2}
-                    height={3}
-                    rx={1}
-                    fill="rgba(255,255,255,0.15)"
-                  />
-                  {fillPct > 0 && (
-                    <rect
-                      x={pos.x + 1}
-                      y={cellY + DECK_LEVEL_H - 4}
-                      width={Math.max(2, (pos.w - 2) * Math.min(fillPct, 1))}
-                      height={3}
-                      rx={1}
-                      fill={
-                        fillPct > 0.90 ? '#f87171' :
-                        fillPct > 0.75 ? '#fbbf24' :
-                        '#4ade80'
-                      }
-                      style={{ filter: 'brightness(1.2)' }}
-                    />
-                  )}
-                  {/* Header: capacity / loaded / available */}
-                  {comp.assignment && (
-                    <>
-                      <rect x={pos.x} y={cellY} width={pos.w} height={CELL_HEADER_H}
-                        fill="#070f1c" opacity={0.78} rx={2} />
-                      <line x1={pos.x + pos.w / 3} y1={cellY + 2} x2={pos.x + pos.w / 3} y2={cellY + CELL_HEADER_H - 2} stroke="#1E3A5F" strokeWidth={0.5} />
-                      <line x1={pos.x + pos.w * 2 / 3} y1={cellY + 2} x2={pos.x + pos.w * 2 / 3} y2={cellY + CELL_HEADER_H - 2} stroke="#1E3A5F" strokeWidth={0.5} />
-                      <text x={pos.x + pos.w / 6} y={cellY + CELL_HEADER_H / 2}
-                        textAnchor="middle" dominantBaseline="middle"
-                        style={{ fontSize: '8px', fill: '#64748b', fontFamily: 'monospace' }}>
-                        {capacity}
-                      </text>
-                      <text x={pos.x + pos.w / 2} y={cellY + CELL_HEADER_H / 2}
-                        textAnchor="middle" dominantBaseline="middle"
-                        style={{ fontSize: '8px', fontFamily: 'monospace',
-                          fill: loaded > 0 ? '#e2e8f0' : '#475569',
-                          fontWeight: loaded > 0 ? 'bold' : 'normal' }}>
-                        {loaded}
-                      </text>
-                      <text x={pos.x + pos.w * 5 / 6} y={cellY + CELL_HEADER_H / 2}
-                        textAnchor="middle" dominantBaseline="middle"
-                        style={{ fontSize: '8px', fontFamily: 'monospace',
-                          fill: available < 0 ? '#ef4444' : available === 0 ? '#94a3b8' : '#22c55e' }}>
-                        {available}
-                      </text>
-                    </>
-                  )}
-                  {/* Cargo label */}
-                  {comp.assignment?.cargoShortLabel && (
-                    <text
-                      x={pos.x + pos.w / 2}
-                      y={cellY + DECK_LEVEL_H / 2 + 3}
-                      textAnchor="middle" dominantBaseline="middle"
-                      className={styles.cargoShortLabel}
-                    >
-                      {comp.assignment.cargoShortLabel}
-                    </text>
-                  )}
-                  {/* Level badge — top-left */}
-                  <text
-                    x={pos.x + 5}
-                    y={cellY + DECK_LEVEL_H - 5}
-                    textAnchor="start"
-                    style={{ fontSize: '8px', fill: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}
-                  >
-                    {comp.id}
-                  </text>
-                </g>
-              );
-            })}
-            {/* Level label on the left */}
-            {deckCompartments.length > 0 && (
-              <text
-                x={CARGO_AREA_X - 8}
-                y={DECK_STRIP_H - DECK_LEVEL_H / 2 - 2}
-                textAnchor="end"
-                dominantBaseline="middle"
-                className={styles.levelLabel}
-              >
-                {deckCompartments[0].level}
-              </text>
-            )}
-          </svg>
-        )}
         <svg
           viewBox={`0 0 ${SVG_W} ${SVG_H}`}
           className={styles.svg}
@@ -567,6 +343,34 @@ export default function VesselProfile({
             stroke="#3B5070"
             strokeWidth="2"
           />
+
+          {/* Hold labels — in the label area above the first level row */}
+          {holdPositions.map((h) => (
+            <text
+              key={`hull-label-h${h.holdNumber}`}
+              x={h.x + h.w / 2}
+              y={11}
+              textAnchor="middle"
+              className={styles.holdLabel}
+            >
+              Hold {h.holdNumber}
+            </text>
+          ))}
+          {holdPositions.map((h) => {
+            const totals = holdTotals.get(h.holdNumber);
+            if (!totals || (totals.loaded === 0 && totals.capacity === 0)) return null;
+            return (
+              <text
+                key={`hull-totals-h${h.holdNumber}`}
+                x={h.x + h.w / 2}
+                y={22}
+                textAnchor="middle"
+                style={{ fontSize: '9px', fill: 'var(--color-text-muted)', fontFamily: 'monospace' }}
+              >
+                {String(totals.loaded)} / {String(totals.capacity)}
+              </text>
+            );
+          })}
 
           {false && (
           <>{/* Superstructure / Bridge */}
@@ -644,7 +448,7 @@ export default function VesselProfile({
           ))}
 
           {/* Compartments */}
-          {hullCompartments.map((comp) => {
+          {compartments.map((comp) => {
             const isHovered = hoveredId === comp.id;
             const isSelected = selectedId === comp.id;
             const inZone = highlightZone && comp.assignment?.zoneId === highlightZone;
@@ -829,25 +633,25 @@ export default function VesselProfile({
                 {/* Thin capacity progress bar — bottom edge */}
                 <rect
                   x={comp.x + 1}
-                  y={comp.y + comp.h - 4}
+                  y={comp.y + comp.h - 5}
                   width={comp.w - 2}
-                  height={3}
+                  height={4}
                   rx={1}
-                  fill="rgba(255,255,255,0.15)"
+                  fill="rgba(255,255,255,0.20)"
                 />
                 {fillPct > 0 && (
                   <rect
                     x={comp.x + 1}
-                    y={comp.y + comp.h - 4}
+                    y={comp.y + comp.h - 5}
                     width={Math.max(2, (comp.w - 2) * Math.min(fillPct, 1))}
-                    height={3}
+                    height={4}
                     rx={1}
                     fill={
-                      fillPct > 0.90 ? '#f87171' :
-                      fillPct > 0.75 ? '#fbbf24' :
-                      '#4ade80'
+                      fillPct > 0.90 ? '#ff4444' :
+                      fillPct > 0.75 ? '#ffbb00' :
+                      '#00dd66'
                     }
-                    style={{ filter: 'brightness(1.2)' }}
+                    style={{ filter: 'drop-shadow(0 0 2px currentColor)' }}
                   />
                 )}
 
@@ -1049,7 +853,7 @@ export default function VesselProfile({
 
           {/* Level labels (left side — use hold with most levels as reference) */}
           {compartments
-            .filter((c) => c.holdNumber === refHoldNumber && !ABOVE_DECK_LEVELS.has(c.level))
+            .filter((c) => c.holdNumber === refHoldNumber)
             .map((c) => (
               <text
                 key={`ll-${c.level}`}
