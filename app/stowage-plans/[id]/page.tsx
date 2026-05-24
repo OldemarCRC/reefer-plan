@@ -12,6 +12,7 @@ import { getStowagePlanById, deleteStowagePlan, saveCargoAssignments, updatePlan
 import { dismissExpiredForecasts } from '@/app/actions/space-forecast';
 import MarkSentModal from '@/components/stowage/MarkSentModal';
 import CompartmentContextMenu, { type ContextMenuCompartment } from '@/components/stowage/CompartmentContextMenu';
+import UnassignedCargoPanel, { type UnassignedBooking } from '@/components/stowage/UnassignedCargoPanel';
 import { getConfirmedBookingsForVoyage } from '@/app/actions/booking';
 
 import CoolingSectionTopDown, { type SectionBookingSlot } from '@/components/stowage/CoolingSectionTopDown';
@@ -69,6 +70,10 @@ export default function StowagePlanDetailPage() {
     compartment: ContextMenuCompartment;
     position: { x: number; y: number };
   } | null>(null);
+
+  const [unassignedPanelOpen, setUnassignedPanelOpen] = useState(false);
+  const [unassignedTargetCompartment, setUnassignedTargetCompartment] =
+    useState<ContextMenuCompartment | null>(null);
 
   // Expired forecasts banner
   const [expiredForecasts, setExpiredForecasts] = useState<string[]>([]);
@@ -519,6 +524,24 @@ export default function StowagePlanDetailPage() {
   const assignedQty = (b: CargoInPlan) => b.assignments.reduce((sum, a) => sum + a.quantity, 0);
   const remainingQty = (b: CargoInPlan) => b.totalQuantity - assignedQty(b);
 
+  const unassignedOrPartialBookings = useMemo((): UnassignedBooking[] =>
+    bookings
+      .filter(b => b.assignments.reduce((s, a) => s + a.quantity, 0) < b.totalQuantity)
+      .map(b => ({
+        bookingId: b.bookingId,
+        bookingNumber: b.bookingNumber,
+        cargoType: b.cargoType,
+        cargoShortLabel: undefined as string | undefined,
+        totalQuantity: b.totalQuantity,
+        assignedQuantity: b.assignments.reduce((s, a) => s + a.quantity, 0),
+        pol: b.pol,
+        pod: b.pod,
+        shipperName: b.shipperName,
+        consignee: b.consignee,
+        isConfirmed: b.isConfirmed,
+      })),
+  [bookings]);
+
   // Total pallets already assigned to a compartment across all bookings
   const usedInCompartment = useMemo(() => {
     const map: Record<string, number> = {};
@@ -659,6 +682,69 @@ export default function StowagePlanDetailPage() {
     setAssigningBooking(null);
     setSelectedCompartment('');
     setAssignQuantity(0);
+  };
+
+  const handleAssignFromPanel = async (booking: UnassignedBooking, quantity: number) => {
+    if (!unassignedTargetCompartment) return;
+    const compartmentId = unassignedTargetCompartment.sectionId;
+
+    // Build a new position entry matching the shape saveCargoAssignments reads
+    const newPos = {
+      bookingId: booking.bookingId,
+      bookingNumber: booking.bookingNumber,
+      cargoType: booking.cargoType,
+      quantity,
+      snapshotTotalQuantity: booking.totalQuantity,
+      compartment: { id: compartmentId },
+      coolingSectionId: compartmentId,
+      polPortCode: booking.pol,
+      podPortCode: booking.pod,
+      consigneeName: booking.consignee,
+    };
+
+    const updatedPositions = [...planCargoPositions, newPos];
+    setPlanCargoPositions(updatedPositions);
+
+    setBookings(prev => prev.map(b => {
+      if (b.bookingId !== booking.bookingId) return b;
+      const existing = b.assignments.find(a => a.compartmentId === compartmentId);
+      return {
+        ...b,
+        assignments: existing
+          ? b.assignments.map(a =>
+              a.compartmentId === compartmentId
+                ? { ...a, quantity: a.quantity + quantity }
+                : a)
+          : [...b.assignments, { compartmentId, quantity }],
+      };
+    }));
+
+    setUnassignedPanelOpen(false);
+    setUnassignedTargetCompartment(null);
+
+    const allAssignments = updatedPositions
+      .map((pos: any) => ({
+        bookingId: pos.bookingId ?? undefined,
+        bookingNumber: pos.bookingNumber ?? undefined,
+        cargoType: pos.cargoType ?? '',
+        quantity: pos.quantity ?? 0,
+        snapshotTotalQuantity: pos.snapshotTotalQuantity ?? pos.quantity ?? 0,
+        compartmentId: pos.coolingSectionId ?? pos.compartment?.id ?? '',
+        polPortCode: pos.polPortCode ?? undefined,
+        podPortCode: pos.podPortCode ?? undefined,
+        consigneeName: pos.consigneeName ?? undefined,
+      }))
+      .filter((a: any) => a.compartmentId && a.quantity > 0);
+
+    const result = await saveCargoAssignments({ planId, assignments: allAssignments });
+    if (result.success) {
+      setSaveMsg({ type: 'success', text: `${quantity} pallets assigned to ${compartmentId}` });
+    } else {
+      setSaveMsg({ type: 'error', text: result.error ?? 'Failed to save assignment' });
+      // Roll back optimistic update on failure
+      setPlanCargoPositions(planCargoPositions);
+    }
+    setTimeout(() => setSaveMsg(null), 3000);
   };
 
   const handleCancelAssign = () => {
@@ -1772,6 +1858,26 @@ export default function StowagePlanDetailPage() {
       )}
       </div>
 
+      {unassignedPanelOpen && (
+        <UnassignedCargoPanel
+          bookings={unassignedOrPartialBookings}
+          targetCompartment={unassignedTargetCompartment ? {
+            sectionId: unassignedTargetCompartment.sectionId,
+            holdNumber: unassignedTargetCompartment.holdNumber,
+            level: unassignedTargetCompartment.level,
+            cargoShortLabel: unassignedTargetCompartment.cargoShortLabel,
+            palletsLoaded: unassignedTargetCompartment.palletsLoaded,
+            palletsCapacity: unassignedTargetCompartment.palletsCapacity,
+            setTemperature: unassignedTargetCompartment.setTemperature,
+          } : null}
+          onAssign={handleAssignFromPanel}
+          onClose={() => {
+            setUnassignedPanelOpen(false);
+            setUnassignedTargetCompartment(null);
+          }}
+        />
+      )}
+
       {contextMenu && (
         <CompartmentContextMenu
           compartment={contextMenu.compartment}
@@ -1782,8 +1888,8 @@ export default function StowagePlanDetailPage() {
             console.log('Transfer:', comp.sectionId);
           }}
           onAddCargo={(comp) => {
-            // TODO Step 2: open unassigned sidebar
-            console.log('Add cargo:', comp.sectionId);
+            setUnassignedTargetCompartment(comp);
+            setUnassignedPanelOpen(true);
           }}
           onReduceCargo={(comp) => {
             // TODO Step 5: open reduce modal
