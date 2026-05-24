@@ -194,7 +194,11 @@ function buildCompartmentRects(
 interface VesselProfileProps {
   vesselName?: string;
   voyageNumber?: string;
-  onCompartmentClick?: (compartmentId: string) => void;
+  onCompartmentClick?: (
+    compartmentId: string,
+    assignment: VoyageTempAssignment | undefined,
+    mouseEvent: { x: number; y: number },
+  ) => void;
   tempAssignments?: VoyageTempAssignment[];
   vesselLayout?: VesselLayout;
   conflictCompartmentIds?: string[];
@@ -348,9 +352,9 @@ export default function VesselProfile({
                   key={comp.id}
                   onMouseEnter={() => setHoveredId(comp.id)}
                   onMouseLeave={() => setHoveredId(null)}
-                  onClick={() => {
+                  onClick={(e) => {
                     setSelectedId(selectedId === comp.id ? null : comp.id);
-                    onCompartmentClick?.(comp.id);
+                    onCompartmentClick?.(comp.id, comp.assignment, { x: e.clientX, y: e.clientY });
                   }}
                   style={{ cursor: 'pointer' }}
                 >
@@ -666,9 +670,9 @@ export default function VesselProfile({
                 key={comp.id}
                 onMouseEnter={() => setHoveredId(comp.id)}
                 onMouseLeave={() => setHoveredId(null)}
-                onClick={() => {
+                onClick={(e) => {
                   setSelectedId(selectedId === comp.id ? null : comp.id);
-                  onCompartmentClick?.(comp.id);
+                  onCompartmentClick?.(comp.id, comp.assignment, { x: e.clientX, y: e.clientY });
                 }}
                 style={{
                   cursor: 'pointer',

@@ -11,6 +11,7 @@ import VesselProfile from '@/components/vessel/VesselProfile';
 import { getStowagePlanById, deleteStowagePlan, saveCargoAssignments, updatePlanStatus, copyStowagePlan, replanAfterTemperatureOverride } from '@/app/actions/stowage-plan';
 import { dismissExpiredForecasts } from '@/app/actions/space-forecast';
 import MarkSentModal from '@/components/stowage/MarkSentModal';
+import CompartmentContextMenu, { type ContextMenuCompartment } from '@/components/stowage/CompartmentContextMenu';
 import { getConfirmedBookingsForVoyage } from '@/app/actions/booking';
 
 import CoolingSectionTopDown, { type SectionBookingSlot } from '@/components/stowage/CoolingSectionTopDown';
@@ -64,6 +65,11 @@ export default function StowagePlanDetailPage() {
   const [showReplanBanner, setShowReplanBanner] = useState(false);
   const [isReplanning, startReplanTransition] = useTransition();
 
+  const [contextMenu, setContextMenu] = useState<{
+    compartment: ContextMenuCompartment;
+    position: { x: number; y: number };
+  } | null>(null);
+
   // Expired forecasts banner
   const [expiredForecasts, setExpiredForecasts] = useState<string[]>([]);
   const [expiredShipperNames, setExpiredShipperNames] = useState<string[]>([]);
@@ -95,6 +101,14 @@ export default function StowagePlanDetailPage() {
 
   // Vessel layout built from DB temperatureZones — drives VesselProfile SVG
   const [vesselLayout, setVesselLayout] = useState<VesselLayout | undefined>(undefined);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     getStowagePlanById(planId).then(async (result) => {
@@ -1059,9 +1073,26 @@ export default function StowagePlanDetailPage() {
           highlightedCompartmentIds={highlightedSectionIds}
           vesselLayout={vesselLayout}
           consigneesBySection={consigneesBySection}
-          onCompartmentClick={(id) => {
+          onCompartmentClick={(id, assignment, mousePos) => {
             setSelectedSectionId(prev => prev === id ? null : id);
             setHighlightedSectionIds([]);
+            if (assignment) {
+              setContextMenu({
+                compartment: {
+                  sectionId: id,
+                  holdNumber: parseInt(id.charAt(0)),
+                  level: id.slice(1),
+                  cargoType: assignment.cargoType,
+                  cargoShortLabel: assignment.cargoShortLabel,
+                  palletsLoaded: assignment.palletsLoaded ?? 0,
+                  palletsCapacity: assignment.palletsCapacity ?? 0,
+                  setTemperature: assignment.setTemperature,
+                  zoneId: assignment.zoneId,
+                  isFull: assignment.isFull,
+                },
+                position: mousePos,
+              });
+            }
           }}
         />
         {/* POD color legend */}
@@ -1738,6 +1769,30 @@ export default function StowagePlanDetailPage() {
         </div>
       )}
       </div>
+
+      {contextMenu && (
+        <CompartmentContextMenu
+          compartment={contextMenu.compartment}
+          position={contextMenu.position}
+          onClose={() => setContextMenu(null)}
+          onTransfer={(comp) => {
+            // TODO Step 3: open transfer modal
+            console.log('Transfer:', comp.sectionId);
+          }}
+          onAddCargo={(comp) => {
+            // TODO Step 2: open unassigned sidebar
+            console.log('Add cargo:', comp.sectionId);
+          }}
+          onReduceCargo={(comp) => {
+            // TODO Step 5: open reduce modal
+            console.log('Reduce:', comp.sectionId);
+          }}
+          onDetails={(comp) => {
+            setSelectedSectionId(comp.sectionId);
+          }}
+          isLocked={isLocked}
+        />
+      )}
     </AppShell>
   );
 }
