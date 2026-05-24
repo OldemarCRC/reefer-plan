@@ -122,30 +122,44 @@ export default function Header({
         </svg>
       </button>
 
-      {/* Breadcrumb */}
-      <nav className={styles.breadcrumb} aria-label="Breadcrumb">
-        {breadcrumbs.map((crumb, i) => {
-          const isLast = i === breadcrumbs.length - 1;
-          return (
-            <span key={crumb.href} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-              {i > 0 && <span className={styles.breadcrumbSeparator}>/</span>}
-              {isLast ? (
-                <span className={`${styles.breadcrumbItem} ${styles['breadcrumbItem--current']}`}>
-                  {crumb.label}
-                </span>
-              ) : (
-                <Link href={crumb.href} className={styles.breadcrumbItem}>
-                  {crumb.label}
-                </Link>
-              )}
-            </span>
-          );
-        })}
-      </nav>
+      {/* Breadcrumb — replaced by vessel/voyage badges when on a plan detail page */}
+      {activeVessel && activeVoyage ? (
+        <div className={styles.vesselBadges}>
+          <span className={styles.vesselBadge}>
+            <span className={styles.badgeIcon}>⛵</span>
+            {activeVessel}
+          </span>
+          <span className={styles.voyageBadge}>
+            <span className={styles.badgeIcon}>⚓</span>
+            {activeVoyage}
+          </span>
+        </div>
+      ) : (
+        <nav className={styles.breadcrumb} aria-label="Breadcrumb">
+          {breadcrumbs.map((crumb, i) => {
+            const isLast = i === breadcrumbs.length - 1;
+            return (
+              <span key={crumb.href} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                {i > 0 && <span className={styles.breadcrumbSeparator}>/</span>}
+                {isLast ? (
+                  <span className={`${styles.breadcrumbItem} ${styles['breadcrumbItem--current']}`}>
+                    {crumb.label}
+                  </span>
+                ) : (
+                  <Link href={crumb.href} className={styles.breadcrumbItem}>
+                    {crumb.label}
+                  </Link>
+                )}
+              </span>
+            );
+          })}
+        </nav>
+      )}
 
       {/* Right section */}
       <div className={styles.headerRight}>
-        {/* Active vessel/voyage context */}
+        {/* Active vessel/voyage context — hidden when badges are shown in breadcrumb area */}
+        {!(activeVessel && activeVoyage) && (
         <div className={styles.context}>
           {activeVessel && (
             <div className={styles.contextItem}>
@@ -174,6 +188,7 @@ export default function Header({
             </div>
           )}
         </div>
+        )}
 
         {/* User avatar + dropdown */}
         <div className={styles.userMenu} ref={menuRef}>
