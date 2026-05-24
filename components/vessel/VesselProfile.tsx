@@ -358,7 +358,7 @@ export default function VesselProfile({
                   textAnchor="middle"
                   style={{ fontSize: '9px', fill: 'var(--color-text-muted)', fontFamily: 'monospace' }}
                 >
-                  {totals.loaded.toLocaleString()} / {totals.capacity.toLocaleString()}
+                  {String(totals.loaded)} / {String(totals.capacity)}
                 </text>
               );
             })}

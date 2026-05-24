@@ -1161,9 +1161,9 @@ export default function StowagePlanDetailPage() {
           consigneesBySection={consigneesBySection}
           headerActions={
             <div className={styles.vesselHeaderStats}>
-              <span className={styles.statChip}>LOADED <strong>{stowedPallets.toLocaleString()}</strong></span>
-              <span className={styles.statChip}>CAPACITY <strong>{totalPallets.toLocaleString()}</strong></span>
-              <span className={styles.statChip}>AVAILABLE <strong>{(totalPallets - stowedPallets).toLocaleString()}</strong></span>
+              <span className={styles.statChip}>LOADED <strong>{String(stowedPallets)}</strong></span>
+              <span className={styles.statChip}>CAPACITY <strong>{String(totalPallets)}</strong></span>
+              <span className={styles.statChip}>AVAILABLE <strong>{String(totalPallets - stowedPallets)}</strong></span>
               <button
                 className={styles.btnUnassigned}
                 onClick={() => {

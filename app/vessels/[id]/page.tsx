@@ -276,7 +276,7 @@ export default async function VesselDetailPage({
                 ? <><FlagIcon code={vessel.flag} /> {vessel.flag}</>
                 : (vessel.flag || '—')} · {vesselLayout.holds.length || vessel.holds?.length || 4} holds ·{' '}
               {vesselLayout.holds.reduce((n, h) => n + h.levels.length, 0) || 19} compartments ·{' '}
-              {profileAssignments.reduce((n, a) => n + a.palletsCapacity, 0).toLocaleString()} pallets
+              {String(profileAssignments.reduce((n, a) => n + a.palletsCapacity, 0))} pallets
             </p>
           </div>
           <div className={styles.headerActions}>
@@ -328,8 +328,8 @@ export default async function VesselDetailPage({
         <div className={styles.statsRow}>
           <div className={styles.statCard}>
             <span className={styles.statLabel}>Total Loaded</span>
-            <span className={styles.statValue}>{totalLoaded.toLocaleString()} plt</span>
-            <span className={styles.statSub}>of {totalCapacity.toLocaleString()} capacity</span>
+            <span className={styles.statValue}>{String(totalLoaded)} plt</span>
+            <span className={styles.statSub}>of {String(totalCapacity)} capacity</span>
           </div>
           <div className={styles.statCard}>
             <span className={styles.statLabel}>Utilization</span>
@@ -352,7 +352,7 @@ export default async function VesselDetailPage({
           </div>
           <div className={styles.statCard}>
             <span className={styles.statLabel}>Remaining</span>
-            <span className={styles.statValue}>{(totalCapacity - totalLoaded).toLocaleString()} plt</span>
+            <span className={styles.statValue}>{String(totalCapacity - totalLoaded)} plt</span>
             <span className={styles.statSub}>available for loading</span>
           </div>
         </div>
@@ -410,8 +410,8 @@ export default async function VesselDetailPage({
                             <span className={styles.cellMuted}>Not assigned</span>
                           )}
                         </td>
-                        <td className={styles.cellRight}>{z.loaded.toLocaleString()}</td>
-                        <td className={styles.cellRight}>{z.capacity.toLocaleString()}</td>
+                        <td className={styles.cellRight}>{String(z.loaded)}</td>
+                        <td className={styles.cellRight}>{String(z.capacity)}</td>
                         <td>
                           <div className={styles.utilBar}>
                             <div className={styles.utilTrack}>

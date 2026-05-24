@@ -27,7 +27,7 @@ export default function CapacityBar({
   const bookedPct   = Math.min(100, (bookedPallets / totalCapacity) * 100);
   const estimatePct = Math.min((estimatedPallets / totalCapacity) * 100, 100 - bookedPct);
 
-  const fmt = (n: number) => n.toLocaleString();
+  const fmt = (n: number) => String(n);
 
   const label =
     size === 'md'

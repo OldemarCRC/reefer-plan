@@ -1284,8 +1284,8 @@ function VesselsTab({ initialVessels }: { initialVessels: AdminVessel[] }) {
             <DRow label="Call Sign" value={selectedVessel.callSign} mono />
             <DRow label="Built" value={selectedVessel.built} />
             <DRow label="Voyages" value={selectedVessel.voyageCount} />
-            <DRow label="Total Pallets" value={selectedVessel.capacity?.totalPallets?.toLocaleString()} />
-            <DRow label="Total m²" value={selectedVessel.capacity?.totalSqm != null ? selectedVessel.capacity.totalSqm.toLocaleString() : undefined} />
+            <DRow label="Total Pallets" value={selectedVessel.capacity?.totalPallets != null ? String(selectedVessel.capacity.totalPallets) : undefined} />
+            <DRow label="Total m²" value={selectedVessel.capacity?.totalSqm != null ? String(selectedVessel.capacity.totalSqm) : undefined} />
             <DRow label="Temperature Zones" value={zoneCount > 0 ? `${zoneCount} zones / ${sectionCount} sections` : undefined} />
             <DRow label="Captain Email" value={selectedVessel.captainEmail} mono />
           </div>
@@ -1350,10 +1350,10 @@ function VesselsTab({ initialVessels }: { initialVessels: AdminVessel[] }) {
                     </td>
                     <td className={styles.cellSecondary}>{v.built ?? '—'}</td>
                     <td className={`${styles.cellNum} ${v.capacity?.totalPallets ? styles.countNonZero : styles.countZero}`}>
-                      {v.capacity?.totalPallets?.toLocaleString() ?? '—'}
+                      {v.capacity?.totalPallets != null ? String(v.capacity.totalPallets) : '—'}
                     </td>
                     <td className={`${styles.cellNum} ${v.capacity?.totalSqm ? styles.countNonZero : styles.countZero}`}>
-                      {v.capacity?.totalSqm != null ? v.capacity.totalSqm.toLocaleString() : '—'}
+                      {v.capacity?.totalSqm != null ? String(v.capacity.totalSqm) : '—'}
                     </td>
                     <td className={`${styles.cellNum} ${zoneCount > 0 ? styles.countNonZero : styles.countZero}`}
                       title={sectionCount > 0 ? `${sectionCount} sections across ${zoneCount} zones` : undefined}>

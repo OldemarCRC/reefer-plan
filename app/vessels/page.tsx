@@ -71,7 +71,7 @@ export default async function VesselsPage() {
               {/* Specs grid */}
               <div className={styles.specsGrid}>
                 <div className={styles.specItem}>
-                  <span className={styles.specValue}>{v.totalPallets.toLocaleString()}</span>
+                  <span className={styles.specValue}>{String(v.totalPallets)}</span>
                   <span className={styles.specLabel}>Pallets</span>
                 </div>
                 <div className={styles.specItem}>
