@@ -633,25 +633,24 @@ export default function VesselProfile({
                 {/* Thin capacity progress bar — bottom edge */}
                 <rect
                   x={comp.x + 1}
-                  y={comp.y + comp.h - 5}
+                  y={comp.y + comp.h - 2}
                   width={comp.w - 2}
-                  height={4}
+                  height={2}
                   rx={1}
-                  fill="rgba(255,255,255,0.20)"
+                  fill="rgba(255,255,255,0.12)"
                 />
                 {fillPct > 0 && (
                   <rect
                     x={comp.x + 1}
-                    y={comp.y + comp.h - 5}
+                    y={comp.y + comp.h - 2}
                     width={Math.max(2, (comp.w - 2) * Math.min(fillPct, 1))}
-                    height={4}
+                    height={2}
                     rx={1}
                     fill={
-                      fillPct > 0.90 ? '#ff4444' :
-                      fillPct > 0.75 ? '#ffbb00' :
-                      '#00dd66'
+                      fillPct > 0.90 ? '#f87171' :
+                      fillPct > 0.75 ? '#fbbf24' :
+                      '#22c55e'
                     }
-                    style={{ filter: 'drop-shadow(0 0 2px currentColor)' }}
                   />
                 )}
 
