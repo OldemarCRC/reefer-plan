@@ -205,8 +205,11 @@ export default function OptimizePage() {
   const [saveError, setSaveError] = useState('');
   const [latestPlanMap, setLatestPlanMap] = useState<Record<string, LatestPlanInfo>>({});
 
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
   const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortRef   = useRef<AbortController | null>(null);
+  const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Load voyages on mount; fetch plan info to determine first-version eligibility
   useEffect(() => {
@@ -230,8 +233,27 @@ export default function OptimizePage() {
   // Cleanup on unmount
   useEffect(() => () => {
     if (pollRef.current) clearInterval(pollRef.current);
+    if (elapsedRef.current) clearInterval(elapsedRef.current);
     abortRef.current?.abort();
   }, []);
+
+  // Elapsed time counter — starts when loading begins, stops on any phase change
+  useEffect(() => {
+    if (phase === 'loading') {
+      setElapsedSeconds(0);
+      elapsedRef.current = setInterval(() => {
+        setElapsedSeconds(s => s + 1);
+      }, 1000);
+    } else {
+      if (elapsedRef.current) {
+        clearInterval(elapsedRef.current);
+        elapsedRef.current = null;
+      }
+    }
+    return () => {
+      if (elapsedRef.current) clearInterval(elapsedRef.current);
+    };
+  }, [phase]);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
@@ -331,6 +353,13 @@ export default function OptimizePage() {
   return (
     <AppShell>
       <div className={styles.page}>
+        {/* Navigation warning — shown while optimizer is running */}
+        {phase === 'loading' && (
+          <div className={styles.navWarningBanner}>
+            <span>⚠ Optimizer is running — navigating away will cancel the calculation and lose the results.</span>
+          </div>
+        )}
+
         <div className={styles.pageHeader}>
           <h1 className={styles.pageTitle}>🔬 Advanced Optimize</h1>
           <p className={styles.pageSubtitle}>
@@ -388,10 +417,23 @@ export default function OptimizePage() {
           <div className={styles.loadingCard}>
             <div className={styles.spinner} />
             <p className={styles.loadingTitle}>Running OR-Tools optimizer — generating 5 alternative plans…</p>
-            <p className={styles.loadingSubtitle}>This may take up to 2–3 minutes</p>
+            <p className={styles.loadingSubtitle}>This may take up to 2–3 minutes. You can cancel at any time.</p>
+            <p className={styles.elapsedTime}>
+              {Math.floor(elapsedSeconds / 60)}:{String(elapsedSeconds % 60).padStart(2, '0')} elapsed
+            </p>
             <span className={`${styles.healthBadge} ${healthOk ? styles.healthOk : styles.healthChecking}`}>
               {healthOk ? '● Service responding' : '○ Connecting to service…'}
             </span>
+            <button
+              className={styles.cancelBtn}
+              onClick={() => {
+                abortRef.current?.abort();
+                stopPolling();
+                setPhase('idle');
+              }}
+            >
+              ✕ Cancel
+            </button>
           </div>
         )}
 
