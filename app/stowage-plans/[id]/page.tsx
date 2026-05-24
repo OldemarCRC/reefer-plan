@@ -1073,9 +1073,11 @@ export default function StowagePlanDetailPage() {
           highlightedCompartmentIds={highlightedSectionIds}
           vesselLayout={vesselLayout}
           consigneesBySection={consigneesBySection}
-          onCompartmentClick={(id, assignment, mousePos) => {
+          onCompartmentClick={(id) => {
             setSelectedSectionId(prev => prev === id ? null : id);
             setHighlightedSectionIds([]);
+          }}
+          onCompartmentContextMenu={(id, assignment, mousePos) => {
             if (assignment) {
               setContextMenu({
                 compartment: {

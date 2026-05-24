@@ -194,7 +194,8 @@ function buildCompartmentRects(
 interface VesselProfileProps {
   vesselName?: string;
   voyageNumber?: string;
-  onCompartmentClick?: (
+  onCompartmentClick?: (compartmentId: string) => void;
+  onCompartmentContextMenu?: (
     compartmentId: string,
     assignment: VoyageTempAssignment | undefined,
     mouseEvent: { x: number; y: number },
@@ -217,6 +218,7 @@ export default function VesselProfile({
   vesselName = 'ACONCAGUA BAY',
   voyageNumber = 'ACON-062026',
   onCompartmentClick,
+  onCompartmentContextMenu,
   tempAssignments = defaultAssignments,
   vesselLayout,
   conflictCompartmentIds,
@@ -352,9 +354,13 @@ export default function VesselProfile({
                   key={comp.id}
                   onMouseEnter={() => setHoveredId(comp.id)}
                   onMouseLeave={() => setHoveredId(null)}
-                  onClick={(e) => {
+                  onClick={() => {
                     setSelectedId(selectedId === comp.id ? null : comp.id);
-                    onCompartmentClick?.(comp.id, comp.assignment, { x: e.clientX, y: e.clientY });
+                    onCompartmentClick?.(comp.id);
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    onCompartmentContextMenu?.(comp.id, comp.assignment, { x: e.clientX, y: e.clientY });
                   }}
                   style={{ cursor: 'pointer' }}
                 >
@@ -670,9 +676,13 @@ export default function VesselProfile({
                 key={comp.id}
                 onMouseEnter={() => setHoveredId(comp.id)}
                 onMouseLeave={() => setHoveredId(null)}
-                onClick={(e) => {
+                onClick={() => {
                   setSelectedId(selectedId === comp.id ? null : comp.id);
-                  onCompartmentClick?.(comp.id, comp.assignment, { x: e.clientX, y: e.clientY });
+                  onCompartmentClick?.(comp.id);
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  onCompartmentContextMenu?.(comp.id, comp.assignment, { x: e.clientX, y: e.clientY });
                 }}
                 style={{
                   cursor: 'pointer',
