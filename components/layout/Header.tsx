@@ -67,6 +67,7 @@ interface HeaderProps {
   activeVessel?: string;
   activeVoyage?: string;
   headerActions?: React.ReactNode;
+  unassignedButton?: React.ReactNode;
   userName?: string;
   userRole?: string;
 }
@@ -77,6 +78,7 @@ export default function Header({
   activeVessel,
   activeVoyage,
   headerActions,
+  unassignedButton,
   userName = '?',
   userRole,
 }: HeaderProps) {
@@ -162,6 +164,8 @@ export default function Header({
 
       {/* Right section */}
       <div className={styles.headerRight}>
+        {unassignedButton}
+
         {/* Active vessel/voyage context — hidden when badges are shown in breadcrumb area */}
         {!(activeVessel && activeVoyage) && (
         <div className={styles.context}>

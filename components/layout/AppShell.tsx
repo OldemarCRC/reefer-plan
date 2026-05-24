@@ -14,9 +14,10 @@ interface AppShellProps {
   activeVessel?: string;
   activeVoyage?: string;
   headerActions?: React.ReactNode;
+  unassignedButton?: React.ReactNode;
 }
 
-export default function AppShell({ children, activeVessel, activeVoyage, headerActions }: AppShellProps) {
+export default function AppShell({ children, activeVessel, activeVoyage, headerActions, unassignedButton }: AppShellProps) {
   // Default false for SSR; the blocking <script> in layout.tsx sets the correct
   // visual state before React loads, so there is no visible expand→collapse jump.
   const [collapsed, setCollapsed] = useState(false);
@@ -111,6 +112,7 @@ export default function AppShell({ children, activeVessel, activeVoyage, headerA
           activeVessel={activeVessel}
           activeVoyage={activeVoyage}
           headerActions={headerActions}
+          unassignedButton={unassignedButton}
           userName={session?.user?.name || session?.user?.email || '?'}
           userRole={(session?.user as any)?.role}
         />

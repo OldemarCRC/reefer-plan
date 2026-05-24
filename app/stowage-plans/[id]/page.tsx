@@ -892,22 +892,25 @@ export default function StowagePlanDetailPage() {
         <strong>{String(totalPallets - stowedPallets)}</strong>
         <span className={styles.statLabel}>AVAILABLE</span>
       </span>
-      <button className={styles.btnUnassigned} onClick={() => {
-        setUnassignedTargetCompartment(null);
-        setUnassignedPanelOpen(true);
-      }}>
-        ⊕ Unassigned
-        {unassignedOrPartialBookings.length > 0 && (
-          <span className={styles.unassignedBadge}>
-            {unassignedOrPartialBookings.length}
-          </span>
-        )}
-      </button>
     </div>
   );
 
+  const unassignedButton = (
+    <button className={styles.btnUnassigned} onClick={() => {
+      setUnassignedTargetCompartment(null);
+      setUnassignedPanelOpen(true);
+    }}>
+      ⊕ Unassigned
+      {unassignedOrPartialBookings.length > 0 && (
+        <span className={styles.unassignedBadge}>
+          {unassignedOrPartialBookings.length}
+        </span>
+      )}
+    </button>
+  );
+
   return (
-    <AppShell activeVessel={plan.vesselName} activeVoyage={plan.voyageNumber} headerActions={headerActions}>
+    <AppShell activeVessel={plan.vesselName} activeVoyage={plan.voyageNumber} headerActions={headerActions} unassignedButton={unassignedButton}>
       <div className={styles.container}>
         {/* Header */}
         <div className={styles.header}>
