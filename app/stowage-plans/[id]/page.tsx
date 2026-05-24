@@ -1159,6 +1159,25 @@ export default function StowagePlanDetailPage() {
           highlightedCompartmentIds={highlightedSectionIds}
           vesselLayout={vesselLayout}
           consigneesBySection={consigneesBySection}
+          headerActions={
+            <div className={styles.vesselHeaderStats}>
+              <span className={styles.statChip}>LOADED <strong>{stowedPallets.toLocaleString()}</strong></span>
+              <span className={styles.statChip}>CAPACITY <strong>{totalPallets.toLocaleString()}</strong></span>
+              <span className={styles.statChip}>AVAILABLE <strong>{(totalPallets - stowedPallets).toLocaleString()}</strong></span>
+              <button
+                className={styles.btnUnassigned}
+                onClick={() => {
+                  setUnassignedTargetCompartment(null);
+                  setUnassignedPanelOpen(true);
+                }}
+              >
+                ⊕ Unassigned
+                {unassignedOrPartialBookings.length > 0 && (
+                  <span className={styles.unassignedBadge}>{unassignedOrPartialBookings.length}</span>
+                )}
+              </button>
+            </div>
+          }
           onCompartmentClick={(id) => {
             setSelectedSectionId(prev => prev === id ? null : id);
             setHighlightedSectionIds([]);

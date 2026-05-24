@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import styles from './VesselProfile.module.css';
 import {
   voyageTempAssignments as defaultAssignments,
@@ -162,13 +162,10 @@ function buildCompartmentRects(
 
     for (const section of hold.levels) {
       const level = section.sectionId.slice(1);
-      const isFC = level === 'FC';
       const isUPD = level === 'UPD';
       const h = levelH[level] ?? normalH;
-      const w = isFC ? pos.w * FC_WIDTH_RATIO
-              : isUPD ? pos.w * UPD_WIDTH_RATIO
-              : pos.w;
-      const xPos = (isFC || isUPD) ? pos.x + (pos.w - w) / 2 : pos.x;
+      const w = isUPD ? pos.w * UPD_WIDTH_RATIO : pos.w;
+      const xPos = isUPD ? pos.x + (pos.w - w) / 2 : pos.x;
 
       rects.push({
         id: section.sectionId,
@@ -212,6 +209,8 @@ interface VesselProfileProps {
   showCompartmentTooltip?: boolean;
   /** Consignee names keyed by section ID — shown in the click panel. Not passed from vessels/[id]. */
   consigneesBySection?: Record<string, string[]>;
+  /** Extra actions/chips rendered in the header right area (stats, sidebar button). */
+  headerActions?: ReactNode;
 }
 
 export default function VesselProfile({
@@ -227,6 +226,7 @@ export default function VesselProfile({
   onZoneTempChange,
   showCompartmentTooltip = true,
   consigneesBySection,
+  headerActions,
 }: VesselProfileProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -254,6 +254,16 @@ export default function VesselProfile({
   const holdPositions = computeHoldPositions(layout);
   const compartments = buildCompartmentRects(layout, holdPositions, tempAssignments);
 
+  const holdTotals = new Map<number, { loaded: number; capacity: number }>();
+  for (const comp of compartments) {
+    const h = comp.holdNumber;
+    const cur = holdTotals.get(h) ?? { loaded: 0, capacity: 0 };
+    holdTotals.set(h, {
+      loaded: cur.loaded + (comp.assignment?.palletsLoaded ?? 0),
+      capacity: cur.capacity + (comp.assignment?.palletsCapacity ?? 0),
+    });
+  }
+
   // Separate above-deck levels (FC, UPD) from below-deck levels
   const ABOVE_DECK_LEVELS = new Set(['FC', 'UPD']);
   const deckCompartments = compartments.filter(c => ABOVE_DECK_LEVELS.has(c.level));
@@ -279,6 +289,7 @@ export default function VesselProfile({
           </span>
         </div>
         <div className={styles.headerRight}>
+          {headerActions}
           {hasHistorical && (
             <div className={styles.factorToggle}>
               <span className={styles.factorLabel}>Capacity factor:</span>
@@ -335,6 +346,22 @@ export default function VesselProfile({
                 Hold {h.holdNumber}
               </text>
             ))}
+            {/* Hold totals: loaded / capacity */}
+            {holdPositions.map((h) => {
+              const totals = holdTotals.get(h.holdNumber);
+              if (!totals || (totals.loaded === 0 && totals.capacity === 0)) return null;
+              return (
+                <text
+                  key={`deck-totals-h${h.holdNumber}`}
+                  x={h.x + h.w / 2}
+                  y={22}
+                  textAnchor="middle"
+                  style={{ fontSize: '9px', fill: 'var(--color-text-muted)', fontFamily: 'monospace' }}
+                >
+                  {totals.loaded.toLocaleString()} / {totals.capacity.toLocaleString()}
+                </text>
+              );
+            })}
             {/* Actual FC/UPD compartments */}
             {hasDeckLevels && deckCompartments.map((comp) => {
               const pos = holdPositions.find(p => p.holdNumber === comp.holdNumber);
@@ -398,6 +425,29 @@ export default function VesselProfile({
                       rx={1}
                       fill="url(#hatch-estimated)"
                       opacity={0.6}
+                    />
+                  )}
+                  {/* Thin capacity progress bar — bottom edge */}
+                  <rect
+                    x={pos.x + 1}
+                    y={cellY + DECK_LEVEL_H - 3}
+                    width={pos.w - 2}
+                    height={2}
+                    rx={1}
+                    fill="rgba(255,255,255,0.08)"
+                  />
+                  {fillPct > 0 && (
+                    <rect
+                      x={pos.x + 1}
+                      y={cellY + DECK_LEVEL_H - 3}
+                      width={Math.max(2, (pos.w - 2) * Math.min(fillPct, 1))}
+                      height={2}
+                      rx={1}
+                      fill={
+                        fillPct > 0.90 ? '#ef4444' :
+                        fillPct > 0.75 ? '#f59e0b' :
+                        '#22c55e'
+                      }
                     />
                   )}
                   {/* Header: capacity / loaded / available */}
@@ -772,6 +822,30 @@ export default function VesselProfile({
                     rx={1}
                     fill="url(#hatch-estimated)"
                     opacity={0.6}
+                  />
+                )}
+
+                {/* Thin capacity progress bar — bottom edge */}
+                <rect
+                  x={comp.x + 1}
+                  y={comp.y + comp.h - 3}
+                  width={comp.w - 2}
+                  height={2}
+                  rx={1}
+                  fill="rgba(255,255,255,0.08)"
+                />
+                {fillPct > 0 && (
+                  <rect
+                    x={comp.x + 1}
+                    y={comp.y + comp.h - 3}
+                    width={Math.max(2, (comp.w - 2) * Math.min(fillPct, 1))}
+                    height={2}
+                    rx={1}
+                    fill={
+                      fillPct > 0.90 ? '#ef4444' :
+                      fillPct > 0.75 ? '#f59e0b' :
+                      '#22c55e'
+                    }
                   />
                 )}
 

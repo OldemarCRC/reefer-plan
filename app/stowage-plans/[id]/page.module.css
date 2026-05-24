@@ -472,11 +472,68 @@
   margin-bottom: 1rem;
 }
 
+/* ── Vessel header stat chips + unassigned button ──────────────────────── */
+
+.vesselHeaderStats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.statChip {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.statChip strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-left: 4px;
+}
+
+.btnUnassigned {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.btnUnassigned:hover {
+  border-color: var(--color-cyan);
+  color: var(--color-cyan);
+}
+
+.unassignedBadge {
+  background: var(--color-cyan);
+  color: #000;
+  border-radius: 9px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  min-width: 16px;
+  text-align: center;
+}
+
 .podLegend {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-1);
+  justify-content: center;
 }
 
 .podLegendItem {
@@ -488,7 +545,7 @@
 .podLegendDot {
   width: 8px;
   height: 8px;
-  border-radius: 2px;
+  border-radius: 50%;
   flex-shrink: 0;
 }
 
