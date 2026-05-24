@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import styles from './VesselProfile.module.css';
 import {
   voyageTempAssignments as defaultAssignments,
@@ -195,8 +195,6 @@ interface VesselProfileProps {
   showCompartmentTooltip?: boolean;
   /** Consignee names keyed by section ID — shown in the click panel. Not passed from vessels/[id]. */
   consigneesBySection?: Record<string, string[]>;
-  /** Extra actions/chips rendered in the header right area (stats, sidebar button). */
-  headerActions?: ReactNode;
 }
 
 export default function VesselProfile({
@@ -212,7 +210,6 @@ export default function VesselProfile({
   onZoneTempChange,
   showCompartmentTooltip = true,
   consigneesBySection,
-  headerActions,
 }: VesselProfileProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -232,9 +229,6 @@ export default function VesselProfile({
       });
     }, 200);
   }
-
-  // Show the factor toggle only when at least one compartment has a historical factor
-  const hasHistorical = tempAssignments.some(a => a.historicalStowageFactor != null);
 
   const layout = vesselLayout ?? buildDefaultLayout();
   const holdPositions = computeHoldPositions(layout);
@@ -260,36 +254,6 @@ export default function VesselProfile({
 
   return (
     <div className={styles.container}>
-      {/* Title bar */}
-      <div className={styles.header}>
-        <div>
-          <h2 className={styles.title}>Longitudinal Profile</h2>
-          <span className={styles.subtitle}>
-            {vesselName} · {voyageNumber}
-          </span>
-        </div>
-        <div className={styles.headerRight}>
-          {headerActions}
-          {hasHistorical && (
-            <div className={styles.factorToggle}>
-              <span className={styles.factorLabel}>Capacity factor:</span>
-              <button
-                className={factorMode === 'design' ? styles.factorBtnActive : styles.factorBtn}
-                onClick={() => setFactorMode('design')}
-              >
-                Design
-              </button>
-              <button
-                className={factorMode === 'historical' ? styles.factorBtnActive : styles.factorBtn}
-                onClick={() => setFactorMode('historical')}
-              >
-                Historical
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
       <div className={styles.svgWrap}>
         <svg
           viewBox={`0 0 ${SVG_W} ${SVG_H}`}

@@ -13,9 +13,10 @@ interface AppShellProps {
   children: React.ReactNode;
   activeVessel?: string;
   activeVoyage?: string;
+  headerActions?: React.ReactNode;
 }
 
-export default function AppShell({ children, activeVessel, activeVoyage }: AppShellProps) {
+export default function AppShell({ children, activeVessel, activeVoyage, headerActions }: AppShellProps) {
   // Default false for SSR; the blocking <script> in layout.tsx sets the correct
   // visual state before React loads, so there is no visible expand→collapse jump.
   const [collapsed, setCollapsed] = useState(false);
@@ -109,6 +110,7 @@ export default function AppShell({ children, activeVessel, activeVoyage }: AppSh
           onMobileMenuToggle={toggleMobile}
           activeVessel={activeVessel}
           activeVoyage={activeVoyage}
+          headerActions={headerActions}
           userName={session?.user?.name || session?.user?.email || '?'}
           userRole={(session?.user as any)?.role}
         />

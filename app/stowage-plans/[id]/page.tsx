@@ -874,8 +874,40 @@ export default function StowagePlanDetailPage() {
     });
   };
 
+  const headerActions = (
+    <div className={styles.vesselHeaderStats}>
+      <span className={styles.statChip}>
+        <strong>{String(stowedPallets)}</strong>
+        <span className={styles.statLabel}>LOADED</span>
+      </span>
+      <span className={styles.statChip}>
+        <strong>{String(totalPallets)}</strong>
+        <span className={styles.statLabel}>CAPACITY</span>
+      </span>
+      <span
+        className={styles.statChip}
+        style={{ color: totalPallets - stowedPallets > 0
+          ? 'var(--color-success)' : 'var(--color-warning)' }}
+      >
+        <strong>{String(totalPallets - stowedPallets)}</strong>
+        <span className={styles.statLabel}>AVAILABLE</span>
+      </span>
+      <button className={styles.btnUnassigned} onClick={() => {
+        setUnassignedTargetCompartment(null);
+        setUnassignedPanelOpen(true);
+      }}>
+        ⊕ Unassigned
+        {unassignedOrPartialBookings.length > 0 && (
+          <span className={styles.unassignedBadge}>
+            {unassignedOrPartialBookings.length}
+          </span>
+        )}
+      </button>
+    </div>
+  );
+
   return (
-    <AppShell activeVessel={plan.vesselName} activeVoyage={plan.voyageNumber}>
+    <AppShell activeVessel={plan.vesselName} activeVoyage={plan.voyageNumber} headerActions={headerActions}>
       <div className={styles.container}>
         {/* Header */}
         <div className={styles.header}>
@@ -1159,25 +1191,6 @@ export default function StowagePlanDetailPage() {
           highlightedCompartmentIds={highlightedSectionIds}
           vesselLayout={vesselLayout}
           consigneesBySection={consigneesBySection}
-          headerActions={
-            <div className={styles.vesselHeaderStats}>
-              <span className={styles.statChip}>LOADED <strong>{String(stowedPallets)}</strong></span>
-              <span className={styles.statChip}>CAPACITY <strong>{String(totalPallets)}</strong></span>
-              <span className={styles.statChip}>AVAILABLE <strong>{String(totalPallets - stowedPallets)}</strong></span>
-              <button
-                className={styles.btnUnassigned}
-                onClick={() => {
-                  setUnassignedTargetCompartment(null);
-                  setUnassignedPanelOpen(true);
-                }}
-              >
-                ⊕ Unassigned
-                {unassignedOrPartialBookings.length > 0 && (
-                  <span className={styles.unassignedBadge}>{unassignedOrPartialBookings.length}</span>
-                )}
-              </button>
-            </div>
-          }
           onCompartmentClick={(id) => {
             setSelectedSectionId(prev => prev === id ? null : id);
             setHighlightedSectionIds([]);

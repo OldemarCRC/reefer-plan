@@ -66,6 +66,7 @@ interface HeaderProps {
   onMobileMenuToggle: () => void;
   activeVessel?: string;
   activeVoyage?: string;
+  headerActions?: React.ReactNode;
   userName?: string;
   userRole?: string;
 }
@@ -75,6 +76,7 @@ export default function Header({
   onMobileMenuToggle,
   activeVessel,
   activeVoyage,
+  headerActions,
   userName = '?',
   userRole,
 }: HeaderProps) {
@@ -122,17 +124,19 @@ export default function Header({
         </svg>
       </button>
 
-      {/* Breadcrumb — replaced by vessel/voyage badges when on a plan detail page */}
+      {/* Breadcrumb — replaced by vessel/voyage/stats group when on a plan detail page */}
       {activeVessel && activeVoyage ? (
-        <div className={styles.vesselBadges}>
-          <span className={styles.vesselBadge}>
-            <span className={styles.badgeIcon}>⛵</span>
-            {activeVessel}
-          </span>
-          <span className={styles.voyageBadge}>
-            <span className={styles.badgeIcon}>⚓</span>
-            {activeVoyage}
-          </span>
+        <div className={styles.vesselHeaderGroup}>
+          <div className={styles.vesselHeaderLeft}>
+            <span className={styles.vesselHeaderTitle}>Longitudinal Profile</span>
+            <span className={styles.vesselHeaderSub}>{activeVessel} · {activeVoyage}</span>
+          </div>
+          {headerActions && <div className={styles.vesselHeaderSep} />}
+          {headerActions && (
+            <div className={styles.vesselHeaderActions}>
+              {headerActions}
+            </div>
+          )}
         </div>
       ) : (
         <nav className={styles.breadcrumb} aria-label="Breadcrumb">
