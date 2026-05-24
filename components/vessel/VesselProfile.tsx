@@ -430,24 +430,25 @@ export default function VesselProfile({
                   {/* Thin capacity progress bar — bottom edge */}
                   <rect
                     x={pos.x + 1}
-                    y={cellY + DECK_LEVEL_H - 3}
+                    y={cellY + DECK_LEVEL_H - 4}
                     width={pos.w - 2}
-                    height={2}
+                    height={3}
                     rx={1}
-                    fill="rgba(255,255,255,0.08)"
+                    fill="rgba(255,255,255,0.15)"
                   />
                   {fillPct > 0 && (
                     <rect
                       x={pos.x + 1}
-                      y={cellY + DECK_LEVEL_H - 3}
+                      y={cellY + DECK_LEVEL_H - 4}
                       width={Math.max(2, (pos.w - 2) * Math.min(fillPct, 1))}
-                      height={2}
+                      height={3}
                       rx={1}
                       fill={
-                        fillPct > 0.90 ? '#ef4444' :
-                        fillPct > 0.75 ? '#f59e0b' :
-                        '#22c55e'
+                        fillPct > 0.90 ? '#f87171' :
+                        fillPct > 0.75 ? '#fbbf24' :
+                        '#4ade80'
                       }
+                      style={{ filter: 'brightness(1.2)' }}
                     />
                   )}
                   {/* Header: capacity / loaded / available */}
@@ -828,24 +829,25 @@ export default function VesselProfile({
                 {/* Thin capacity progress bar — bottom edge */}
                 <rect
                   x={comp.x + 1}
-                  y={comp.y + comp.h - 3}
+                  y={comp.y + comp.h - 4}
                   width={comp.w - 2}
-                  height={2}
+                  height={3}
                   rx={1}
-                  fill="rgba(255,255,255,0.08)"
+                  fill="rgba(255,255,255,0.15)"
                 />
                 {fillPct > 0 && (
                   <rect
                     x={comp.x + 1}
-                    y={comp.y + comp.h - 3}
+                    y={comp.y + comp.h - 4}
                     width={Math.max(2, (comp.w - 2) * Math.min(fillPct, 1))}
-                    height={2}
+                    height={3}
                     rx={1}
                     fill={
-                      fillPct > 0.90 ? '#ef4444' :
-                      fillPct > 0.75 ? '#f59e0b' :
-                      '#22c55e'
+                      fillPct > 0.90 ? '#f87171' :
+                      fillPct > 0.75 ? '#fbbf24' :
+                      '#4ade80'
                     }
+                    style={{ filter: 'brightness(1.2)' }}
                   />
                 )}
 

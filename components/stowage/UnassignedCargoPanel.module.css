@@ -1,8 +1,19 @@
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes slideOut {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(100%); opacity: 0; }
+}
+
 .overlay {
   position: fixed;
   inset: 0;
   z-index: 900;
-  pointer-events: none;
+  pointer-events: all;
+  background: transparent;
 }
 
 .panel {
@@ -18,6 +29,11 @@
   z-index: 901;
   pointer-events: all;
   box-shadow: -8px 0 24px rgba(0,0,0,0.3);
+  animation: slideIn 0.22s ease-out forwards;
+}
+
+.panelClosing {
+  animation: slideOut 0.18s ease-in forwards;
 }
 
 .header {

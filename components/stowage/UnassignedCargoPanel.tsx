@@ -41,6 +41,12 @@ export default function UnassignedCargoPanel({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [assignQty, setAssignQty] = useState(0);
+  const [closing, setClosing] = useState(false);
+
+  const handleClose = () => {
+    setClosing(true);
+    setTimeout(() => onClose(), 180);
+  };
 
   const availableInTarget = targetCompartment
     ? targetCompartment.palletsCapacity - targetCompartment.palletsLoaded
@@ -72,13 +78,16 @@ export default function UnassignedCargoPanel({
     : 0;
 
   return (
-    <div className={styles.overlay}>
-      <div className={styles.panel}>
+    <div className={styles.overlay} onClick={handleClose}>
+      <div
+        className={`${styles.panel} ${closing ? styles.panelClosing : ''}`}
+        onClick={e => e.stopPropagation()}
+      >
         {/* Header */}
         <div className={styles.header}>
           <div className={styles.headerTop}>
             <h3 className={styles.title}>Unassigned Cargo</h3>
-            <button className={styles.closeBtn} onClick={onClose}>✕</button>
+            <button className={styles.closeBtn} onClick={handleClose}>✕</button>
           </div>
           {targetCompartment && (
             <div className={styles.targetBadge}>
