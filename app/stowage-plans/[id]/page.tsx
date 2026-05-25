@@ -562,8 +562,20 @@ export default function StowagePlanDetailPage() {
     return map;
   }, [bookings, planCargoPositions]);
 
-  const totalPallets = bookings.reduce((sum, b) => sum + b.totalQuantity, 0);
-  const stowedPallets = bookings.reduce((sum, b) => sum + assignedQty(b), 0);
+  const totalPallets = useMemo(() =>
+    vesselProfileData.reduce((sum, a) => sum + (a.palletsCapacity ?? 0), 0),
+  [vesselProfileData]);
+
+  const stowedPallets = useMemo(() => {
+    const fromBookings = bookings.reduce((sum, b) => sum + assignedQty(b), 0);
+    const fromEstimates = planCargoPositions
+      .filter((pos: any) => {
+        const bid = String(pos.bookingId ?? '');
+        return bid.startsWith('FORECAST-') || bid.startsWith('CONTRACT-ESTIMATE-');
+      })
+      .reduce((sum: number, pos: any) => sum + (pos.quantity ?? 0), 0);
+    return fromBookings + fromEstimates;
+  }, [bookings, planCargoPositions]);
 
   const selectedBooking = bookings.find(b => b.bookingId === selectedBookingId) || null;
 
@@ -998,7 +1010,7 @@ export default function StowagePlanDetailPage() {
           <div className={styles.stat}>
             <div className={styles.statLabel}>Utilization</div>
             <div className={styles.statValue}>
-              {Math.round((stowedPallets / 4840) * 100)}%
+              {totalPallets > 0 ? Math.round((stowedPallets / totalPallets) * 100) : 0}%
             </div>
           </div>
           <div className={styles.statDivider} />
