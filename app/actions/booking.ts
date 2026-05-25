@@ -935,6 +935,55 @@ export async function updateBookingQuantity(data: unknown) {
 
     await booking.save();
 
+    // ── Sync SpaceForecasts to reflect the updated booking quantity ────────────
+    // Forecasts with planImpact REPLACED_BY_BOOKING (SHIPPER_PORTAL/PLANNER_ENTRY
+    // properly replaced at booking-creation time) and INCORPORATED (CONTRACT_DEFAULT
+    // that may have stayed active due to shipperId mismatch at creation) are both
+    // kept in sync so the capacity bar always shows the correct estimated segment.
+    try {
+      if (booking.contractId && booking.voyageId) {
+        const forecastFilter: any = {
+          contractId: booking.contractId,
+          voyageId:   booking.voyageId,
+          planImpact: { $in: ['REPLACED_BY_BOOKING', 'INCORPORATED'] },
+        };
+        if (booking.shipperId) {
+          forecastFilter.shipperId = booking.shipperId;
+        } else if ((booking.shipper as any)?.code) {
+          forecastFilter.shipperCode = (booking.shipper as any).code;
+        }
+
+        const isCancelled = booking.status === 'CANCELLED';
+        const effectiveQty = validated.confirmedQuantity !== undefined
+          ? validated.confirmedQuantity
+          : newRequestedQty;
+
+        if (isCancelled || effectiveQty === 0) {
+          // Booking cancelled or zeroed — restore forecast to contract weekly estimate
+          const contract = await ContractModel.findById(booking.contractId)
+            .select('counterparties')
+            .lean();
+          const cp = (contract as any)?.counterparties?.find((c: any) =>
+            c.active !== false && (
+              (booking.shipperId && c.shipperId?.toString() === booking.shipperId.toString()) ||
+              ((booking.shipper as any)?.code && c.shipperCode === (booking.shipper as any).code)
+            )
+          );
+          const weeklyPallets = (cp as any)?.weeklyPallets ?? 0;
+          await SpaceForecastModel.updateMany(forecastFilter, {
+            $set: { estimatedPallets: weeklyPallets, planImpact: 'PENDING_REVIEW' },
+          });
+        } else {
+          // Active booking: sync estimatedPallets to current confirmed/requested quantity
+          await SpaceForecastModel.updateMany(forecastFilter, {
+            $set: { estimatedPallets: effectiveQty },
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[forecast-sync] Failed to sync SpaceForecasts after booking quantity change:', err);
+    }
+
     let resolvedVesselName = booking.vesselName ?? '';
     if (!resolvedVesselName && booking.voyageId) {
       const voy = await VoyageModel.findById(booking.voyageId).select('vesselName vesselId').lean();
