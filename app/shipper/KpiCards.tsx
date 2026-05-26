@@ -11,8 +11,6 @@ interface KpiCardsProps {
   standbyCount: number;
   standbyPallets: number;
   pendingRequestsCount: number;
-  pendingRequestsMissing: number;
-  pendingRequestsDefault: number;
 }
 
 export default function KpiCards({
@@ -23,8 +21,6 @@ export default function KpiCards({
   standbyCount,
   standbyPallets,
   pendingRequestsCount,
-  pendingRequestsMissing,
-  pendingRequestsDefault,
 }: KpiCardsProps) {
   const router = useRouter();
 
@@ -77,7 +73,7 @@ export default function KpiCards({
         </div>
       </div>
 
-      <div className={styles.kpiCard} {...nav('/shipper/forecasts?pending=1')}>
+      <div className={styles.kpiCard} {...nav('/shipper/pending')}>
         <div className={styles.kpiLabel}>Pending Requests</div>
         <div className={`${styles.kpiValue} ${
           pendingRequestsCount > 0 ? styles.kpiWarning : styles.kpiMuted
@@ -86,8 +82,8 @@ export default function KpiCards({
         </div>
         <div className={styles.kpiSub}>
           {pendingRequestsCount === 0
-            ? 'All forecasts submitted'
-            : `${pendingRequestsMissing} missing · ${pendingRequestsDefault} contract default`
+            ? 'All submissions up to date'
+            : 'Voyages awaiting your submission'
           }
         </div>
       </div>

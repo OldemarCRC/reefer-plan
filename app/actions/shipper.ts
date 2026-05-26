@@ -422,8 +422,8 @@ export async function getUpcomingVoyagesForService(serviceId: string, shipperPol
 
 // ----------------------------------------------------------------------------
 // GET PENDING REQUESTS FOR SHIPPER
-// Returns upcoming voyages where the shipper has not yet submitted a forecast
-// or booking. CONTRACT_DEFAULT (planner-created) does not count as submitted.
+// Returns upcoming voyages where the shipper has NO forecast or booking at all.
+// Any existing forecast (including CONTRACT_DEFAULT) means the voyage is skipped.
 // ----------------------------------------------------------------------------
 
 export async function getPendingRequestsForShipper(): Promise<{
@@ -440,7 +440,6 @@ export async function getPendingRequestsForShipper(): Promise<{
     contractNumber: string;
     cargoType: string;
     weeklyEstimate: number;
-    forecastStatus: 'NONE' | 'CONTRACT_DEFAULT' | 'SUBMITTED';
   }>;
   error?: string;
 }> {
@@ -524,24 +523,16 @@ export async function getPendingRequestsForShipper(): Promise<{
         });
         if (hasBooking) continue;
 
-        // 4. Check forecast status
+        // 4. Skip if any non-superseded forecast exists for this shipper+voyage+contract
         const resolvedShipperId = shipperId ?? cp.shipperId?.toString();
         const forecast = await SpaceForecastModel.findOne({
           voyageId: v._id,
           contractId: contract._id,
           shipperId: resolvedShipperId,
           planImpact: { $ne: 'SUPERSEDED' },
-        }).select('source').lean();
+        }).select('_id').lean();
 
-        let forecastStatus: 'NONE' | 'CONTRACT_DEFAULT' | 'SUBMITTED';
-        if (!forecast) {
-          forecastStatus = 'NONE';
-        } else if ((forecast as any).source === 'CONTRACT_DEFAULT') {
-          forecastStatus = 'CONTRACT_DEFAULT';
-        } else {
-          // SHIPPER_PORTAL or PLANNER_ENTRY — already actioned by shipper
-          continue;
-        }
+        if (forecast) continue;
 
         // 5. Week number from last 2 digits of voyageNumber
         const voyageNumber: string = v.voyageNumber ?? '';
@@ -571,7 +562,6 @@ export async function getPendingRequestsForShipper(): Promise<{
           contractNumber: contract.contractNumber ?? '',
           cargoType,
           weeklyEstimate,
-          forecastStatus,
         });
       }
     }

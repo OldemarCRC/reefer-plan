@@ -70,8 +70,6 @@ export default async function ShipperDashboardPage() {
         standbyCount={summary.standbyCount}
         standbyPallets={summary.standbyPallets}
         pendingRequestsCount={pendingRequests.length}
-        pendingRequestsMissing={(pendingRequests as any[]).filter(r => r.forecastStatus === 'NONE').length}
-        pendingRequestsDefault={(pendingRequests as any[]).filter(r => r.forecastStatus === 'CONTRACT_DEFAULT').length}
       />
 
       {/* Upcoming Voyages */}
