@@ -5,7 +5,7 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getShipperDashboard } from '@/app/actions/shipper';
+import { getShipperDashboard, getPendingRequestsForShipper } from '@/app/actions/shipper';
 import styles from './shipper.module.css';
 import { FlagIcon } from '@/lib/utils/flagIcon';
 
@@ -50,6 +50,9 @@ export default async function ShipperDashboardPage() {
   }
 
   const { summary, upcomingVoyages, recentBookings } = result.data;
+
+  const pendingResult = await getPendingRequestsForShipper();
+  const pendingRequests = pendingResult.success ? pendingResult.data ?? [] : [];
 
   return (
     <div>
@@ -130,6 +133,83 @@ export default async function ShipperDashboardPage() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Pending Requests */}
+      {pendingRequests.length > 0 && (
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>Pending Requests</h2>
+            <span className={styles.sectionCount}>{pendingRequests.length}</span>
+          </div>
+          <div className={styles.tableWrapper}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Voyage</th>
+                  <th>Vessel</th>
+                  <th>Week</th>
+                  <th>Service</th>
+                  <th>Route</th>
+                  <th>Cargo</th>
+                  <th>Est. Pallets</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingRequests.map((r: any) => (
+                  <tr key={`${r.voyageId}-${r.contractId}`}>
+                    <td data-label="Voyage" className={styles.mono}>{r.voyageNumber}</td>
+                    <td data-label="Vessel">{r.vesselName}</td>
+                    <td data-label="Week" className={styles.mono}>
+                      Wk {String(r.weekNumber).padStart(2, '0')}
+                    </td>
+                    <td data-label="Service" className={styles.mono}>{r.serviceCode}</td>
+                    <td data-label="Route">
+                      <div className={styles.portRoute}>
+                        <span>
+                          {r.portCalls
+                            .filter((p: any) => p.type === 'LOAD')
+                            .map((p: any) => p.portCode)
+                            .join(', ') || '—'}
+                        </span>
+                        <span className={styles.portArrow}>→</span>
+                        <span>
+                          {r.portCalls
+                            .filter((p: any) => p.type === 'DISCHARGE')
+                            .map((p: any) => p.portCode)
+                            .join(', ') || '—'}
+                        </span>
+                      </div>
+                    </td>
+                    <td data-label="Cargo" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                      {r.cargoType ? r.cargoType.replace(/_/g, ' ') : '—'}
+                    </td>
+                    <td data-label="Est. Pallets" className={styles.mutedText}>
+                      {r.weeklyEstimate > 0 ? `~${r.weeklyEstimate} plt` : '—'}
+                    </td>
+                    <td data-label="Status">
+                      {r.forecastStatus === 'CONTRACT_DEFAULT' ? (
+                        <span className={styles.badgeWarning}>Contract default used</span>
+                      ) : (
+                        <span className={styles.badgeDanger}>No estimate sent</span>
+                      )}
+                    </td>
+                    <td data-label="Action">
+                      <Link
+                        href={`/shipper/forecasts/new?voyageId=${r.voyageId}&contractId=${r.contractId}`}
+                        className={styles.btnGhostSm}
+                      >
+                        Submit →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

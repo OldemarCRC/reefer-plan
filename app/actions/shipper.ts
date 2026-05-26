@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import connectDB from '@/lib/db/connect';
-import { BookingModel, VoyageModel, ServiceModel, ShipperModel } from '@/lib/db/schemas';
+import { BookingModel, VoyageModel, ServiceModel, ShipperModel, SpaceForecastModel } from '@/lib/db/schemas';
 import { toTitleCase, toUpperCode, toLower } from '@/lib/utils/normalize';
 import { auth } from '@/auth';
 
@@ -417,5 +417,176 @@ export async function getUpcomingVoyagesForService(serviceId: string, shipperPol
   } catch (error) {
     console.error('Error fetching voyages for service:', error);
     return { success: false, data: [], error: 'Failed to fetch voyages' };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// GET PENDING REQUESTS FOR SHIPPER
+// Returns upcoming voyages where the shipper has not yet submitted a forecast
+// or booking. CONTRACT_DEFAULT (planner-created) does not count as submitted.
+// ----------------------------------------------------------------------------
+
+export async function getPendingRequestsForShipper(): Promise<{
+  success: boolean;
+  data?: Array<{
+    voyageId: string;
+    voyageNumber: string;
+    vesselName: string;
+    serviceCode: string;
+    weekNumber: number;
+    departureDate: string | null;
+    portCalls: Array<{ portCode: string; sequence: number; type: string }>;
+    contractId: string;
+    contractNumber: string;
+    cargoType: string;
+    weeklyEstimate: number;
+    forecastStatus: 'NONE' | 'CONTRACT_DEFAULT' | 'SUBMITTED';
+  }>;
+  error?: string;
+}> {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    if ((session.user as any).role !== 'EXPORTER') {
+      return { success: false, error: 'Only exporters can access this' };
+    }
+    const shipperId   = (session.user as any).shipperId   as string | undefined;
+    const shipperCode = (session.user as any).shipperCode as string | undefined;
+    if (!shipperId && !shipperCode) {
+      return { success: false, error: 'Account not linked to a shipper' };
+    }
+
+    await connectDB();
+
+    // 1. Find active contracts where this shipper is a counterparty
+    const orConditions: any[] = [];
+    if (shipperCode) {
+      orConditions.push(
+        { 'counterparties.shipperCode': shipperCode },
+        { 'shippers.code': shipperCode },
+        { 'client.type': 'SHIPPER', 'client.clientNumber': shipperCode },
+      );
+    }
+    if (shipperId) {
+      orConditions.push({ 'counterparties.shipperId': shipperId });
+    }
+
+    const contracts = await ContractModel.find({ active: true, $or: orConditions }).lean();
+    if (contracts.length === 0) return { success: true, data: [] };
+
+    const now = new Date();
+    const results: any[] = [];
+    const seen = new Set<string>();
+
+    for (const contract of contracts as any[]) {
+      const contractId = contract._id.toString();
+
+      // Resolve serviceId — may be a populated object or a raw ObjectId
+      const rawServiceId = contract.serviceId;
+      const serviceId: string = rawServiceId?._id
+        ? rawServiceId._id.toString()
+        : rawServiceId?.toString() ?? '';
+      if (!serviceId) continue;
+
+      // Resolve this shipper's counterparty entry for weeklyEstimate + cargoType
+      const counterparties: any[] = contract.counterparties ?? [];
+      const cp = counterparties.find((c: any) =>
+        (shipperId && c.shipperId?.toString() === shipperId) ||
+        (shipperCode && c.shipperCode === shipperCode)
+      );
+      if (!cp) continue;
+
+      const weeklyEstimate: number = cp.weeklyEstimate ?? cp.weeklyPallets ?? 0;
+      const cargoType: string = cp.cargoTypes?.[0] ?? contract.cargoType ?? '';
+
+      // 2. Find upcoming voyages for this service
+      const voyages = await VoyageModel.find({
+        serviceId,
+        status: { $in: ['PLANNED', 'IN_PROGRESS'] },
+        $or: [{ departureDate: { $gte: now } }, { departureDate: null }],
+      })
+        .sort({ departureDate: 1 })
+        .limit(12)
+        .lean();
+
+      for (const v of voyages as any[]) {
+        const voyageId = v._id.toString();
+        const key = `${voyageId}-${contractId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        // 3. Skip if a non-cancelled booking already exists
+        const hasBooking = await BookingModel.exists({
+          voyageId: v._id,
+          contractId: contract._id,
+          ...(shipperId ? { shipperId } : { 'shipper.code': shipperCode }),
+          status: { $nin: ['CANCELLED', 'REJECTED'] },
+        });
+        if (hasBooking) continue;
+
+        // 4. Check forecast status
+        const resolvedShipperId = shipperId ?? cp.shipperId?.toString();
+        const forecast = await SpaceForecastModel.findOne({
+          voyageId: v._id,
+          contractId: contract._id,
+          shipperId: resolvedShipperId,
+          planImpact: { $ne: 'SUPERSEDED' },
+        }).select('source').lean();
+
+        let forecastStatus: 'NONE' | 'CONTRACT_DEFAULT' | 'SUBMITTED';
+        if (!forecast) {
+          forecastStatus = 'NONE';
+        } else if ((forecast as any).source === 'CONTRACT_DEFAULT') {
+          forecastStatus = 'CONTRACT_DEFAULT';
+        } else {
+          // SHIPPER_PORTAL or PLANNER_ENTRY — already actioned by shipper
+          continue;
+        }
+
+        // 5. Week number from last 2 digits of voyageNumber
+        const voyageNumber: string = v.voyageNumber ?? '';
+        const weekNumber = voyageNumber.length >= 2
+          ? parseInt(voyageNumber.slice(-2), 10)
+          : 0;
+
+        // 6. Port calls summary: LOAD / DISCHARGE / TRANSIT type
+        const portCalls = (v.portCalls ?? []).map((pc: any) => {
+          const ops: string[] = pc.operations ?? [];
+          let type = 'TRANSIT';
+          if (ops.includes('LOAD') && ops.includes('DISCHARGE')) type = 'LOAD';
+          else if (ops.includes('LOAD'))      type = 'LOAD';
+          else if (ops.includes('DISCHARGE')) type = 'DISCHARGE';
+          return { portCode: pc.portCode, sequence: pc.sequence ?? 0, type };
+        });
+
+        results.push({
+          voyageId,
+          voyageNumber: v.voyageNumber ?? '',
+          vesselName:   v.vesselName ?? '',
+          serviceCode:  v.serviceCode ?? contract.serviceCode ?? '',
+          weekNumber,
+          departureDate: v.departureDate ? v.departureDate.toISOString() : null,
+          portCalls,
+          contractId,
+          contractNumber: contract.contractNumber ?? '',
+          cargoType,
+          weeklyEstimate,
+          forecastStatus,
+        });
+      }
+    }
+
+    // Sort by departureDate ascending, nulls last
+    results.sort((a, b) => {
+      if (!a.departureDate && !b.departureDate) return 0;
+      if (!a.departureDate) return 1;
+      if (!b.departureDate) return -1;
+      return new Date(a.departureDate).getTime() - new Date(b.departureDate).getTime();
+    });
+
+    return { success: true, data: results };
+  } catch (err: any) {
+    console.error('Error fetching pending requests:', err);
+    return { success: false, error: err.message ?? 'Failed to fetch pending requests' };
   }
 }
