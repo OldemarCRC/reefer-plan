@@ -205,7 +205,27 @@ export async function getMyForecasts(
     const forecasts = await SpaceForecastModel.find(query).sort({ submittedAt: -1 }).lean();
     return {
       success: true,
-      data: (forecasts as any[]).map((f: any) => f as SpaceForecast),
+      data: (forecasts as any[]).map((f: any) => ({
+        _id:              f._id.toString(),
+        forecastNumber:   f.forecastNumber,
+        contractId:       f.contractId?.toString(),
+        contractNumber:   f.contractNumber,
+        voyageId:         f.voyageId?.toString(),
+        voyageNumber:     f.voyageNumber,
+        vesselName:       f.vesselName,
+        serviceCode:      f.serviceCode,
+        shipperId:        f.shipperId?.toString(),
+        shipperName:      f.shipperName,
+        consigneeName:    f.consigneeName,
+        cargoType:        f.cargoType,
+        polPortCode:      f.polPortCode,
+        podPortCode:      f.podPortCode,
+        estimatedPallets: f.estimatedPallets,
+        source:           f.source,
+        planImpact:       f.planImpact,
+        submittedAt:      f.submittedAt?.toISOString(),
+        createdAt:        f.createdAt?.toISOString(),
+      })) as SpaceForecast[],
     };
   } catch (err: any) {
     return { success: false, data: [], error: err.message ?? 'Failed to fetch forecasts' };
