@@ -156,6 +156,8 @@ export default async function ShipperDashboardPage() {
                 <tr>
                   <th>Booking #</th>
                   <th>Voyage</th>
+                  <th>Vessel</th>
+                  <th>Week</th>
                   <th>Cargo</th>
                   <th>Consignee</th>
                   <th>Req.</th>
@@ -175,6 +177,10 @@ export default async function ShipperDashboardPage() {
                         </Link>
                       </td>
                       <td data-label="Voyage" className={styles.mono}>{b.voyageNumber || '—'}</td>
+                      <td data-label="Vessel">{b.vesselName || '—'}</td>
+                      <td data-label="Week" className={styles.mono}>
+                        {b.voyageNumber ? `Wk ${b.voyageNumber.slice(-2)}` : '—'}
+                      </td>
                       <td data-label="Cargo">{b.cargoType.replace(/_/g, ' ')}</td>
                       <td data-label="Consignee">{b.consignee?.name || '—'}</td>
                       <td data-label="Req." className={styles.mono}>{b.requestedQuantity}</td>

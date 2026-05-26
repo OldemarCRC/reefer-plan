@@ -1245,6 +1245,7 @@ export async function getBookingsByShipperCode(code: string, shipperId?: string)
       contractId: b.contractId?.toString() ?? null,
       voyageId: b.voyageId?.toString() ?? null,
       voyageNumber: b.voyageNumber ?? '',
+      vesselName: b.vesselName ?? null,
       officeCode: b.officeCode ?? '',
       serviceCode: b.serviceCode ?? '',
       shipper: b.shipper ?? { name: '', code: '' },

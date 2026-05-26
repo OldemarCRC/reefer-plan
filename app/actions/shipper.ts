@@ -216,6 +216,7 @@ export async function getShipperDashboard(shipperCode: string, shipperId?: strin
       _id: b._id.toString(),
       bookingNumber: b.bookingNumber,
       voyageNumber: b.voyageNumber ?? '',
+      vesselName: b.vesselName ?? null,
       serviceCode: b.serviceCode ?? '',
       cargoType: b.cargoType ?? '',
       requestedQuantity: b.requestedQuantity ?? 0,

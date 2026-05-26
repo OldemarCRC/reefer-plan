@@ -64,9 +64,12 @@ export default async function ShipperForecastsPage({
             <thead>
               <tr>
                 <th>Voyage</th>
+                <th>Vessel</th>
                 <th>Service</th>
-                <th>Contract</th>
+                <th>Week</th>
+                <th>Route</th>
                 <th>Cargo</th>
+                <th>Consignee</th>
                 <th>Pallets</th>
                 <th>Status</th>
                 <th>Submitted</th>
@@ -75,13 +78,23 @@ export default async function ShipperForecastsPage({
             <tbody>
               {(forecasts as any[]).map((f: any) => {
                 const impact = PLAN_IMPACT_STYLES[f.planImpact] ?? PLAN_IMPACT_STYLES.NO_CHANGE;
+                const route = (f.polPortCode && f.podPortCode)
+                  ? `${f.polPortCode} → ${f.podPortCode}`
+                  : '—';
                 return (
                   <tr key={f._id?.toString()}>
                     <td className={styles.mono}>{f.voyageNumber || '—'}</td>
+                    <td>{f.vesselName || '—'}</td>
                     <td className={styles.mono}>{f.serviceCode || '—'}</td>
-                    <td className={styles.mono}>{f.contractNumber || '—'}</td>
+                    <td className={styles.mono}>
+                      {f.voyageNumber ? `Wk ${f.voyageNumber.slice(-2)}` : '—'}
+                    </td>
+                    <td className={styles.mono}>{route}</td>
                     <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
                       {f.cargoType ? (f.cargoType as string).replace(/_/g, ' ') : '—'}
+                    </td>
+                    <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                      {f.consigneeName || '—'}
                     </td>
                     <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', fontVariantNumeric: 'tabular-nums' }}>
                       {f.source === 'NO_CARGO' ? (

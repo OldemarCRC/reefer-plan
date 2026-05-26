@@ -10,6 +10,7 @@ interface ShipperBooking {
   _id: string;
   bookingNumber: string;
   voyageNumber: string;
+  vesselName?: string | null;
   serviceCode: string;
   cargoType: string;
   requestedQuantity: number;
@@ -120,6 +121,7 @@ export default function BookingsClient({
                 <th>Booking #</th>
                 <th>Voyage</th>
                 <th>Service</th>
+                <th>Vessel</th>
                 <th>Cargo Type</th>
                 <th>Consignee</th>
                 <th>Req.</th>
@@ -143,6 +145,7 @@ export default function BookingsClient({
                     </td>
                     <td data-label="Voyage" className={styles.mono}>{b.voyageNumber || '—'}</td>
                     <td data-label="Service" className={styles.mono}>{b.serviceCode}</td>
+                    <td data-label="Vessel">{b.vesselName || '—'}</td>
                     <td data-label="Cargo Type">{b.cargoType.replace(/_/g, ' ')}</td>
                     <td data-label="Consignee">{b.consignee?.name || '—'}</td>
                     <td data-label="Req." className={styles.mono}>{b.requestedQuantity}</td>
