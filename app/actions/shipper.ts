@@ -256,9 +256,8 @@ export async function getShipperSchedules() {
 
     const now = new Date();
 
-    let scheduleQuery: Record<string, unknown> = {
-      status: { $in: ['PLANNED', 'ESTIMATED', 'CONFIRMED', 'IN_PROGRESS'] },
-      $or: [{ departureDate: { $gte: now } }, { departureDate: null }],
+    let scheduleQuery: any = {
+      status: { $nin: ['COMPLETED', 'CLOSED', 'CANCELLED'] },
     };
 
     if (serviceFilter.length > 0) {
@@ -270,8 +269,27 @@ export async function getShipperSchedules() {
     const voyages = await VoyageModel.find(scheduleQuery)
       .populate('serviceId', 'serviceCode serviceName shortCode')
       .sort({ departureDate: 1 })
-      .limit(60)
+      .limit(100)
       .lean();
+
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const visibleVoyages = (voyages as any[]).filter(v => {
+      const portCalls = v.portCalls ?? [];
+      if (portCalls.length === 0) return true;
+
+      const lastPort = portCalls.reduce((max: any, pc: any) =>
+        (pc.sequence ?? 0) > (max.sequence ?? 0) ? pc : max,
+        portCalls[0]
+      );
+
+      const effectiveDate =
+        lastPort.atd ?? lastPort.etd ?? lastPort.ata ?? lastPort.eta ?? null;
+
+      if (!effectiveDate) return true;
+      return new Date(effectiveDate) >= sevenDaysAgo;
+    });
 
     // Group by service
     const serviceMap = new Map<string, {
@@ -280,7 +298,7 @@ export async function getShipperSchedules() {
       voyages: any[];
     }>();
 
-    for (const v of voyages as any[]) {
+    for (const v of visibleVoyages) {
       const sCode = v.serviceId?.serviceCode ?? v.serviceCode ?? 'UNKNOWN';
       const sName = v.serviceId?.serviceName ?? sCode;
 
