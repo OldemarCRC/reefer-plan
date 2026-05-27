@@ -407,8 +407,13 @@ export async function getUpcomingVoyagesForService(serviceId: string, shipperPol
     // If a POL port code is provided, exclude voyages where that port has already departed
     const filtered = shipperPolPortCode
       ? mapped.filter(v => {
-          const polPc = v.portCalls.find((pc: any) => pc.portCode === shipperPolPortCode);
-          return !polPc || !polPc.atd;
+          const polPc = v.portCalls.find(
+            (pc: any) => pc.portCode === shipperPolPortCode
+          );
+          if (!polPc) return true;
+          const effectiveDeparture = polPc.atd ?? polPc.etd ?? null;
+          if (!effectiveDeparture) return true;
+          return new Date(effectiveDeparture) > now;
         })
       : mapped;
 
@@ -506,7 +511,28 @@ export async function getPendingRequestsForShipper(): Promise<{
         .limit(12)
         .lean();
 
-      for (const v of voyages as any[]) {
+      const polPortCodes = contracts
+        .filter((c: any) => c.serviceId?.toString() === serviceId)
+        .map((c: any) => c.originPort?.portCode)
+        .filter(Boolean);
+
+      const openVoyages = (voyages as any[]).filter(v => {
+        const loadPortCalls = (v.portCalls ?? []).filter((pc: any) =>
+          polPortCodes.length === 0 || polPortCodes.includes(pc.portCode)
+        );
+        if (loadPortCalls.length > 0) {
+          return loadPortCalls.some((pc: any) => {
+            const effectiveDeparture = pc.atd ?? pc.etd ?? null;
+            if (!effectiveDeparture) return true;
+            return new Date(effectiveDeparture) > now;
+          });
+        }
+        const effectiveDeparture = v.departureDate ?? null;
+        if (!effectiveDeparture) return true;
+        return new Date(effectiveDeparture) > now;
+      });
+
+      for (const v of openVoyages) {
         const voyageId = v._id.toString();
         const key = `${voyageId}-${contractId}`;
         if (seen.has(key)) continue;
