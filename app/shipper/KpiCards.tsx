@@ -11,6 +11,7 @@ interface KpiCardsProps {
   standbyCount: number;
   standbyPallets: number;
   pendingRequestsCount: number;
+  pendingRequestsHasEstimate: number;
 }
 
 export default function KpiCards({
@@ -21,6 +22,7 @@ export default function KpiCards({
   standbyCount,
   standbyPallets,
   pendingRequestsCount,
+  pendingRequestsHasEstimate,
 }: KpiCardsProps) {
   const router = useRouter();
 
@@ -83,7 +85,9 @@ export default function KpiCards({
         <div className={styles.kpiSub}>
           {pendingRequestsCount === 0
             ? 'All submissions up to date'
-            : 'Voyages awaiting your submission'
+            : pendingRequestsCount === pendingRequestsHasEstimate
+              ? 'Booking pending · estimate sent'
+              : `${pendingRequestsCount - pendingRequestsHasEstimate} awaiting submission`
           }
         </div>
       </div>

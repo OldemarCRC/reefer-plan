@@ -70,6 +70,7 @@ export default async function ShipperDashboardPage() {
         standbyCount={summary.standbyCount}
         standbyPallets={summary.standbyPallets}
         pendingRequestsCount={pendingRequests.length}
+        pendingRequestsHasEstimate={pendingRequests.filter(r => r.forecastStatus === 'HAS_ESTIMATE').length}
       />
 
       {/* Upcoming Voyages */}

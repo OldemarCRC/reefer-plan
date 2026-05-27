@@ -462,6 +462,7 @@ export async function getPendingRequestsForShipper(): Promise<{
     contractNumber: string;
     cargoType: string;
     weeklyEstimate: number;
+    forecastStatus: 'NONE' | 'HAS_ESTIMATE';
   }>;
   error?: string;
 }> {
@@ -565,16 +566,28 @@ export async function getPendingRequestsForShipper(): Promise<{
         });
         if (hasBooking) continue;
 
-        // 4. Skip if any non-superseded forecast exists for this shipper+voyage+contract
+        // 4. Check for non-superseded forecast to determine forecastStatus
         const resolvedShipperId = shipperId ?? cp.shipperId?.toString();
         const forecast = await SpaceForecastModel.findOne({
           voyageId: v._id,
           contractId: contract._id,
           shipperId: resolvedShipperId,
           planImpact: { $ne: 'SUPERSEDED' },
-        }).select('_id').lean();
+        }).select('_id source').lean();
 
-        if (forecast) continue;
+        let forecastStatus: 'NONE' | 'HAS_ESTIMATE' = 'NONE';
+
+        if (forecast) {
+          if (
+            (forecast as any).source === 'SHIPPER_PORTAL' ||
+            (forecast as any).source === 'PLANNER_ENTRY'
+          ) {
+            forecastStatus = 'HAS_ESTIMATE';
+          } else {
+            // CONTRACT_DEFAULT or other internal forecast — skip
+            continue;
+          }
+        }
 
         // 5. Week number from last 2 digits of voyageNumber
         const voyageNumber: string = v.voyageNumber ?? '';
@@ -604,6 +617,7 @@ export async function getPendingRequestsForShipper(): Promise<{
           contractNumber: contract.contractNumber ?? '',
           cargoType,
           weeklyEstimate,
+          forecastStatus,
         });
       }
     }
