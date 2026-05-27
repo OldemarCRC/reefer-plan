@@ -369,8 +369,7 @@ export async function getUpcomingVoyagesForService(serviceId: string, shipperPol
 
     const voyages = await VoyageModel.find({
       serviceId,
-      status: { $in: ['PLANNED'] },
-      $or: [{ departureDate: { $gte: now } }, { departureDate: null }],
+      status: { $nin: ['COMPLETED', 'CLOSED', 'CANCELLED'] },
     })
       .sort({ departureDate: 1 })
       .limit(12)
@@ -501,8 +500,7 @@ export async function getPendingRequestsForShipper(): Promise<{
       // 2. Find upcoming voyages for this service
       const voyages = await VoyageModel.find({
         serviceId,
-        status: { $in: ['PLANNED', 'IN_PROGRESS'] },
-        $or: [{ departureDate: { $gte: now } }, { departureDate: null }],
+        status: { $nin: ['COMPLETED', 'CLOSED', 'CANCELLED'] },
       })
         .sort({ departureDate: 1 })
         .limit(12)
