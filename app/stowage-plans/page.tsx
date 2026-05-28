@@ -105,7 +105,7 @@ export default async function StowagePlansPage({ searchParams }: { searchParams?
             const hasIssues = p.overstowViolations > 0 || p.temperatureConflicts > 0;
 
             return (
-              <div key={p._id} className={styles.planCard}>
+              <Link key={p._id} href={`/stowage-plans/${p._id}`} className={`${styles.planCard} ${styles.planCardClickable}`}>
                 <div className={styles.planHeader}>
                   <div className={styles.planId}>
                     <span className={styles.planCode}>{p.planNumber}</span>
@@ -149,12 +149,7 @@ export default async function StowagePlansPage({ searchParams }: { searchParams?
                     )}
                   </div>
                 </div>
-                <div className={styles.planFooter}>
-                  <Link href={`/stowage-plans/${p._id}`} className={styles.btnGhost}>
-                    Open Plan →
-                  </Link>
-                </div>
-              </div>
+              </Link>
             );
           })}
         </div>

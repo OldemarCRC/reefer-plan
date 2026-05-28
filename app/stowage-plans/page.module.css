@@ -257,6 +257,25 @@
   background: var(--color-surface-hover);
 }
 
+.planCardClickable {
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+
+.planCardClickable:hover {
+  background: var(--color-bg-tertiary);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+.planCardClickable:focus-visible {
+  outline: 2px solid var(--color-cyan);
+  outline-offset: 2px;
+}
+
 .planHeader {
   display: flex;
   flex-direction: column;
