@@ -73,10 +73,15 @@ export default async function VesselsPage() {
                       href={`https://www.marinetraffic.com/en/ais/details/ships/imo:${v.imoNumber}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={styles.externalLink}
-                      title="View on MarineTraffic"
+                      className={styles.mtLink}
+                      title={`Track ${v.name} on MarineTraffic (IMO ${v.imoNumber})`}
                     >
-                      ↗
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
+                           stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M7 1h4v4" />
+                        <path d="M11 1L5.5 6.5" />
+                        <path d="M5 2H2a1 1 0 00-1 1v7a1 1 0 001 1h7a1 1 0 001-1V8" />
+                      </svg>
                     </a>
                   )}
                 </div>

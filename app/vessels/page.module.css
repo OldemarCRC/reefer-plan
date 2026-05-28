@@ -99,19 +99,26 @@
   outline-offset: 2px;
 }
 
-/* External link floats above the stretched link so it remains independently clickable */
-.externalLink {
+/* MarineTraffic link floats above the stretched link so it remains independently clickable */
+.mtLink {
   position: relative;
   z-index: 2;
-  font-size: 11px;
-  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  margin-left: 6px;
+  flex-shrink: 0;
   text-decoration: none;
-  padding: 2px 4px;
-  border-radius: 3px;
-  margin-left: 4px;
 }
 
-.externalLink:hover {
+.mtLink:hover {
+  opacity: 1;
   color: var(--color-cyan);
   background: var(--color-bg-tertiary);
 }
@@ -147,8 +154,11 @@
 
 .vesselImo {
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .activeVoyage {
