@@ -34,7 +34,8 @@ export default async function VesselsPage() {
         {/* Vessel grid */}
         <div className={styles.vesselGrid}>
           {displayVessels.map((v: any) => (
-            <div key={v._id} className={styles.vesselCard}>
+            <div key={v._id} className={`${styles.vesselCard} ${styles.vesselCardClickable}`}>
+              <Link href={`/vessels/${v._id}`} className={styles.cardLink} aria-label={`View ${v.name} profile`} />
               {/* Ship icon header */}
               <div className={styles.cardTop}>
                 <div className={styles.shipIcon}>
@@ -65,7 +66,20 @@ export default async function VesselsPage() {
                   </svg>
                 </div>
                 <div className={styles.vesselName}>{v.name}</div>
-                <div className={styles.vesselImo}>IMO {v.imoNumber}</div>
+                <div className={styles.vesselImo}>
+                  IMO {v.imoNumber}
+                  {v.imoNumber !== '—' && (
+                    <a
+                      href={`https://www.marinetraffic.com/en/ais/details/ships/imo:${v.imoNumber}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.externalLink}
+                      title="View on MarineTraffic"
+                    >
+                      ↗
+                    </a>
+                  )}
+                </div>
               </div>
 
               {/* Specs grid */}
@@ -109,9 +123,6 @@ export default async function VesselsPage() {
                     ? <FlagIcon code={v.flag} />
                     : (v.flag || '—')}
                 </span>
-                <Link href={`/vessels/${v._id}`} className={styles.btnGhost}>
-                  View Profile →
-                </Link>
               </div>
             </div>
           ))}

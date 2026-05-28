@@ -66,6 +66,56 @@
   background: var(--color-surface-hover);
 }
 
+.vesselCardClickable {
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+
+.vesselCardClickable:hover {
+  background: var(--color-bg-tertiary);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+.vesselCardClickable:focus-visible {
+  outline: 2px solid var(--color-cyan);
+  outline-offset: 2px;
+}
+
+/* Stretched link covers the full card; z-index 1 sits above non-positioned content */
+.cardLink {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  color: inherit;
+}
+
+.cardLink:focus-visible {
+  outline: 2px solid var(--color-cyan);
+  outline-offset: 2px;
+}
+
+/* External link floats above the stretched link so it remains independently clickable */
+.externalLink {
+  position: relative;
+  z-index: 2;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  padding: 2px 4px;
+  border-radius: 3px;
+  margin-left: 4px;
+}
+
+.externalLink:hover {
+  color: var(--color-cyan);
+  background: var(--color-bg-tertiary);
+}
+
 /* --- Card top --- */
 
 .cardTop {
