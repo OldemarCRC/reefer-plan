@@ -7,8 +7,8 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getShipperDashboard, getPendingRequestsForShipper } from '@/app/actions/shipper';
 import KpiCards from './KpiCards';
+import UpcomingVoyageStrip from './UpcomingVoyageStrip';
 import styles from './shipper.module.css';
-import { FlagIcon } from '@/lib/utils/flagIcon';
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   PENDING:   { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)' },
@@ -18,12 +18,6 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   REJECTED:  { bg: 'var(--color-danger-muted)',  color: 'var(--color-danger)' },
   CANCELLED: { bg: 'var(--color-bg-tertiary)',   color: 'var(--color-text-tertiary)' },
 };
-
-function fmtDate(d?: string | null) {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
 
 export default async function ShipperDashboardPage() {
   const session = await auth();
@@ -80,36 +74,7 @@ export default async function ShipperDashboardPage() {
             <h2 className={styles.sectionTitle}>Upcoming Voyages</h2>
             <Link href="/shipper/schedules" className={styles.sectionLink}>View all schedules →</Link>
           </div>
-          <div className={styles.voyageStrip}>
-            {upcomingVoyages.map((v: any) => {
-              const loadPorts = v.portCalls.filter((pc: any) => pc.operations?.includes('LOAD'));
-              const dischPorts = v.portCalls.filter((pc: any) => pc.operations?.includes('DISCHARGE'));
-              return (
-                <div key={v._id} className={styles.voyageCard}>
-                  <div className={styles.voyageCardNum}>{v.voyageNumber}</div>
-                  <div className={styles.voyageCardVessel}>{v.vesselName}</div>
-                  <div className={styles.voyageCardDep}>
-                    Dep. {fmtDate(v.departureDate)}
-                  </div>
-                  <div className={styles.portChain}>
-                    {loadPorts.map((pc: any, i: number) => (
-                      <span key={i} className={`${styles.portDot} ${styles['portDot--load']}`}>
-                        <FlagIcon code={pc.country} /> {pc.portCode}
-                        {i < loadPorts.length - 1 && <span className={styles.portDotSep} />}
-                      </span>
-                    ))}
-                    {dischPorts.length > 0 && <span className={`${styles.portDot} ${styles.portArrow}`}> → </span>}
-                    {dischPorts.map((pc: any, i: number) => (
-                      <span key={i} className={`${styles.portDot} ${styles['portDot--discharge']}`}>
-                        <FlagIcon code={pc.country} /> {pc.portCode}
-                        {i < dischPorts.length - 1 && <span className={styles.portDotSep} />}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <UpcomingVoyageStrip voyages={upcomingVoyages} />
         </div>
       )}
 

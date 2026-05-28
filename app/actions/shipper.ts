@@ -636,3 +636,108 @@ export async function getPendingRequestsForShipper(): Promise<{
     return { success: false, error: err.message ?? 'Failed to fetch pending requests' };
   }
 }
+
+// ----------------------------------------------------------------------------
+// GET VOYAGE SUBMISSION STATUS
+// Returns per-contract booking/estimate status for one voyage for the current
+// EXPORTER user — used by the voyage action modal.
+// ----------------------------------------------------------------------------
+
+export async function getVoyageSubmissionStatus(voyageId: string): Promise<{
+  success: boolean;
+  data?: {
+    voyageId: string;
+    contracts: Array<{
+      contractId: string;
+      contractNumber: string;
+      cargoType: string;
+      weeklyEstimate: number;
+      status: 'NONE' | 'HAS_ESTIMATE' | 'HAS_BOOKING';
+    }>;
+  };
+  error?: string;
+}> {
+  try {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: 'Unauthorized' };
+    if ((session.user as any).role !== 'EXPORTER') {
+      return { success: false, error: 'Exporter role required' };
+    }
+    const shipperId   = (session.user as any).shipperId   as string | undefined;
+    const shipperCode = (session.user as any).shipperCode as string | undefined;
+    if (!shipperId && !shipperCode) {
+      return { success: false, error: 'Account not linked to a shipper' };
+    }
+
+    await connectDB();
+
+    const orConditions: any[] = [];
+    if (shipperCode) {
+      orConditions.push(
+        { 'counterparties.shipperCode': shipperCode },
+        { 'shippers.code': shipperCode },
+        { 'client.type': 'SHIPPER', 'client.clientNumber': shipperCode },
+      );
+    }
+    if (shipperId) {
+      orConditions.push({ 'counterparties.shipperId': shipperId });
+    }
+
+    const contracts = await ContractModel.find({ active: true, $or: orConditions }).lean();
+
+    const results: Array<{
+      contractId: string;
+      contractNumber: string;
+      cargoType: string;
+      weeklyEstimate: number;
+      status: 'NONE' | 'HAS_ESTIMATE' | 'HAS_BOOKING';
+    }> = [];
+
+    for (const contract of contracts as any[]) {
+      const contractId = contract._id.toString();
+      const counterparties: any[] = contract.counterparties ?? [];
+      const cp = counterparties.find((c: any) =>
+        (shipperId && c.shipperId?.toString() === shipperId) ||
+        (shipperCode && c.shipperCode === shipperCode)
+      );
+      const weeklyEstimate: number = cp?.weeklyEstimate ?? cp?.weeklyPallets ?? 0;
+      const cargoType: string = cp?.cargoTypes?.[0] ?? contract.cargoType ?? '';
+
+      const hasBooking = await BookingModel.exists({
+        voyageId,
+        contractId: contract._id,
+        ...(shipperId ? { shipperId } : { 'shipper.code': shipperCode }),
+        status: { $nin: ['CANCELLED', 'REJECTED'] },
+      });
+
+      if (hasBooking) {
+        results.push({ contractId, contractNumber: contract.contractNumber ?? '', cargoType, weeklyEstimate, status: 'HAS_BOOKING' });
+        continue;
+      }
+
+      const resolvedShipperId = shipperId ?? cp?.shipperId?.toString();
+      const hasForecast = resolvedShipperId
+        ? await SpaceForecastModel.exists({
+            voyageId,
+            contractId: contract._id,
+            shipperId: resolvedShipperId,
+            planImpact: { $ne: 'SUPERSEDED' },
+            source: { $in: ['SHIPPER_PORTAL', 'PLANNER_ENTRY'] },
+          })
+        : null;
+
+      results.push({
+        contractId,
+        contractNumber: contract.contractNumber ?? '',
+        cargoType,
+        weeklyEstimate,
+        status: hasForecast ? 'HAS_ESTIMATE' : 'NONE',
+      });
+    }
+
+    return { success: true, data: { voyageId, contracts: results } };
+  } catch (err: any) {
+    console.error('Error fetching voyage submission status:', err);
+    return { success: false, error: err.message ?? 'Failed to fetch status' };
+  }
+}

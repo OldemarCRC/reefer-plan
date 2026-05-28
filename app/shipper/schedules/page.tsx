@@ -3,21 +3,8 @@
 // ============================================================================
 
 import { getShipperSchedules } from '@/app/actions/shipper';
+import SchedulesClient from './SchedulesClient';
 import styles from '../shipper.module.css';
-import { FlagIcon } from '@/lib/utils/flagIcon';
-
-const VOYAGE_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  PLANNED:     { bg: 'var(--color-bg-tertiary)',   color: 'var(--color-text-tertiary)' },
-  ESTIMATED:   { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)' },
-  CONFIRMED:   { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
-  IN_PROGRESS: { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
-  COMPLETED:   { bg: 'var(--color-bg-tertiary)',   color: 'var(--color-text-tertiary)' },
-};
-
-function fmtDate(d?: string | null) {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
 
 
 export default async function ShipperSchedulesPage() {
@@ -52,67 +39,7 @@ export default async function ShipperSchedulesPage() {
           <div className={styles.emptyStateDesc}>Check back later for scheduled sailings.</div>
         </div>
       ) : (
-        services.map((svc: any) => (
-          <div key={svc.serviceCode} className={styles.serviceSection}>
-            <div className={styles.serviceHeader}>
-              <span className={styles.serviceCode}>{svc.serviceCode}</span>
-              <span className={styles.serviceName}>{svc.serviceName}</span>
-            </div>
-
-            <div className={styles.tableWrapper}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Voyage</th>
-                    <th>Vessel</th>
-                    <th>Departure</th>
-                    <th>Port Rotation</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {svc.voyages.map((v: any) => {
-                    const vs = VOYAGE_STATUS_COLORS[v.status] ?? VOYAGE_STATUS_COLORS.PLANNED;
-                    const ports = [...v.portCalls].sort((a: any, b: any) => a.sequence - b.sequence);
-                    return (
-                      <tr key={v._id}>
-                        <td data-label="Voyage" className={styles.mono}>{v.voyageNumber}</td>
-                        <td data-label="Vessel" style={{ color: 'var(--color-text-primary)', fontWeight: 'var(--weight-medium)' }}>
-                          {v.vesselName}
-                        </td>
-                        <td data-label="Departure" className={styles.mono}>{fmtDate(v.departureDate)}</td>
-                        <td data-label="Port Rotation">
-                          <div className={styles.portChain}>
-                            {ports.map((pc: any, i: number) => (
-                              <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
-                                  <FlagIcon code={pc.country} /> {pc.portCode}
-                                </span>
-                                {pc.eta && (
-                                  <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-                                    {new Date(pc.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                  </span>
-                                )}
-                                {i < ports.length - 1 && (
-                                  <span style={{ color: 'var(--color-text-tertiary)', fontSize: '11px' }}> →</span>
-                                )}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                        <td data-label="Status">
-                          <span className={styles.badge} style={{ background: vs.bg, color: vs.color }}>
-                            {v.status.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ))
+        <SchedulesClient services={services} />
       )}
     </div>
   );
