@@ -4,6 +4,7 @@ import { getStowagePlans } from '@/app/actions/stowage-plan';
 import { getBookings } from '@/app/actions/booking';
 import { ClickablePlanRow } from '@/components/dashboard/ClickablePlanRow';
 import CapacityBar from '@/components/ui/CapacityBar/CapacityBar';
+import StatCard from './dashboard-stat-card';
 import styles from './page.module.css';
 import type { CargoType } from '@/types/models';
 
@@ -139,10 +140,30 @@ export default async function DashboardPage() {
 
         {/* Stats */}
         <div className={styles.statsGrid}>
-          <StatCard label="Active Voyages" value={dashboardStats.activeVoyages} accent="blue" />
-          <StatCard label="Pending Bookings" value={dashboardStats.pendingBookings} accent="yellow" />
-          <StatCard label="Plans in Draft" value={dashboardStats.plansInDraft} accent="cyan" />
-          <StatCard label="Awaiting Captain" value={dashboardStats.awaitingCaptain} accent="warning" />
+          <StatCard
+            label="Active Voyages"
+            value={dashboardStats.activeVoyages}
+            accent="blue"
+            href="/voyages?status=IN_PROGRESS,PLANNED"
+          />
+          <StatCard
+            label="Pending Bookings"
+            value={dashboardStats.pendingBookings}
+            accent="yellow"
+            href="/bookings?status=PENDING,STANDBY,PARTIAL"
+          />
+          <StatCard
+            label="Plans in Draft"
+            value={dashboardStats.plansInDraft}
+            accent="cyan"
+            href="/stowage-plans?status=DRAFT"
+          />
+          <StatCard
+            label="Awaiting Captain"
+            value={dashboardStats.awaitingCaptain}
+            accent="warning"
+            href="/stowage-plans?status=READY_FOR_CAPTAIN,EMAIL_SENT"
+          />
         </div>
 
         {/* Main grid */}
@@ -277,33 +298,6 @@ export default async function DashboardPage() {
 }
 
 // --- Sub-components ---
-
-function StatCard({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: number;
-  accent: 'blue' | 'cyan' | 'yellow' | 'warning';
-}) {
-  const accentColors: Record<string, string> = {
-    blue: 'var(--color-blue)',
-    cyan: 'var(--color-cyan)',
-    yellow: 'var(--color-yellow)',
-    warning: 'var(--color-warning)',
-  };
-
-  return (
-    <div className={styles.statCard}>
-      <div className={styles.statAccent} style={{ backgroundColor: accentColors[accent] }} />
-      <div className={styles.statContent}>
-        <span className={styles.statValue}>{value}</span>
-        <span className={styles.statLabel}>{label}</span>
-      </div>
-    </div>
-  );
-}
 
 function IssueIndicators({ overstow, tempConflicts }: { overstow: number; tempConflicts: number }) {
   if (overstow === 0 && tempConflicts === 0) {

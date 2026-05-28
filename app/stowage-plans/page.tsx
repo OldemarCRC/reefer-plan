@@ -30,7 +30,9 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export default async function StowagePlansPage() {
+export default async function StowagePlansPage({ searchParams }: { searchParams?: Promise<{ status?: string }> }) {
+  const params = await searchParams;
+  const statusFilter = params?.status ? params.status.split(',') : null;
   const [session, result] = await Promise.all([auth(), getStowagePlans()]);
   const isDemo = (session?.user as any)?.role === 'DEMO_AGENT';
   const plans = result.success ? result.data : [];
@@ -73,13 +75,17 @@ export default async function StowagePlansPage() {
     };
   });
 
+  const filteredPlans = statusFilter
+    ? displayPlans.filter((p: any) => statusFilter.includes(p.status))
+    : displayPlans;
+
   return (
     <AppShell>
       <div className={styles.page}>
         <div className={styles.pageHeader}>
           <div>
             <h1 className={styles.pageTitle}>Stowage Plans</h1>
-            <p className={styles.pageSubtitle}>{displayPlans.length} plans</p>
+            <p className={styles.pageSubtitle}>{filteredPlans.length} plans{statusFilter ? ' (filtered)' : ''}</p>
           </div>
           <AutoGenerateButton isDemo={isDemo} />
           <AdvancedOptimizeButton isDemo={isDemo} />
@@ -95,7 +101,7 @@ export default async function StowagePlansPage() {
         </div>
 
         <div className={styles.planList}>
-          {displayPlans.map((p: any) => {
+          {filteredPlans.map((p: any) => {
             const hasIssues = p.overstowViolations > 0 || p.temperatureConflicts > 0;
 
             return (

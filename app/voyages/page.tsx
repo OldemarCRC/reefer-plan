@@ -17,7 +17,9 @@ function formatShortDate(dateStr: string | null | undefined): string | null {
   }
 }
 
-export default async function VoyagesPage() {
+export default async function VoyagesPage({ searchParams }: { searchParams?: Promise<{ status?: string }> }) {
+  const params = await searchParams;
+  const initialStatusFilter = params?.status ?? '';
   const [session, result] = await Promise.all([auth(), getVoyages()]);
   const isDemo = (session?.user as any)?.role === 'DEMO_AGENT';
   const voyages = result.success ? result.data : [];
@@ -115,7 +117,7 @@ export default async function VoyagesPage() {
           )}
         </div>
 
-        <VoyagesClient voyages={displayVoyages} />
+        <VoyagesClient voyages={displayVoyages} initialStatusFilter={initialStatusFilter} />
       </div>
     </AppShell>
   );

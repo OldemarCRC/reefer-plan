@@ -53,6 +53,19 @@
   border-color: rgba(255, 255, 255, 0.08);
 }
 
+.statCardClickable {
+  transition: background 0.15s, transform 0.1s;
+}
+.statCardClickable:hover {
+  background: var(--color-bg-tertiary);
+  transform: translateY(-1px);
+}
+
+.accent_blue    { color: var(--color-blue); }
+.accent_cyan    { color: var(--color-cyan); }
+.accent_yellow  { color: var(--color-yellow); }
+.accent_warning { color: var(--color-warning); }
+
 .statAccent {
   width: 3px;
   height: 36px;

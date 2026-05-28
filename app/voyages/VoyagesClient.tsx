@@ -54,17 +54,19 @@ export interface DisplayVoyage {
 
 interface VoyagesClientProps {
   voyages: DisplayVoyage[];
+  initialStatusFilter?: string;
 }
 
-export default function VoyagesClient({ voyages }: VoyagesClientProps) {
+export default function VoyagesClient({ voyages, initialStatusFilter = '' }: VoyagesClientProps) {
   const [searchText, setSearchText] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
+  const [filterStatus, setFilterStatus] = useState(initialStatusFilter);
   const [filterVessel, setFilterVessel] = useState('');
   const [filterService, setFilterService] = useState('');
 
   const filtered = useMemo(() => {
+    const activeStatuses = filterStatus ? filterStatus.split(',') : null;
     return voyages.filter((v: any) => {
-      if (filterStatus && v.status !== filterStatus) return false;
+      if (activeStatuses && !activeStatuses.includes(v.status)) return false;
       if (filterVessel && v.vesselName !== filterVessel) return false;
       if (filterService && v.serviceCode !== filterService) return false;
       if (searchText) {

@@ -197,8 +197,9 @@ export default function BookingsClient({
   } | null>(null);
 
   const filtered = useMemo(() => {
+    const activeStatuses = filterStatus ? filterStatus.split(',') : null;
     return bookings.filter((b) => {
-      if (filterStatus && b.status !== filterStatus) return false;
+      if (activeStatuses && !activeStatuses.includes(b.status)) return false;
       if (filterCargo && b.cargoType !== filterCargo) return false;
       if (filterVoyage && b.voyageNumber !== filterVoyage) return false;
       if (filterShipper && b.shipperName !== filterShipper) return false;
