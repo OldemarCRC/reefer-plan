@@ -116,6 +116,22 @@
   background: var(--color-surface-hover);
 }
 
+.voyageCardClickable {
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+
+.voyageCardClickable:hover {
+  background: var(--color-bg-tertiary);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+.voyageCardClickable:focus-visible {
+  outline: 2px solid var(--color-cyan);
+  outline-offset: 2px;
+}
+
 .voyageHeader {
   display: flex;
   flex-direction: column;

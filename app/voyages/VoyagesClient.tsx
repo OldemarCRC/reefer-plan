@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import styles from './page.module.css';
 import CapacityBar from '@/components/ui/CapacityBar/CapacityBar';
 
@@ -58,6 +58,7 @@ interface VoyagesClientProps {
 }
 
 export default function VoyagesClient({ voyages, initialStatusFilter = '' }: VoyagesClientProps) {
+  const router = useRouter();
   const [searchText, setSearchText] = useState('');
   const [filterStatus, setFilterStatus] = useState(initialStatusFilter);
   const [filterVessel, setFilterVessel] = useState('');
@@ -141,7 +142,19 @@ export default function VoyagesClient({ voyages, initialStatusFilter = '' }: Voy
           </p>
         ) : (
           filtered.map((v: any) => (
-            <div key={v._id} className={styles.voyageCard}>
+            <div
+              key={v._id}
+              className={`${styles.voyageCard} ${styles.voyageCardClickable}`}
+              onClick={() => router.push(`/voyages/${v._id}`)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  router.push(`/voyages/${v._id}`);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+            >
               {/* Card header */}
               <div className={styles.voyageHeader}>
                 <div className={styles.voyageId}>
@@ -230,7 +243,6 @@ export default function VoyagesClient({ voyages, initialStatusFilter = '' }: Voy
                     showLabel={false}
                   />
                 </div>
-                <Link href={`/voyages/${v._id}`} className={styles.btnGhost}>View Details →</Link>
               </div>
             </div>
           ))
