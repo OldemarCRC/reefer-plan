@@ -7,7 +7,12 @@ import { getContractsForShipper } from '@/app/actions/shipper';
 import RequestClient from './RequestClient';
 import styles from '../shipper.module.css';
 
-export default async function ShipperRequestPage() {
+export default async function ShipperRequestPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ voyageId?: string; contractId?: string }>;
+}) {
+  const { voyageId: initialVoyageId, contractId: initialContractId } = await searchParams;
   const session = await auth();
   const shipperCode = (session?.user as any)?.shipperCode as string | null;
   const shipperId   = (session?.user as any)?.shipperId   as string | null;
@@ -34,6 +39,8 @@ export default async function ShipperRequestPage() {
     <RequestClient
       shipperCode={shipperCode ?? ''}
       initialContracts={contracts}
+      initialContractId={initialContractId ?? null}
+      initialVoyageId={initialVoyageId ?? null}
     />
   );
 }

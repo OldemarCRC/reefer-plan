@@ -9,7 +9,12 @@ import { getMyForecasts } from '@/app/actions/space-forecast';
 import ForecastWizard from './ForecastWizard';
 import styles from '../../shipper.module.css';
 
-export default async function NewForecastPage() {
+export default async function NewForecastPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ voyageId?: string; contractId?: string }>;
+}) {
+  const { voyageId: initialVoyageId, contractId: initialContractId } = await searchParams;
   const session = await auth();
   if (!session?.user) redirect('/login');
   if ((session.user as any).role !== 'EXPORTER') redirect('/shipper');
@@ -65,6 +70,8 @@ export default async function NewForecastPage() {
       contracts={safeContracts}
       voyagesByServiceId={safeVoyagesByService}
       existingForecasts={safeForecasts}
+      initialContractId={initialContractId ?? null}
+      initialVoyageId={initialVoyageId ?? null}
     />
   );
 }

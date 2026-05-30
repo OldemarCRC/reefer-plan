@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { getUpcomingVoyagesForService } from '@/app/actions/shipper';
 import { createBookingFromContract } from '@/app/actions/booking';
@@ -25,20 +25,33 @@ function fmtDate(d?: string | null) {
 interface RequestClientProps {
   shipperCode: string;
   initialContracts: any[];
+  initialContractId?: string | null;
+  initialVoyageId?: string | null;
 }
 
-export default function RequestClient({ shipperCode, initialContracts }: RequestClientProps) {
+export default function RequestClient({ shipperCode, initialContracts, initialContractId, initialVoyageId }: RequestClientProps) {
   const router = useRouter();
 
-  const [step, setStep] = useState(1); // 1, 2, 3
+  const [step, setStep] = useState<number>(() => {
+    const found = !!initialContractId && initialContracts.some(c => c._id === initialContractId);
+    if (found && initialVoyageId) return 3;
+    if (found) return 2;
+    return 1;
+  });
 
   // Step 1 state
-  const [selectedContractId, setSelectedContractId] = useState('');
+  const [selectedContractId, setSelectedContractId] = useState(() => {
+    const found = !!initialContractId && initialContracts.some(c => c._id === initialContractId);
+    return found ? initialContractId! : '';
+  });
 
   // Step 2 state
   const [voyages, setVoyages] = useState<any[]>([]);
   const [voyagesLoading, setVoyagesLoading] = useState(false);
-  const [selectedVoyageId, setSelectedVoyageId] = useState('');
+  const [selectedVoyageId, setSelectedVoyageId] = useState(() => {
+    const found = !!initialContractId && initialContracts.some(c => c._id === initialContractId);
+    return found && initialVoyageId ? initialVoyageId : '';
+  });
 
   // Step 3 state
   const [cargoType, setCargoType] = useState('');
@@ -47,6 +60,37 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
 
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-fetch voyages when starting at step 2 or 3 (contract pre-selected from URL params)
+  useEffect(() => {
+    const found = !!initialContractId && initialContracts.some(c => c._id === initialContractId);
+    if (!found) return;
+    const contract = initialContracts.find(c => c._id === initialContractId);
+    if (!contract) return;
+    const serviceId = contract.serviceId?._id ?? contract.serviceId;
+    if (!serviceId) { setStep(1); return; }
+    setVoyagesLoading(true);
+    const polCode = contract.originPort?.portCode ?? undefined;
+    getUpcomingVoyagesForService(serviceId, polCode).then(result => {
+      setVoyagesLoading(false);
+      if (!result.success || result.data.length === 0) {
+        setError('No upcoming voyages found for this service.');
+        setStep(1);
+        return;
+      }
+      setVoyages(result.data);
+      if (initialVoyageId) {
+        setCargoType(contract.cargoType ?? 'OTHER_CHILLED');
+        const cp = (contract.counterparties ?? []).find((x: any) => x.shipperCode === shipperCode);
+        const hint =
+          cp?.weeklyEstimate ??
+          ((contract.shippers ?? []).find((s: any) => s.code === shipperCode)?.weeklyEstimate) ??
+          contract.weeklyPallets ??
+          null;
+        if (hint) setQuantity(String(hint));
+      }
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedContract = initialContracts.find(c => c._id === selectedContractId);
   const selectedVoyage = voyages.find(v => v._id === selectedVoyageId);
@@ -325,7 +369,12 @@ export default function RequestClient({ shipperCode, initialContracts }: Request
             <div className={styles.wizardTitle}>Pick a Voyage</div>
             <div className={styles.formGroup}>
               <label className={styles.formLabel}>Available Sailings — {selectedContract?.serviceCode}</label>
-              {voyages.map((v: any) => {
+              {voyagesLoading && (
+                <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)', padding: 'var(--space-3) 0' }}>
+                  Loading voyages…
+                </div>
+              )}
+              {!voyagesLoading && voyages.map((v: any) => {
                 const ports = [...v.portCalls].sort((a: any, b: any) => a.sequence - b.sequence);
                 const polCode = selectedContract?.originPort?.portCode;
                 const polPc = polCode ? ports.find((pc: any) => pc.portCode === polCode) : undefined;

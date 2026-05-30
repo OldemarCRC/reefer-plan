@@ -113,7 +113,7 @@ export default function VoyageActionModal({ voyage, onClose }: Props) {
                   <>
                     <span className={styles.statusEstimate}>Estimate sent</span>
                     <Link
-                      href={`/shipper/request`}
+                      href={`/shipper/request?voyageId=${voyage._id}&contractId=${c.contractId}`}
                       className={styles.btnActionSm}
                     >
                       Book →
@@ -129,7 +129,7 @@ export default function VoyageActionModal({ voyage, onClose }: Props) {
                       Submit Estimate
                     </Link>
                     <Link
-                      href={`/shipper/request`}
+                      href={`/shipper/request?voyageId=${voyage._id}&contractId=${c.contractId}`}
                       className={styles.btnActionSm}
                     >
                       Request Booking

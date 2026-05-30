@@ -46,6 +46,8 @@ interface ForecastWizardProps {
   contracts: Contract[];
   voyagesByServiceId: Record<string, Voyage[]>;
   existingForecasts: any[];
+  initialContractId?: string | null;
+  initialVoyageId?: string | null;
 }
 
 function fmtDate(d?: string | null) {
@@ -73,10 +75,18 @@ export default function ForecastWizard({
   contracts,
   voyagesByServiceId,
   existingForecasts,
+  initialContractId,
+  initialVoyageId,
 }: ForecastWizardProps) {
   const router = useRouter();
-  const [step, setStep]               = useState<1 | 2>(1);
-  const [selectedId, setSelectedId]   = useState<string | null>(null);
+  const [step, setStep] = useState<1 | 2>(() => {
+    const found = !!initialContractId && contracts.some(c => c._id === initialContractId);
+    return found ? 2 : 1;
+  });
+  const [selectedId, setSelectedId] = useState<string | null>(() => {
+    const found = !!initialContractId && contracts.some(c => c._id === initialContractId);
+    return found ? initialContractId! : null;
+  });
   const [estimates, setEstimates]     = useState<Record<string, string>>({});
   const [noCargo, setNoCargo]         = useState<Record<string, boolean>>({});
   const [isPending, startTransition]  = useTransition();
@@ -309,7 +319,7 @@ export default function ForecastWizard({
                     const isNoCargoExisting   = existing?.source === 'NO_CARGO';
 
                     return (
-                      <tr key={v._id}>
+                      <tr key={v._id} style={initialVoyageId && v._id === initialVoyageId ? { background: 'rgba(59, 130, 246, 0.07)' } : undefined}>
                         <td className={styles.mono}>{v.voyageNumber}</td>
                         <td style={{ fontWeight: 'var(--weight-medium)' as any }}>{v.vesselName}</td>
                         <td className={styles.mono}>{fmtDate(v.departureDate)}</td>
