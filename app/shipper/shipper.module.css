@@ -1002,6 +1002,14 @@
   flex-wrap: wrap;
 }
 
+.cardActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
 .btnAction {
   display: inline-flex;
   align-items: center;
@@ -1236,6 +1244,19 @@
 
 .btnActionSmSecondary:hover {
   background: var(--color-blue-muted);
+}
+
+.btnActionSmDone {
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  background: transparent;
+  border: 1px solid var(--color-success);
+  color: var(--color-success);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: default;
+  opacity: 0.7;
 }
 
 /* ============================================================================

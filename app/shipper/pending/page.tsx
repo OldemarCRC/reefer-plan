@@ -75,19 +75,24 @@ export default async function PendingPage() {
                   )}
                 </div>
 
-                {item.forecastStatus === 'HAS_ESTIMATE' && (
-                  <span className={styles.estimateBadge}>Estimate submitted</span>
-                )}
-                <div className={styles.pendingCardActions}>
-                  {item.forecastStatus === 'NONE' && (
+                <div className={styles.cardActions}>
+                  {item.forecastStatus === 'HAS_ESTIMATE' ? (
+                    <button
+                      className={styles.btnActionSmDone}
+                      disabled
+                    >
+                      ✓ Estimate sent
+                    </button>
+                  ) : (
                     <Link
                       href={`/shipper/forecasts/new?voyageId=${item.voyageId}&contractId=${item.contractId}`}
-                      className={styles.btnSecondary}
+                      className={styles.btnActionSmSecondary}
                     >
                       Submit Estimate
                     </Link>
                   )}
-                  <Link href="/shipper/request" className={styles.btnPrimary}>
+
+                  <Link href="/shipper/request" className={styles.btnActionSm}>
                     Request Booking
                   </Link>
                 </div>
