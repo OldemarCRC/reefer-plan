@@ -92,7 +92,7 @@ export default async function PendingPage() {
                     </Link>
                   )}
 
-                  <Link href="/shipper/request" className={styles.btnActionSm}>
+                  <Link href={`/shipper/request?voyageId=${item.voyageId}&contractId=${item.contractId}`} className={styles.btnActionSm}>
                     Request Booking
                   </Link>
                 </div>
