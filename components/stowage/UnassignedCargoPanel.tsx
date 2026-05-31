@@ -32,10 +32,11 @@ interface Props {
   } | null;
   onAssign: (booking: UnassignedBooking, quantity: number) => void;
   onClose: () => void;
+  isNarrow?: boolean;
 }
 
 export default function UnassignedCargoPanel({
-  bookings, targetCompartment, onAssign, onClose,
+  bookings, targetCompartment, onAssign, onClose, isNarrow,
 }: Props) {
   const [filter, setFilter] = useState<'ALL' | 'UNASSIGNED' | 'PARTIAL'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
@@ -80,7 +81,7 @@ export default function UnassignedCargoPanel({
   return (
     <div className={styles.overlay} onClick={handleClose}>
       <div
-        className={`${styles.panel} ${closing ? styles.panelClosing : ''}`}
+        className={`${styles.panel} ${isNarrow ? styles.panelNarrow : ''} ${closing ? styles.panelClosing : ''}`}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}

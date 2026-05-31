@@ -1,7 +1,7 @@
 // app/stowage-plans/[id]/page.tsx
 'use client';
 
-import { useState, useMemo, useEffect, useTransition } from 'react';
+import { useState, useMemo, useEffect, useRef, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -355,6 +355,33 @@ export default function StowagePlanDetailPage() {
     if (validation.weightDistributionWarnings.length > 0) expanded.weight = true;
     setExpandedValidation(expanded);
   }, [validation]);
+
+  const SIDEBAR_KEY = 'reefer-sidebar-collapsed';
+  const HTML_CLASS  = 'sidebar-collapsed';
+
+  // Track whether sidebar was already collapsed before panel opened
+  const sidebarWasCollapsed = useRef(false);
+
+  // Collapse sidebar when compartment detail panel opens; restore on close
+  useEffect(() => {
+    if (selectedSectionId) {
+      // Remember current state before collapsing
+      sidebarWasCollapsed.current =
+        localStorage.getItem(SIDEBAR_KEY) === 'true';
+
+      if (!sidebarWasCollapsed.current) {
+        // Collapse: same 3 operations as toggleSidebar()
+        localStorage.setItem(SIDEBAR_KEY, 'true');
+        document.documentElement.classList.add(HTML_CLASS);
+      }
+    } else {
+      // Panel closed — restore only if WE collapsed it
+      if (!sidebarWasCollapsed.current) {
+        localStorage.setItem(SIDEBAR_KEY, 'false');
+        document.documentElement.classList.remove(HTML_CLASS);
+      }
+    }
+  }, [selectedSectionId]);
 
   // Zone colors (hue-based on temperature, matching wizard)
   const tempToColor = (temp: number) => {
@@ -1243,8 +1270,11 @@ export default function StowagePlanDetailPage() {
         )}
       </div>
 
-      {/* Cell Booking Panel — section info + consignees always; eligible bookings when editable */}
-      {selectedSectionId && (() => {
+      {/* Compartment detail panel — fixed right; contains booking slots + top-down view */}
+      {selectedSectionId && selectedSectionInfo && (
+        <div className={`${styles.compartmentDetailPanel}${unassignedPanelOpen ? ` ${styles.compartmentDetailPanelShifted}` : ''}`}>
+        {/* Cell Booking Panel — section info + consignees; eligible bookings when editable */}
+        {(() => {
         const zone = tempZoneConfig.find(z => z.compartments.includes(selectedSectionId));
         const zoneTemp = zone?.temp;
         const sectionCap = compartmentCapacities[selectedSectionId] ?? 0;
@@ -1353,10 +1383,9 @@ export default function StowagePlanDetailPage() {
             )}
           </div>
         );
-      })()}
+        })()}
 
-      {/* Top-down cooling section view — rendered when a section is selected */}
-      {selectedSectionId && selectedSectionInfo && (
+        {/* Top-down view */}
         <CoolingSectionTopDown
           sectionId={selectedSectionId}
           capacity={compartmentCapacities[selectedSectionId] ?? 0}
@@ -1368,6 +1397,7 @@ export default function StowagePlanDetailPage() {
           onSlotsChange={handleTopDownChange}
           onClose={() => setSelectedSectionId(null)}
         />
+        </div>
       )}
 
       {/* Validation Panel — below SVG, collapsible sections */}
@@ -1918,6 +1948,7 @@ export default function StowagePlanDetailPage() {
             setTemperature: unassignedTargetCompartment.setTemperature,
           } : null}
           onAssign={handleAssignFromPanel}
+          isNarrow={!!selectedSectionId}
           onClose={() => {
             setUnassignedPanelOpen(false);
             setUnassignedTargetCompartment(null);

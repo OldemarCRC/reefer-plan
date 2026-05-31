@@ -35,6 +35,10 @@
   animation: slideIn 0.22s ease-out forwards;
 }
 
+.panelNarrow {
+  width: 280px;
+}
+
 .panelClosing {
   animation: slideOut 0.18s ease-in forwards;
 }
