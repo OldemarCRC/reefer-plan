@@ -7,17 +7,11 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
       "Bash(npx tsx *)",
       "Bash(npx tsc *)",
-      "Bash(node -e ' *)",
       "Bash(npx ts-node *)",
       "Bash(git stash *)",
       "Bash(npx next *)",
       "Bash(curl -s http://localhost:3001/api/health)",
       "Bash(node scripts/trace-voyage.mjs AC26020)",
-      "Bash(del *)",
-      "Bash(findstr /i MONGODB)",
-      "Bash(Remove-Item *)",
-      "Bash(dir D:\\\\REPOSITORIOS\\\\NextJS\\\\reefer-plan\\\\scripts *)",
-      "Bash(powershell *)",
       "Bash(node *)",
       "Bash(pip --version)",
       "Bash(pip3 --version)",
@@ -35,17 +29,8 @@
       "Bash(venv/Scripts/python.exe _overstow.py)",
       "Bash(stowage-optimizer\\\\venv\\\\Scripts\\\\python.exe stowage-optimizer\\\\solver.py 69e631cd593e9d58097259b9)",
       "Bash(venv\\\\Scripts\\\\python.exe _diag.py)",
-      "Bash(D:\\\\REPOSITORIOS\\\\NextJS\\\\reefer-plan\\\\stowage-optimizer\\\\venv\\\\Scripts\\\\pip.exe show *)",
       "Bash(\"stowage-optimizer/venv/Scripts/python.exe\" stowage-optimizer/solver.py 69e631cd593e9d58097259b9)",
-      "Bash(npm list *)",
-      "Bash(where playwright *)",
-      "Bash(npx playwright *)",
-      "Bash(ls node_modules/.bin/playwright*)",
-      "Bash(ls C:/Users/oldem/AppData/Roaming/npm/node_modules/@playwright)",
-      "Bash(npm root *)",
-      "PowerShell(Test-Path *)",
-      "Bash(grep -i \"node_modules/playwright$\")",
-      "Bash(grep -l '\"playwright\"' __TRACKED_VAR__/node_modules/.package-lock.json)"
+      "Bash(npm list *)"
     ]
   }
 }
