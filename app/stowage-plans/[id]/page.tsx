@@ -39,6 +39,9 @@ interface CargoInPlan {
   isConfirmed: boolean;
 }
 
+const SIDEBAR_KEY = 'reefer-sidebar-collapsed';
+const HTML_CLASS  = 'sidebar-collapsed';
+
 export default function StowagePlanDetailPage() {
   const params = useParams();
   const planId = params.id as string;
@@ -356,30 +359,26 @@ export default function StowagePlanDetailPage() {
     setExpandedValidation(expanded);
   }, [validation]);
 
-  const SIDEBAR_KEY = 'reefer-sidebar-collapsed';
-  const HTML_CLASS  = 'sidebar-collapsed';
+  const sidebarWasCollapsed = useRef<boolean>(false);
 
-  // Track whether sidebar was already collapsed before panel opened
-  const sidebarWasCollapsed = useRef(false);
-
-  // Collapse sidebar when compartment detail panel opens; restore on close
   useEffect(() => {
     if (selectedSectionId) {
-      // Remember current state before collapsing
+      // Store current state before we touch it
       sidebarWasCollapsed.current =
         localStorage.getItem(SIDEBAR_KEY) === 'true';
-
+      // Collapse if not already collapsed
       if (!sidebarWasCollapsed.current) {
-        // Collapse: same 3 operations as toggleSidebar()
         localStorage.setItem(SIDEBAR_KEY, 'true');
         document.documentElement.classList.add(HTML_CLASS);
       }
     } else {
-      // Panel closed — restore only if WE collapsed it
+      // Restore only if WE collapsed it (user didn't collapse manually)
       if (!sidebarWasCollapsed.current) {
         localStorage.setItem(SIDEBAR_KEY, 'false');
         document.documentElement.classList.remove(HTML_CLASS);
       }
+      // Reset the ref
+      sidebarWasCollapsed.current = false;
     }
   }, [selectedSectionId]);
 
