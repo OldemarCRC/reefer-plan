@@ -961,7 +961,17 @@ export default function StowagePlanDetailPage() {
 
   return (
     <AppShell activeVessel={plan.vesselName} activeVoyage={plan.voyageNumber} headerActions={headerActions} unassignedButton={unassignedButton}>
-      <div className={styles.container}>
+      <div
+        className={styles.container}
+        style={{
+          paddingRight: (() => {
+            if (selectedSectionId && unassignedPanelOpen) return 'calc(660px + 2rem)';  // both panels: 280+380
+            if (selectedSectionId)                         return 'calc(420px + 2rem)';  // compartment only
+            if (unassignedPanelOpen)                       return 'calc(360px + 2rem)';  // unassigned only
+            return undefined;
+          })(),
+        }}
+      >
         {/* Header */}
         <div className={styles.header}>
         <div className={styles.compactHeader}>
