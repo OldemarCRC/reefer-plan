@@ -1377,33 +1377,47 @@ export default function StowagePlanDetailPage() {
                       <p className={styles.cellPanelEmpty}>No eligible bookings for this temperature zone.</p>
                     ) : (
                       <div className={styles.cellPanelList}>
-                        {eligibleBookings.map(b => {
-                          const remaining = remainingQty(b);
-                          return (
-                            <div
-                              key={b.bookingId}
-                              className={`${styles.cellPanelRow} ${b.bookingId === selectedBookingId ? styles.cellPanelRowActive : ''}`}
-                            >
-                              <span className={styles.cellPanelDot} style={{ background: podColorMap[b.pod] ?? '#64748b' }} />
+                        {eligibleBookings.map(b => (
+                          <div
+                            key={b.bookingId}
+                            className={`${styles.cellPanelRow} ${b.bookingId === selectedBookingId ? styles.cellPanelRowActive : ''}`}
+                            onClick={() => setSelectedBookingId(b.bookingId)}
+                          >
+                            {/* Line 1: dot · booking number · pallets left */}
+                            <div className={styles.cellPanelRowTop}>
+                              <span
+                                className={styles.cellPanelDot}
+                                style={{ background: podColorMap[b.pod] ?? '#64748b' }}
+                              />
                               <span className={styles.cellPanelBookingNum}>{b.bookingNumber}</span>
-                              <span className={styles.cellPanelCargo}>{b.cargoType.replace(/_/g, ' ')}</span>
-                              <span className={styles.cellPanelShipper}>{b.shipperName || b.consignee}</span>
-                              <span className={styles.cellPanelRoute}>{b.pol} → {b.pod}</span>
-                              <span className={styles.cellPanelPallets}>{remaining} pal left</span>
+                              <span className={styles.cellPanelPallets}>
+                                {remainingQty(b)} pal left
+                              </span>
+                            </div>
+                            {/* Line 2: cargo · shipper · route · assign */}
+                            <div className={styles.cellPanelRowBottom}>
+                              <span className={styles.cellPanelCargo}>
+                                {b.cargoType.replace(/_/g, ' ')}
+                              </span>
+                              <span className={styles.cellPanelShipper}>
+                                · {b.shipperName || b.consignee}
+                              </span>
+                              <span className={styles.cellPanelRoute}>{b.pol}→{b.pod}</span>
                               <button
                                 className={styles.cellPanelAssign}
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   setSelectedBookingId(b.bookingId);
                                   setAssigningBooking(b);
                                   setSelectedCompartment(selectedSectionId);
-                                  setAssignQuantity(Math.min(remaining, sectionFree) || 1);
+                                  setAssignQuantity(Math.min(remainingQty(b), sectionFree) || 1);
                                 }}
                               >
                                 Assign
                               </button>
                             </div>
-                          );
-                        })}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>

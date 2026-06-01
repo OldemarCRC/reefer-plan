@@ -1602,24 +1602,33 @@
 
 .cellPanelRow {
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.45rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  font-size: 0.8rem;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--color-border-tertiary);
+  cursor: pointer;
   transition: background 0.1s;
 }
-
-.cellPanelRow:last-child {
-  border-bottom: none;
-}
-
 .cellPanelRow:hover {
-  background: var(--surface-hover);
+  background: var(--color-bg-tertiary);
+}
+.cellPanelRowActive {
+  background: var(--color-bg-tertiary);
 }
 
-.cellPanelRowActive {
-  background: rgba(14, 165, 233, 0.05);
+/* Line 1: dot + booking number + pallets */
+.cellPanelRowTop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Line 2: cargo · shipper + route + assign */
+.cellPanelRowBottom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 14px; /* indent to align under booking number */
 }
 
 .cellPanelDot {
@@ -1630,62 +1639,63 @@
 }
 
 .cellPanelBookingNum {
-  font-family: 'Space Grotesk', monospace;
+  font-size: 11px;
   font-weight: 600;
-  font-size: 0.8rem;
-  color: var(--text-primary);
-  min-width: 130px;
-}
-
-.cellPanelCargo {
-  color: var(--text-secondary);
-  min-width: 100px;
-  text-transform: capitalize;
-}
-
-.cellPanelShipper {
-  color: var(--text-secondary);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.cellPanelRoute {
-  font-family: 'Space Grotesk', monospace;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
   white-space: nowrap;
 }
 
 .cellPanelPallets {
-  font-family: 'Space Grotesk', monospace;
-  font-weight: 600;
-  font-size: 0.8rem;
-  color: var(--text-primary);
+  font-size: 11px;
+  color: var(--color-cyan);
+  font-weight: 500;
   white-space: nowrap;
-  min-width: 70px;
-  text-align: right;
-}
-
-.cellPanelAssign {
-  padding: 0.2rem 0.6rem;
-  border: 1px solid var(--accent-primary);
-  border-radius: 4px;
-  background: rgba(14, 165, 233, 0.08);
-  color: var(--accent-primary);
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s;
   flex-shrink: 0;
 }
 
+.cellPanelCargo {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cellPanelShipper {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cellPanelRoute {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cellPanelAssign {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--color-cyan);
+  color: #000;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .cellPanelAssign:hover {
-  background: var(--accent-primary);
-  color: white;
+  filter: brightness(1.1);
 }
 
 /* ── Compartment Detail Panel — fixed right-side panel ────────────────────── */
