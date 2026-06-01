@@ -191,10 +191,6 @@ interface VesselProfileProps {
   editableZoneTemps?: Record<string, number>;
   /** Called when user changes a zone temperature; all cells in the same zone sync automatically */
   onZoneTempChange?: (zoneId: string, temp: number) => void;
-  /** When false, the hover/click detail panel is not rendered. Defaults to true. */
-  showCompartmentTooltip?: boolean;
-  /** Consignee names keyed by section ID — shown in the click panel. Not passed from vessels/[id]. */
-  consigneesBySection?: Record<string, string[]>;
 }
 
 export default function VesselProfile({
@@ -208,11 +204,7 @@ export default function VesselProfile({
   highlightedCompartmentIds,
   editableZoneTemps,
   onZoneTempChange,
-  showCompartmentTooltip = true,
-  consigneesBySection,
 }: VesselProfileProps) {
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [factorMode, setFactorMode] = useState<'design' | 'historical'>('design');
   // Editable-temp mode: local in-progress strings, focused zone, flash set
   const [localTempStrings, setLocalTempStrings] = useState<Record<string, string>>({});
@@ -243,11 +235,6 @@ export default function VesselProfile({
       capacity: cur.capacity + (comp.assignment?.palletsCapacity ?? 0),
     });
   }
-
-  const hovered = hoveredId ? compartments.find((c) => c.id === hoveredId) : null;
-  const selected = selectedId ? compartments.find((c) => c.id === selectedId) : null;
-  const detail = selected || hovered;
-  const highlightZone = detail?.assignment?.zoneId || null;
 
   // Find hold with most levels to use as level-label reference
   const refHoldNumber = [...layout.holds].sort((a, b) => b.levels.length - a.levels.length)[0]?.holdNumber ?? 1;
@@ -413,11 +400,8 @@ export default function VesselProfile({
 
           {/* Compartments */}
           {compartments.map((comp) => {
-            const isHovered = hoveredId === comp.id;
-            const isSelected = selectedId === comp.id;
-            const inZone = highlightZone && comp.assignment?.zoneId === highlightZone;
-            const isConflict = !isSelected && !isHovered && !!conflictCompartmentIds?.includes(comp.id);
-            const isHighlighted = !isSelected && !isHovered && !isConflict && !!highlightedCompartmentIds?.includes(comp.id);
+            const isConflict = !!conflictCompartmentIds?.includes(comp.id);
+            const isHighlighted = !isConflict && !!highlightedCompartmentIds?.includes(comp.id);
             const isEstimated = comp.assignment?.confidence === 'ESTIMATED';
             // POD color takes precedence over temperature-based zone color
             const effectiveColor = comp.assignment?.podColor || comp.assignment?.zoneColor || '#1E3A5F';
@@ -493,12 +477,7 @@ export default function VesselProfile({
             return (
               <g
                 key={comp.id}
-                onMouseEnter={() => setHoveredId(comp.id)}
-                onMouseLeave={() => setHoveredId(null)}
-                onClick={() => {
-                  setSelectedId(selectedId === comp.id ? null : comp.id);
-                  onCompartmentClick?.(comp.id);
-                }}
+                onClick={() => onCompartmentClick?.(comp.id)}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   onCompartmentContextMenu?.(comp.id, comp.assignment, { x: e.clientX, y: e.clientY });
@@ -517,20 +496,16 @@ export default function VesselProfile({
                   rx={2}
                   fill={comp.assignment?.cargoType ? effectiveColor : '#111E33'}
                   opacity={
-                    isSelected ? 0.5 :
-                    isHovered ? 0.4 :
                     isConflict ? 0.35 :
                     isHighlighted ? 0.4 :
-                    inZone ? 0.25 : 0.15
+                    0.15
                   }
                   stroke={
-                    isSelected ? '#FCD34D' :
                     isHighlighted ? '#22c55e' :
-                    isHovered ? '#fff' :
                     isConflict ? '#ef4444' :
-                    inZone ? effectiveColor : '#1E3A5F'
+                    '#1E3A5F'
                   }
-                  strokeWidth={isSelected ? 2 : isHighlighted ? 2 : isHovered ? 1.5 : isConflict ? 1.5 : 0.8}
+                  strokeWidth={isHighlighted ? 2 : isConflict ? 1.5 : 0.8}
                 />
 
                 {/* Conflict indicator — small red dot top-right */}
@@ -577,7 +552,7 @@ export default function VesselProfile({
                     height={centerH * fillPct - 1}
                     rx={1}
                     fill={effectiveColor}
-                    opacity={isSelected ? 0.7 : isHovered ? 0.6 : 0.35}
+                    opacity={0.35}
                   />
                 )}
 
@@ -661,7 +636,7 @@ export default function VesselProfile({
                     textAnchor="middle"
                     dominantBaseline="middle"
                     className={styles.cargoShortLabel}
-                    opacity={isHovered || isSelected || inZone ? 1 : 0.8}
+                    opacity={0.8}
                   >
                     {comp.assignment.cargoShortLabel}
                   </text>
@@ -839,95 +814,6 @@ export default function VesselProfile({
           </text>
         </svg>
 
-        {/* Detail panel — absolutely positioned overlay inside svgWrap */}
-        {showCompartmentTooltip && detail && detail.assignment && (
-          <div
-            className={styles.detailPanel}
-            style={{
-              borderLeftColor: detail.assignment.podColor ?? detail.assignment.zoneColor,
-              position: 'absolute',
-              top: '8px',
-              right: '8px',
-              zIndex: 10,
-              minWidth: '200px',
-              background: 'rgba(10,22,40,0.97)',
-              border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: '8px',
-              padding: '12px 14px',
-            }}
-          >
-            {/* Close button — only shown when panel is pinned by a click (selectedId set) */}
-            {selectedId && (
-              <button
-                onClick={() => setSelectedId(null)}
-                style={{
-                  color: 'rgba(255,255,255,0.5)',
-                  fontSize: '1rem',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  position: 'absolute',
-                  top: '6px',
-                  right: '8px',
-                  lineHeight: 1,
-                  padding: 0,
-                }}
-                aria-label="Close"
-              >
-                ×
-              </button>
-            )}
-            <div className={styles.detailHeader}>
-              <span className={styles.detailId}>
-                {detail.id}
-                <span style={{
-                  color: 'rgba(255,255,255,0.35)',
-                  fontWeight: 400,
-                  margin: '0 4px',
-                }}>/</span>
-                <span style={{
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  color: detail.assignment.podColor ?? detail.assignment.zoneColor,
-                  background: `${(detail.assignment.podColor ?? detail.assignment.zoneColor)}20`,
-                  padding: '1px 6px',
-                  borderRadius: '3px',
-                }}>
-                  {detail.assignment.zoneName}
-                </span>
-              </span>
-            </div>
-            {/* Consignees */}
-            {(() => {
-              const names = consigneesBySection?.[detail.id] ?? [];
-              return (
-                <div style={{ padding: '8px 12px', fontSize: '0.78rem' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.45)', marginRight: '6px' }}>Consignees</span>
-                  {names.length > 0
-                    ? names.map((name, i) => (
-                        <span
-                          key={name}
-                          style={{
-                            display: 'inline-block',
-                            background: 'rgba(255,255,255,0.07)',
-                            border: '1px solid rgba(255,255,255,0.12)',
-                            borderRadius: '3px',
-                            padding: '1px 6px',
-                            marginRight: i < names.length - 1 ? '4px' : 0,
-                            color: 'rgba(255,255,255,0.85)',
-                            fontSize: '0.75rem',
-                          }}
-                        >
-                          {name}
-                        </span>
-                      ))
-                    : <span style={{ color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' }}>No cargo assigned</span>
-                  }
-                </div>
-              );
-            })()}
-          </div>
-        )}
       </div>
     </div>
   );
