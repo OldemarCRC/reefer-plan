@@ -39,9 +39,6 @@ interface CargoInPlan {
   isConfirmed: boolean;
 }
 
-const SIDEBAR_KEY = 'reefer-sidebar-collapsed';
-const HTML_CLASS  = 'sidebar-collapsed';
-
 export default function StowagePlanDetailPage() {
   const params = useParams();
   const planId = params.id as string;
@@ -363,21 +360,23 @@ export default function StowagePlanDetailPage() {
 
   useEffect(() => {
     if (selectedSectionId) {
-      // Store current state before we touch it
+      // Remember current state
       sidebarWasCollapsed.current =
-        localStorage.getItem(SIDEBAR_KEY) === 'true';
-      // Collapse if not already collapsed
+        localStorage.getItem('reefer-sidebar-collapsed') === 'true';
+
+      // Only collapse if not already collapsed
       if (!sidebarWasCollapsed.current) {
-        localStorage.setItem(SIDEBAR_KEY, 'true');
-        document.documentElement.classList.add(HTML_CLASS);
+        window.dispatchEvent(
+          new CustomEvent('collapse-sidebar', { detail: { collapsed: true } })
+        );
       }
     } else {
-      // Restore only if WE collapsed it (user didn't collapse manually)
+      // Restore only if WE collapsed it
       if (!sidebarWasCollapsed.current) {
-        localStorage.setItem(SIDEBAR_KEY, 'false');
-        document.documentElement.classList.remove(HTML_CLASS);
+        window.dispatchEvent(
+          new CustomEvent('collapse-sidebar', { detail: { collapsed: false } })
+        );
       }
-      // Reset the ref
       sidebarWasCollapsed.current = false;
     }
   }, [selectedSectionId]);

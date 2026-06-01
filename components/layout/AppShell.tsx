@@ -77,6 +77,24 @@ export default function AppShell({ children, activeVessel, activeVoyage, headerA
     setMobileOpen(false);
   }, [pathname]);
 
+  // Listen for programmatic collapse requests from child pages
+  useEffect(() => {
+    const handleCollapse = (e: CustomEvent) => {
+      const shouldCollapse = e.detail.collapsed as boolean;
+      setCollapsed(prev => {
+        if (prev === shouldCollapse) return prev; // no change needed
+        const next = shouldCollapse;
+        localStorage.setItem(SIDEBAR_KEY, String(next));
+        if (next) document.documentElement.classList.add(HTML_CLASS);
+        else document.documentElement.classList.remove(HTML_CLASS);
+        return next;
+      });
+    };
+
+    window.addEventListener('collapse-sidebar', handleCollapse as EventListener);
+    return () => window.removeEventListener('collapse-sidebar', handleCollapse as EventListener);
+  }, []);
+
   const toggleSidebar = useCallback(() => {
     setCollapsed((prev) => {
       const next = !prev;
