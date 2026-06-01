@@ -73,6 +73,7 @@ export default function StowagePlanDetailPage() {
 
   const [unassignedPanelOpen, setUnassignedPanelOpen] = useState(false);
   const [detailPanelClosing, setDetailPanelClosing] = useState(false);
+  const [bookingListCollapsed, setBookingListCollapsed] = useState(false);
   const [unassignedTargetCompartment, setUnassignedTargetCompartment] =
     useState<ContextMenuCompartment | null>(null);
 
@@ -1283,7 +1284,8 @@ export default function StowagePlanDetailPage() {
       {/* Compartment detail panel — fixed right; contains booking slots + top-down view */}
       {selectedSectionId && selectedSectionInfo && (
         <div className={`${styles.compartmentDetailPanel}${unassignedPanelOpen ? ` ${styles.compartmentDetailPanelShifted}` : ''}${detailPanelClosing ? ` ${styles.compartmentDetailPanelClosing}` : ''}`}>
-        {/* Cell Booking Panel — section info + consignees; eligible bookings when editable */}
+          <div className={styles.compartmentDetailScrollArea}>
+          {/* Cell Booking Panel — section info + consignees; eligible bookings when editable */}
         {(() => {
         const zone = tempZoneConfig.find(z => z.compartments.includes(selectedSectionId));
         const zoneTemp = zone?.temp;
@@ -1334,7 +1336,6 @@ export default function StowagePlanDetailPage() {
                   {zone.temp > 0 ? '+' : ''}{zone.temp}°C{canEdit && !isLocked ? ` · ${sectionFree} free of ${sectionCap}` : ''}
                 </span>
               )}
-              {canEdit && !isLocked && <span className={styles.cellPanelTitle}>Eligible Bookings</span>}
               <button className={styles.cellPanelClose} onClick={closeDetailPanel}>✕</button>
             </div>
             {/* Consignees row */}
@@ -1357,56 +1358,77 @@ export default function StowagePlanDetailPage() {
               }
             </div>
             {canEdit && !isLocked && (
-              eligibleBookings.length === 0 ? (
-                <p className={styles.cellPanelEmpty}>No eligible bookings for this temperature zone.</p>
-              ) : (
-                <div className={styles.cellPanelList}>
-                  {eligibleBookings.map(b => {
-                    const remaining = remainingQty(b);
-                    return (
-                      <div
-                        key={b.bookingId}
-                        className={`${styles.cellPanelRow} ${b.bookingId === selectedBookingId ? styles.cellPanelRowActive : ''}`}
-                      >
-                        <span className={styles.cellPanelDot} style={{ background: podColorMap[b.pod] ?? '#64748b' }} />
-                        <span className={styles.cellPanelBookingNum}>{b.bookingNumber}</span>
-                        <span className={styles.cellPanelCargo}>{b.cargoType.replace(/_/g, ' ')}</span>
-                        <span className={styles.cellPanelShipper}>{b.shipperName || b.consignee}</span>
-                        <span className={styles.cellPanelRoute}>{b.pol} → {b.pod}</span>
-                        <span className={styles.cellPanelPallets}>{remaining} pal left</span>
-                        <button
-                          className={styles.cellPanelAssign}
-                          onClick={() => {
-                            setSelectedBookingId(b.bookingId);
-                            setAssigningBooking(b);
-                            setSelectedCompartment(selectedSectionId);
-                            setAssignQuantity(Math.min(remaining, sectionFree) || 1);
-                          }}
-                        >
-                          Assign
-                        </button>
+              <div className={styles.detailSection}>
+                <button
+                  className={styles.detailSectionHeader}
+                  onClick={() => setBookingListCollapsed(p => !p)}
+                >
+                  <span>ELIGIBLE BOOKINGS</span>
+                  <span className={styles.detailSectionCount}>
+                    {eligibleBookings.length}
+                  </span>
+                  <span className={styles.detailSectionChevron}>
+                    {bookingListCollapsed ? '▶' : '▼'}
+                  </span>
+                </button>
+                {!bookingListCollapsed && (
+                  <div className={styles.detailSectionBody}>
+                    {eligibleBookings.length === 0 ? (
+                      <p className={styles.cellPanelEmpty}>No eligible bookings for this temperature zone.</p>
+                    ) : (
+                      <div className={styles.cellPanelList}>
+                        {eligibleBookings.map(b => {
+                          const remaining = remainingQty(b);
+                          return (
+                            <div
+                              key={b.bookingId}
+                              className={`${styles.cellPanelRow} ${b.bookingId === selectedBookingId ? styles.cellPanelRowActive : ''}`}
+                            >
+                              <span className={styles.cellPanelDot} style={{ background: podColorMap[b.pod] ?? '#64748b' }} />
+                              <span className={styles.cellPanelBookingNum}>{b.bookingNumber}</span>
+                              <span className={styles.cellPanelCargo}>{b.cargoType.replace(/_/g, ' ')}</span>
+                              <span className={styles.cellPanelShipper}>{b.shipperName || b.consignee}</span>
+                              <span className={styles.cellPanelRoute}>{b.pol} → {b.pod}</span>
+                              <span className={styles.cellPanelPallets}>{remaining} pal left</span>
+                              <button
+                                className={styles.cellPanelAssign}
+                                onClick={() => {
+                                  setSelectedBookingId(b.bookingId);
+                                  setAssigningBooking(b);
+                                  setSelectedCompartment(selectedSectionId);
+                                  setAssignQuantity(Math.min(remaining, sectionFree) || 1);
+                                }}
+                              >
+                                Assign
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
-                </div>
-              )
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         );
-        })()}
+          })()}
 
-        {/* Top-down view */}
-        <CoolingSectionTopDown
-          sectionId={selectedSectionId}
-          capacity={compartmentCapacities[selectedSectionId] ?? 0}
-          temperature={selectedSectionInfo.temperature}
-          zoneColor={selectedSectionInfo.zoneColor}
-          slots={selectedSectionSlots}
-          selectedBookingId={selectedBookingId}
-          isLocked={isLocked || !canEdit}
-          onSlotsChange={handleTopDownChange}
-          onClose={closeDetailPanel}
-        />
+          {/* Top-down view — always visible, no collapse toggle */}
+          <div className={styles.detailSection}>
+            <CoolingSectionTopDown
+              sectionId={selectedSectionId}
+              capacity={compartmentCapacities[selectedSectionId] ?? 0}
+              temperature={selectedSectionInfo.temperature}
+              zoneColor={selectedSectionInfo.zoneColor}
+              slots={selectedSectionSlots}
+              selectedBookingId={selectedBookingId}
+              isLocked={isLocked || !canEdit}
+              onSlotsChange={handleTopDownChange}
+              onClose={closeDetailPanel}
+            />
+          </div>
+          </div>
         </div>
       )}
 
