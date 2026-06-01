@@ -88,6 +88,18 @@
   line-height: 1.2;
 }
 
+.vesselHeaderStatus {
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  letter-spacing: 0.05em;
+  vertical-align: middle;
+}
+
 .vesselHeaderSep {
   width: 1px;
   height: 28px;

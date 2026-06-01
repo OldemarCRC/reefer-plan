@@ -53,30 +53,6 @@
   color: var(--text-secondary);
 }
 
-.statusBadge {
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.statusBadge.draft {
-  background: rgba(100, 116, 139, 0.1);
-  color: var(--text-secondary);
-}
-
-.statusBadge.ready_for_captain {
-  background: rgba(14, 165, 233, 0.1);
-  color: var(--accent-primary);
-}
-
-.headerActions {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-}
 
 .btnSecondary,
 .btnPrimary {
@@ -1491,54 +1467,44 @@
   color: #22c55e;
 }
 
-/* ── Compact Header ───────────────────────────────────────────────────────── */
+/* ── Header action buttons ────────────────────────────────────────────────── */
 
-.compactHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  min-height: 48px;
-  padding-bottom: 1rem;
+.headerBtn {
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 5px;
+  border: 1px solid var(--color-border-secondary);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.headerBtn:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
 }
 
-.compactHeaderLeft {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
+.headerBtnDanger {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+.headerBtnDanger:hover {
+  background: var(--color-danger-muted);
 }
 
-.backLink {
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-size: 1.1rem;
-  line-height: 1;
-  padding: 0.125rem 0.375rem;
+.headerLockedBadge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
   border-radius: 4px;
-  transition: color 0.15s;
+  background: var(--color-warning-muted);
+  color: var(--color-warning);
 }
 
-.backLink:hover {
-  color: var(--text-primary);
-}
-
-.compactPlanNum {
-  font-family: 'Space Grotesk', monospace;
-  font-weight: 700;
-  font-size: 1rem;
-  color: var(--text-primary);
-}
-
-.compactSep {
-  color: var(--border-color);
-  font-size: 0.875rem;
-}
-
-.compactVoyage {
-  font-family: 'Space Grotesk', monospace;
-  font-size: 0.875rem;
-  color: var(--text-secondary);
+.headerSaveMsg {
+  font-size: 11px;
+  color: var(--color-success);
 }
 
 /* ── Cell Booking Panel ───────────────────────────────────────────────────── */

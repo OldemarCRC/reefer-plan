@@ -66,6 +66,8 @@ interface HeaderProps {
   onMobileMenuToggle: () => void;
   activeVessel?: string;
   activeVoyage?: string;
+  planInfo?: string;
+  planStatus?: string;
   headerActions?: React.ReactNode;
   unassignedButton?: React.ReactNode;
   userName?: string;
@@ -77,6 +79,8 @@ export default function Header({
   onMobileMenuToggle,
   activeVessel,
   activeVoyage,
+  planInfo,
+  planStatus,
   headerActions,
   unassignedButton,
   userName = '?',
@@ -131,7 +135,14 @@ export default function Header({
         <div className={styles.vesselHeaderGroup}>
           <div className={styles.vesselHeaderLeft}>
             <span className={styles.vesselHeaderTitle}>Longitudinal Profile</span>
-            <span className={styles.vesselHeaderSub}>{activeVessel} · {activeVoyage}</span>
+            <span className={styles.vesselHeaderSub}>
+              {planInfo ?? `${activeVessel} · ${activeVoyage}`}
+              {planStatus && (
+                <span className={styles.vesselHeaderStatus}>
+                  {planStatus}
+                </span>
+              )}
+            </span>
           </div>
           {headerActions && <div className={styles.vesselHeaderSep} />}
           {headerActions && (

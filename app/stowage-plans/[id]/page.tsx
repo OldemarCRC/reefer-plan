@@ -3,7 +3,6 @@
 
 import { useState, useMemo, useEffect, useRef, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import AppShell from '@/components/layout/AppShell';
@@ -924,11 +923,31 @@ export default function StowagePlanDetailPage() {
     });
   };
 
+  const planParts = useMemo(() => {
+    const match = plan.planNumber?.match(
+      /^(WK\d+)-(.+)-([A-Z]{2}\d+)-(\d+)$/
+    );
+    if (!match) return {
+      week: '',
+      vesselSlug: '',
+      voyage: plan.voyageNumber,
+      version: '',
+      formatted: plan.planNumber,
+    };
+    return {
+      week: match[1],
+      vesselSlug: match[2].replace(/_/g, ' '),
+      voyage: match[3],
+      version: match[4],
+      formatted: `${match[1]} · ${match[2].replace(/_/g, ' ')} · ${match[3]} · ${match[4]}`,
+    };
+  }, [plan.planNumber, plan.voyageNumber]);
+
   const utilizationPct = totalPallets > 0
     ? Math.round((stowedPallets / totalPallets) * 100)
     : 0;
 
-  const headerActions = (
+  const headerActions = useMemo(() => (
     <div className={styles.vesselHeaderStats}>
       <span className={styles.statChip}>
         <strong>{String(stowedPallets)}</strong>
@@ -946,9 +965,6 @@ export default function StowagePlanDetailPage() {
         <strong>{String(totalPallets - stowedPallets)}</strong>
         <span className={styles.statLabel}>AVAILABLE</span>
       </span>
-
-      <span className={styles.statSep} />
-
       <span className={styles.statChip}>
         <strong style={{ color: utilizationPct >= 90
           ? 'var(--color-warning)'
@@ -962,32 +978,44 @@ export default function StowagePlanDetailPage() {
 
       <span className={styles.statSep} />
 
-      {stabilityIndicators.length > 0 && (
+      {!isLocked && canEdit && (
         <>
-          <span className={styles.statChip}>
-            <strong>{stability.displacement}</strong>
-            <span className={styles.statLabel}>MT</span>
-          </span>
-          <span className={styles.statChip}>
-            <strong>{stability.estimatedTrim > 0 ? '+' : ''}{stability.estimatedTrim}m</strong>
-            <span className={styles.statLabel}>TRIM</span>
-          </span>
-          <span className={styles.statChip}>
-            <strong>{stability.estimatedList}°</strong>
-            <span className={styles.statLabel}>LIST</span>
-          </span>
-          <span className={styles.statChip}>
-            <strong>{stability.estimatedDrafts.forward}m</strong>
-            <span className={styles.statLabel}>FWD</span>
-          </span>
-          <span className={styles.statChip}>
-            <strong>{stability.estimatedDrafts.aft}m</strong>
-            <span className={styles.statLabel}>AFT</span>
-          </span>
+          {saveMsg && (
+            <span className={styles.headerSaveMsg}>{saveMsg.text}</span>
+          )}
+          <button className={styles.headerBtn} onClick={handleSavePlan}>
+            Save Draft
+          </button>
+          {plan.status === 'READY_FOR_CAPTAIN' ? (
+            <button className={styles.headerBtn} onClick={handleMarkSent}>
+              Mark as Sent
+            </button>
+          ) : (
+            <button className={styles.headerBtn} onClick={handleSendToCaptain}>
+              Send to Captain
+            </button>
+          )}
+          <button
+            className={`${styles.headerBtn} ${styles.headerBtnDanger}`}
+            onClick={() => setShowDeleteConfirm(true)}
+          >
+            Delete
+          </button>
+        </>
+      )}
+      {isLocked && (
+        <>
+          <span className={styles.headerLockedBadge}>LOCKED</span>
+          {canEdit && (
+            <button className={styles.headerBtn} onClick={handleNewDraft}>
+              + New Draft
+            </button>
+          )}
         </>
       )}
     </div>
-  );
+  ), [stowedPallets, totalPallets, utilizationPct, isLocked,
+      canEdit, saveMsg, plan.status]);
 
   const unassignedButton = (
     <button className={styles.btnUnassigned} onClick={() => {
@@ -1004,7 +1032,14 @@ export default function StowagePlanDetailPage() {
   );
 
   return (
-    <AppShell activeVessel={plan.vesselName} activeVoyage={plan.voyageNumber} headerActions={headerActions} unassignedButton={unassignedButton}>
+    <AppShell
+      activeVessel={plan.vesselName}
+      activeVoyage={plan.voyageNumber}
+      planInfo={planParts.formatted}
+      planStatus={plan.status.replace(/_/g, ' ')}
+      headerActions={headerActions}
+      unassignedButton={unassignedButton}
+    >
       <div
         className={styles.container}
         style={{
@@ -1018,74 +1053,6 @@ export default function StowagePlanDetailPage() {
       >
         {/* Header */}
         <div className={styles.header}>
-        <div className={styles.compactHeader}>
-          <div className={styles.compactHeaderLeft}>
-            <Link href="/stowage-plans" className={styles.backLink}>←</Link>
-            <span className={styles.compactPlanNum}>{plan.planNumber}</span>
-            <span className={`${styles.statusBadge} ${styles[plan.status.toLowerCase()]}`}>
-              {plan.status.replace(/_/g, ' ')}
-            </span>
-            <span className={styles.compactSep}>·</span>
-            <span className={styles.compactVoyage}>{plan.voyageNumber}</span>
-          </div>
-          <div className={styles.headerActions}>
-            {saveMsg && (
-              <span style={{
-                fontSize: '0.8rem',
-                color: saveMsg.type === 'success' ? 'var(--color-success)' : 'var(--color-danger)',
-                padding: '0.25rem 0.5rem',
-                background: saveMsg.type === 'success' ? 'var(--color-success-muted)' : 'var(--color-danger-muted)',
-                borderRadius: '4px',
-              }}>
-                {saveMsg.text}
-              </span>
-            )}
-            {isLocked ? (
-              <>
-                <span style={{
-                  fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.05em',
-                  color: 'var(--color-warning)', background: 'var(--color-warning-muted)',
-                  padding: '0.25rem 0.6rem', borderRadius: '4px',
-                }}>
-                  LOCKED
-                </span>
-                {canEdit && (
-                  <button
-                    className={styles.btnPrimary}
-                    onClick={handleNewDraft}
-                    disabled={isCopying}
-                  >
-                    {isCopying ? 'Creating...' : '+ New Draft'}
-                  </button>
-                )}
-              </>
-            ) : canEdit ? (
-              <>
-                <button className={styles.btnSecondary} onClick={handleSavePlan} disabled={isSaving}>
-                  {isSaving ? 'Saving...' : 'Save Draft'}
-                </button>
-                {plan.status === 'READY_FOR_CAPTAIN' ? (
-                  <button className={styles.btnPrimary} onClick={handleMarkSent} disabled={isSaving}>
-                    {isSaving ? 'Saving...' : 'Mark as Sent'}
-                  </button>
-                ) : (
-                  <button className={styles.btnPrimary} onClick={handleSendToCaptain} disabled={isSaving}>
-                    {isSaving ? 'Saving...' : 'Send to Captain'}
-                  </button>
-                )}
-              </>
-            ) : null}
-            {canEdit && !isLocked && (
-              <button
-                className={styles.btnDanger}
-                onClick={() => setShowDeleteConfirm(true)}
-                disabled={isDeleting}
-              >
-                Delete Plan
-              </button>
-            )}
-          </div>
-        </div>
 
         {/* Stability Timeline — per-port discharge stability from engine */}
         {stabilityIndicators.length > 0 && (
