@@ -72,6 +72,7 @@ export default function StowagePlanDetailPage() {
   } | null>(null);
 
   const [unassignedPanelOpen, setUnassignedPanelOpen] = useState(false);
+  const [detailPanelClosing, setDetailPanelClosing] = useState(false);
   const [unassignedTargetCompartment, setUnassignedTargetCompartment] =
     useState<ContextMenuCompartment | null>(null);
 
@@ -366,9 +367,12 @@ export default function StowagePlanDetailPage() {
 
       // Only collapse if not already collapsed
       if (!sidebarWasCollapsed.current) {
-        window.dispatchEvent(
-          new CustomEvent('collapse-sidebar', { detail: { collapsed: true } })
-        );
+        // Small delay so panel animation and sidebar collapse start together
+        setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent('collapse-sidebar', { detail: { collapsed: true } })
+          );
+        }, 10);
       }
     } else {
       // Restore only if WE collapsed it
@@ -719,6 +723,14 @@ export default function StowagePlanDetailPage() {
     setAssigningBooking(null);
     setSelectedCompartment('');
     setAssignQuantity(0);
+  };
+
+  const closeDetailPanel = () => {
+    setDetailPanelClosing(true);
+    setTimeout(() => {
+      setSelectedSectionId(null);
+      setDetailPanelClosing(false);
+    }, 180);
   };
 
   const handleAssignFromPanel = async (booking: UnassignedBooking, quantity: number) => {
@@ -1270,7 +1282,7 @@ export default function StowagePlanDetailPage() {
 
       {/* Compartment detail panel — fixed right; contains booking slots + top-down view */}
       {selectedSectionId && selectedSectionInfo && (
-        <div className={`${styles.compartmentDetailPanel}${unassignedPanelOpen ? ` ${styles.compartmentDetailPanelShifted}` : ''}`}>
+        <div className={`${styles.compartmentDetailPanel}${unassignedPanelOpen ? ` ${styles.compartmentDetailPanelShifted}` : ''}${detailPanelClosing ? ` ${styles.compartmentDetailPanelClosing}` : ''}`}>
         {/* Cell Booking Panel — section info + consignees; eligible bookings when editable */}
         {(() => {
         const zone = tempZoneConfig.find(z => z.compartments.includes(selectedSectionId));
@@ -1323,7 +1335,7 @@ export default function StowagePlanDetailPage() {
                 </span>
               )}
               {canEdit && !isLocked && <span className={styles.cellPanelTitle}>Eligible Bookings</span>}
-              <button className={styles.cellPanelClose} onClick={() => setSelectedSectionId(null)}>✕</button>
+              <button className={styles.cellPanelClose} onClick={closeDetailPanel}>✕</button>
             </div>
             {/* Consignees row */}
             <div style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
@@ -1393,7 +1405,7 @@ export default function StowagePlanDetailPage() {
           selectedBookingId={selectedBookingId}
           isLocked={isLocked || !canEdit}
           onSlotsChange={handleTopDownChange}
-          onClose={() => setSelectedSectionId(null)}
+          onClose={closeDetailPanel}
         />
         </div>
       )}
@@ -1947,6 +1959,7 @@ export default function StowagePlanDetailPage() {
           } : null}
           onAssign={handleAssignFromPanel}
           isNarrow={!!selectedSectionId}
+          compartmentPanelOpen={!!selectedSectionId}
           onClose={() => {
             setUnassignedPanelOpen(false);
             setUnassignedTargetCompartment(null);
