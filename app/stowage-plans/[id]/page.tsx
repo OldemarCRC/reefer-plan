@@ -924,6 +924,10 @@ export default function StowagePlanDetailPage() {
     });
   };
 
+  const utilizationPct = totalPallets > 0
+    ? Math.round((stowedPallets / totalPallets) * 100)
+    : 0;
+
   const headerActions = (
     <div className={styles.vesselHeaderStats}>
       <span className={styles.statChip}>
@@ -942,6 +946,46 @@ export default function StowagePlanDetailPage() {
         <strong>{String(totalPallets - stowedPallets)}</strong>
         <span className={styles.statLabel}>AVAILABLE</span>
       </span>
+
+      <span className={styles.statSep} />
+
+      <span className={styles.statChip}>
+        <strong style={{ color: utilizationPct >= 90
+          ? 'var(--color-warning)'
+          : utilizationPct >= 70
+          ? 'var(--color-success)'
+          : 'var(--color-text-secondary)' }}>
+          {utilizationPct}%
+        </strong>
+        <span className={styles.statLabel}>UTIL</span>
+      </span>
+
+      <span className={styles.statSep} />
+
+      {stabilityIndicators.length > 0 && (
+        <>
+          <span className={styles.statChip}>
+            <strong>{stability.displacement}</strong>
+            <span className={styles.statLabel}>MT</span>
+          </span>
+          <span className={styles.statChip}>
+            <strong>{stability.estimatedTrim > 0 ? '+' : ''}{stability.estimatedTrim}m</strong>
+            <span className={styles.statLabel}>TRIM</span>
+          </span>
+          <span className={styles.statChip}>
+            <strong>{stability.estimatedList}°</strong>
+            <span className={styles.statLabel}>LIST</span>
+          </span>
+          <span className={styles.statChip}>
+            <strong>{stability.estimatedDrafts.forward}m</strong>
+            <span className={styles.statLabel}>FWD</span>
+          </span>
+          <span className={styles.statChip}>
+            <strong>{stability.estimatedDrafts.aft}m</strong>
+            <span className={styles.statLabel}>AFT</span>
+          </span>
+        </>
+      )}
     </div>
   );
 
@@ -1041,60 +1085,6 @@ export default function StowagePlanDetailPage() {
               </button>
             )}
           </div>
-        </div>
-
-        {/* Stats Bar — extended with stability data */}
-        <div className={styles.statsBar}>
-          <div className={styles.stat}>
-            <div className={styles.statLabel}>Total Cargo</div>
-            <div className={styles.statValue}>{totalPallets} pallets</div>
-          </div>
-          <div className={styles.stat}>
-            <div className={styles.statLabel}>Stowed</div>
-            <div className={styles.statValue}>
-              {stowedPallets} <span className={styles.statSubtext}>/ {totalPallets}</span>
-            </div>
-          </div>
-          <div className={styles.stat}>
-            <div className={styles.statLabel}>Utilization</div>
-            <div className={styles.statValue}>
-              {totalPallets > 0 ? Math.round((stowedPallets / totalPallets) * 100) : 0}%
-            </div>
-          </div>
-          <div className={styles.statDivider} />
-          <div className={styles.stat}>
-            <div className={styles.statLabel}>Displacement</div>
-            <div className={styles.statValue}>{stability.displacement} <span className={styles.statSubtext}>MT</span></div>
-          </div>
-          <div className={styles.stat}>
-            <div className={styles.statLabel}>GM</div>
-            <div className={styles.statValue}>{stability.estimatedGM}m</div>
-          </div>
-          <div className={styles.stat}>
-            <div className={styles.statLabel}>Trim</div>
-            <div className={styles.statValue}>{stability.estimatedTrim > 0 ? '+' : ''}{stability.estimatedTrim}m</div>
-          </div>
-          <div className={styles.stat}>
-            <div className={styles.statLabel}>List</div>
-            <div className={styles.statValue}>{stability.estimatedList}°</div>
-          </div>
-          <div className={styles.stat}>
-            <div className={styles.statLabel}>Fwd Draft</div>
-            <div className={styles.statValue}>{stability.estimatedDrafts.forward}m</div>
-          </div>
-          <div className={styles.stat}>
-            <div className={styles.statLabel}>Aft Draft</div>
-            <div className={styles.statValue}>{stability.estimatedDrafts.aft}m</div>
-          </div>
-          {stability.preliminaryCheck.warnings.length > 0 && (
-            <div className={styles.stabilityWarningInline}>
-              <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                <path d="M10 2l8 16H2l8-16z" stroke="#eab308" strokeWidth="1.5" strokeLinejoin="round"/>
-                <path d="M10 8v4m0 3h.01" stroke="#eab308" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
-              <span>{stability.preliminaryCheck.warnings[0]}</span>
-            </div>
-          )}
         </div>
 
         {/* Stability Timeline — per-port discharge stability from engine */}

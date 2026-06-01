@@ -492,7 +492,7 @@
 }
 
 .statChip strong {
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.2;
   color: inherit;
@@ -502,8 +502,16 @@
   font-size: 9px;
   color: var(--color-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   line-height: 1.2;
+}
+
+.statSep {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border-secondary);
+  flex-shrink: 0;
+  align-self: center;
 }
 
 .btnUnassigned {
