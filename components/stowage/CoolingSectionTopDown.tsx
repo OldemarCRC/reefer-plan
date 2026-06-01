@@ -43,7 +43,6 @@ interface Props {
   selectedBookingId: string;
   isLocked: boolean;
   onSlotsChange: (newSlots: SectionBookingSlot[]) => void;
-  onClose: () => void;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -63,7 +62,6 @@ export default function CoolingSectionTopDown({
   selectedBookingId,
   isLocked,
   onSlotsChange,
-  onClose,
 }: Props) {
 
   // ── Grid dimensions ──────────────────────────────────────────────────────────
@@ -291,14 +289,6 @@ export default function CoolingSectionTopDown({
               );
             })}
           </div>
-        </div>
-        <div className={styles.headerRight}>
-          <span className={styles.viewLabel}>Top-down · {cols}×{rows}</span>
-          <button className={styles.closeBtn} onClick={onClose} title="Close">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-          </button>
         </div>
       </div>
 

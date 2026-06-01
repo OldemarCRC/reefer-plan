@@ -1545,10 +1545,18 @@
 .cellPanelHeader {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 1rem;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--surface-base);
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border-tertiary);
+  flex-shrink: 0;
+}
+
+.cellPanelHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
 }
 
 .cellPanelSection {
@@ -1564,27 +1572,19 @@
   color: var(--text-secondary);
 }
 
-.cellPanelTitle {
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-secondary);
-  margin-left: auto;
-}
-
 .cellPanelClose {
   background: none;
   border: none;
-  color: var(--text-secondary);
+  color: var(--color-text-muted);
   cursor: pointer;
-  font-size: 0.9rem;
-  padding: 0.125rem 0.25rem;
-  line-height: 1;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
 }
-
 .cellPanelClose:hover {
-  color: var(--text-primary);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
 }
 
 .cellPanelEmpty {

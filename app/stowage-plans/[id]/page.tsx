@@ -1330,13 +1330,21 @@ export default function StowagePlanDetailPage() {
         return (
           <div className={styles.cellPanel}>
             <div className={styles.cellPanelHeader}>
-              <span className={styles.cellPanelSection}>{selectedSectionId}</span>
-              {zone && (
-                <span className={styles.cellPanelTemp}>
-                  {zone.temp > 0 ? '+' : ''}{zone.temp}°C{canEdit && !isLocked ? ` · ${sectionFree} free of ${sectionCap}` : ''}
-                </span>
-              )}
-              <button className={styles.cellPanelClose} onClick={closeDetailPanel}>✕</button>
+              <div className={styles.cellPanelHeaderLeft}>
+                <span className={styles.cellPanelSection}>{selectedSectionId}</span>
+                {zone && (
+                  <span className={styles.cellPanelTemp}>
+                    {zone.temp > 0 ? '+' : ''}{zone.temp}°C{canEdit && !isLocked ? ` · ${sectionFree} free of ${sectionCap}` : ''}
+                  </span>
+                )}
+              </div>
+              <button
+                className={styles.cellPanelClose}
+                onClick={closeDetailPanel}
+                title="Close"
+              >
+                ✕
+              </button>
             </div>
             {/* Consignees row */}
             <div style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
@@ -1439,7 +1447,6 @@ export default function StowagePlanDetailPage() {
               selectedBookingId={selectedBookingId}
               isLocked={isLocked || !canEdit}
               onSlotsChange={handleTopDownChange}
-              onClose={closeDetailPanel}
             />
           </div>
           </div>
