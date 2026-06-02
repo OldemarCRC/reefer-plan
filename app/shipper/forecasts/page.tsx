@@ -70,9 +70,9 @@ export default async function ShipperForecastsPage({
                 <th>Route</th>
                 <th>Cargo</th>
                 <th>Consignee</th>
-                <th>Pallets</th>
+                <th className={styles.colNumeric}>Pallets</th>
                 <th>Status</th>
-                <th>Submitted</th>
+                <th className={styles.colDate}>Submitted</th>
               </tr>
             </thead>
             <tbody>
@@ -96,7 +96,7 @@ export default async function ShipperForecastsPage({
                     <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
                       {f.consigneeName || '—'}
                     </td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', fontVariantNumeric: 'tabular-nums' }}>
+                    <td className={styles.colNumeric} style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
                       {f.source === 'NO_CARGO' ? (
                         <span
                           className={styles.badge}
@@ -116,7 +116,7 @@ export default async function ShipperForecastsPage({
                         {impact.label}
                       </span>
                     </td>
-                    <td className={styles.mono}>{fmtDate(f.submittedAt)}</td>
+                    <td className={`${styles.mono} ${styles.colDate}`}>{fmtDate(f.submittedAt)}</td>
                   </tr>
                 );
               })}

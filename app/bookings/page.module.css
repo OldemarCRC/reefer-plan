@@ -128,7 +128,7 @@
 .table thead th {
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   text-align: left;
@@ -184,6 +184,13 @@
   text-align: right;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Right-align th for numeric columns */
+.thRight {
+  text-align: right !important;
 }
 
 .cellConfirmed {

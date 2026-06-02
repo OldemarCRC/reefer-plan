@@ -360,9 +360,9 @@ export default function BookingsClient({
                 <th>Shipper</th>
                 <th>Consignee</th>
                 <th>Cargo</th>
-                <th>Requested</th>
-                <th>Confirmed</th>
-                <th>Standby</th>
+                <th className={styles.thRight}>Requested</th>
+                <th className={styles.thRight}>Confirmed</th>
+                <th className={styles.thRight}>Standby</th>
                 <th>Route</th>
                 <th>Status</th>
                 <th>Actions</th>

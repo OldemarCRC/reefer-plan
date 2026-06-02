@@ -42,7 +42,7 @@ export default function SchedulesClient({ services }: { services: ServiceData[] 
                 <tr>
                   <th>Voyage</th>
                   <th>Vessel</th>
-                  <th>Departure</th>
+                  <th className={styles.colDate}>Departure</th>
                   <th>Port Rotation</th>
                   <th>Status</th>
                 </tr>
@@ -64,7 +64,7 @@ export default function SchedulesClient({ services }: { services: ServiceData[] 
                       <td data-label="Vessel" style={{ color: 'var(--color-text-primary)', fontWeight: 'var(--weight-medium)' }}>
                         {v.vesselName}
                       </td>
-                      <td data-label="Departure" className={styles.mono}>{fmtDate(v.departureDate)}</td>
+                      <td data-label="Departure" className={`${styles.mono} ${styles.colDate}`}>{fmtDate(v.departureDate)}</td>
                       <td data-label="Port Rotation">
                         <div className={styles.portChain}>
                           {ports.map((pc, i) => (

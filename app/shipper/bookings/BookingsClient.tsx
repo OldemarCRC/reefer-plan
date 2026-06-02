@@ -124,11 +124,11 @@ export default function BookingsClient({
                 <th>Vessel</th>
                 <th>Cargo Type</th>
                 <th>Consignee</th>
-                <th>Req.</th>
-                <th>Conf.</th>
-                <th>Stby.</th>
+                <th className={styles.colNumeric}>Req.</th>
+                <th className={styles.colNumeric}>Conf.</th>
+                <th className={styles.colNumeric}>Stby.</th>
                 <th>Route</th>
-                <th>Requested</th>
+                <th className={styles.colDate}>Requested</th>
                 <th>Status</th>
                 <th></th>
               </tr>
@@ -148,9 +148,9 @@ export default function BookingsClient({
                     <td data-label="Vessel">{b.vesselName || '—'}</td>
                     <td data-label="Cargo Type">{b.cargoType.replace(/_/g, ' ')}</td>
                     <td data-label="Consignee">{b.consignee?.name || '—'}</td>
-                    <td data-label="Req." className={styles.mono}>{b.requestedQuantity}</td>
-                    <td data-label="Conf." className={styles.mono}>{b.confirmedQuantity || '—'}</td>
-                    <td data-label="Stby." className={styles.mono}>{b.standbyQuantity || '—'}</td>
+                    <td data-label="Req." className={`${styles.mono} ${styles.colNumeric}`}>{b.requestedQuantity}</td>
+                    <td data-label="Conf." className={`${styles.mono} ${styles.colNumeric}`}>{b.confirmedQuantity || '—'}</td>
+                    <td data-label="Stby." className={`${styles.mono} ${styles.colNumeric}`}>{b.standbyQuantity || '—'}</td>
                     <td data-label="Route">
                       <div className={styles.portRoute}>
                         <span>{b.pol?.portCode ?? '—'}</span>
@@ -158,7 +158,7 @@ export default function BookingsClient({
                         <span>{b.pod?.portCode ?? '—'}</span>
                       </div>
                     </td>
-                    <td data-label="Requested" className={styles.mono}>{fmtDate(b.requestedDate)}</td>
+                    <td data-label="Requested" className={`${styles.mono} ${styles.colDate}`}>{fmtDate(b.requestedDate)}</td>
                     <td data-label="Status">
                       <span className={styles.badge} style={{ background: s.bg, color: s.color }}>
                         {b.status}
