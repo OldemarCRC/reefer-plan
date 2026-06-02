@@ -381,3 +381,136 @@
   display: block;
   text-align: right;
 }
+
+/* ============================================================================
+   RESPONSIVE — Mobile (≤767px)
+   ============================================================================ */
+
+@media (max-width: 767px) {
+
+  /* --- Step indicator: keep compact --- */
+  .stepIndicator {
+    gap: var(--space-1);
+    font-size: 11px;
+  }
+
+  .stepSep {
+    width: 16px;
+  }
+
+  /* --- Contract cards: tighter padding, weekly estimate wraps below info --- */
+  .contractCard {
+    padding: var(--space-3) var(--space-4);
+    flex-wrap: wrap;
+  }
+
+  .contractWeekly {
+    width: 100%;
+    align-items: flex-start;
+    white-space: normal;
+    padding-left: calc(18px + var(--space-4)); /* align under contractInfo */
+    margin-top: var(--space-1);
+  }
+
+  .contractWeeklyNum,
+  .contractWeeklyLabel {
+    text-align: left;
+  }
+
+  /* --- Footer: stack vertically; primary is first in DOM so column keeps it on top --- */
+  .footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  /* --- Buttons: full width, 44px touch target --- */
+  .btnPrimary,
+  .btnSecondary {
+    width: 100%;
+    min-height: 44px;
+    display: flex;
+    justify-content: center;
+    text-align: center;
+  }
+
+  /* --- Voyage estimate table → card list on mobile --- */
+  .tableCard {
+    overflow-x: visible;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+  }
+
+  .table,
+  .table thead,
+  .table tbody,
+  .table tr,
+  .table th,
+  .table td {
+    display: block;
+  }
+
+  .table {
+    min-width: 0;
+  }
+
+  .table thead tr {
+    display: none;
+  }
+
+  .table tbody tr {
+    background: var(--color-bg-secondary);
+    border: var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
+    margin-bottom: var(--space-3);
+    overflow: hidden;
+  }
+
+  .table tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  /* Each cell becomes a label + value flex row */
+  .table tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-1) 0;
+    font-size: var(--text-sm);
+    border: none;
+  }
+
+  /* Label from data-label attribute */
+  .table tbody td::before {
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+    margin-right: var(--space-3);
+  }
+
+  /* --- Estimate input: full width, 44px, font-size 16px prevents iOS zoom --- */
+  .estimateInput {
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  /* --- No-cargo checkbox: larger touch target --- */
+  .noCargoLabel {
+    gap: var(--space-2);
+    min-height: 44px;
+    margin-top: 0;
+  }
+
+  .noCargoLabel input[type='checkbox'] {
+    width: 20px;
+    height: 20px;
+  }
+}

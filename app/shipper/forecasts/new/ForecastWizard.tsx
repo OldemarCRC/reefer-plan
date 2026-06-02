@@ -320,11 +320,11 @@ export default function ForecastWizard({
 
                     return (
                       <tr key={v._id} style={initialVoyageId && v._id === initialVoyageId ? { background: 'rgba(59, 130, 246, 0.07)' } : undefined}>
-                        <td className={styles.mono}>{v.voyageNumber}</td>
-                        <td style={{ fontWeight: 'var(--weight-medium)' as any }}>{v.vesselName}</td>
-                        <td className={styles.mono}>{fmtDate(v.departureDate)}</td>
-                        <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{route}</td>
-                        <td>
+                        <td data-label="Voyage" className={styles.mono}>{v.voyageNumber}</td>
+                        <td data-label="Vessel" style={{ fontWeight: 'var(--weight-medium)' as any }}>{v.vesselName}</td>
+                        <td data-label="Departure" className={styles.mono}>{fmtDate(v.departureDate)}</td>
+                        <td data-label="Route" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{route}</td>
+                        <td data-label="Estimate">
                           {bookingLocked ? (
                             <span className={`${styles.badge} ${styles.badgeBooking}`}>
                               Booking confirmed
