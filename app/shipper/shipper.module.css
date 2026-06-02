@@ -1081,6 +1081,162 @@
   background: var(--color-bg-hover);
 }
 
+/* ============================================================================
+   SCHEDULES — Expandable row timeline
+   ============================================================================ */
+
+/* Collapsed row — replaces tableRowClickable for schedules */
+.scheduleRow {
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.scheduleRow:hover td {
+  background: var(--color-bg-tertiary);
+}
+
+.scheduleRow:focus-visible td {
+  background: var(--color-bg-hover);
+}
+
+/* Compact route summary cell */
+.colRoute {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.routePort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.routeArrow {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.routeMore {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+/* Expand chevron column */
+.colExpand {
+  width: 24px;
+  text-align: center;
+}
+
+.expandChevron {
+  font-size: 9px;
+  color: var(--color-text-muted);
+}
+
+/* Expanded row container */
+.expandedRow {
+  background: var(--color-bg-secondary);
+}
+
+.expandedCell {
+  padding: 16px 24px 20px !important;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Horizontal port timeline */
+.portTimeline {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.timelineStop {
+  display: flex;
+  align-items: flex-start;
+  flex-shrink: 0;
+}
+
+.timelineConnector {
+  width: 40px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  margin-top: 10px;
+  flex-shrink: 0;
+}
+
+/* Schedule-specific dot (distinct from .timelineDot used in booking detail) */
+.timelineDotSch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-bg-tertiary);
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.timelineDotSchLoad {
+  background: var(--color-cyan);
+  border-color: var(--color-cyan);
+}
+
+.timelineDotSchDisch {
+  background: var(--color-warning);
+  border-color: var(--color-warning);
+}
+
+.timelineInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: -10px;
+  margin-top: 28px;
+  min-width: 80px;
+  max-width: 100px;
+}
+
+.timelinePortCode {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.timelinePortName {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timelineDate {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.timelineOp {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.timelineOpLoad  { color: var(--color-cyan); }
+.timelineOpDisch { color: var(--color-warning); }
+
 /* --- Voyage action modal --- */
 
 .modalBackdrop {

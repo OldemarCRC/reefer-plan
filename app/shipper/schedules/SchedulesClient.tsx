@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { FlagIcon } from '@/lib/utils/flagIcon';
-import VoyageActionModal, { type VoyageInfo } from '../VoyageActionModal';
+import { type VoyageInfo } from '../VoyageActionModal';
 import styles from '../shipper.module.css';
 
 const VOYAGE_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -25,7 +25,10 @@ function fmtDate(d?: string | null) {
 }
 
 export default function SchedulesClient({ services }: { services: ServiceData[] }) {
-  const [selectedVoyage, setSelectedVoyage] = useState<VoyageInfo | null>(null);
+  const [expandedVoyageId, setExpandedVoyageId] = useState<string | null>(null);
+
+  const toggleRow = (id: string) =>
+    setExpandedVoyageId(prev => prev === id ? null : id);
 
   return (
     <>
@@ -43,53 +46,120 @@ export default function SchedulesClient({ services }: { services: ServiceData[] 
                   <th>Voyage</th>
                   <th>Vessel</th>
                   <th className={styles.colDate}>Departure</th>
-                  <th>Port Rotation</th>
+                  <th>Route</th>
                   <th>Status</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {svc.voyages.map((v) => {
                   const vs = VOYAGE_STATUS_COLORS[v.status ?? ''] ?? VOYAGE_STATUS_COLORS.PLANNED;
-                  const ports = [...v.portCalls].sort((a, b) => a.sequence - b.sequence);
+                  const isExpanded = expandedVoyageId === v._id;
+
+                  const sortedPorts = [...v.portCalls].sort((a, b) => a.sequence - b.sequence);
+                  const loadPorts = sortedPorts.filter(pc => pc.operations?.includes('LOAD'));
+                  const dischPorts = sortedPorts.filter(pc => pc.operations?.includes('DISCHARGE')).reverse();
+                  const firstLoad = loadPorts[0] ?? null;
+                  const lastDisch = dischPorts[0] ?? null;
+
                   return (
-                    <tr
-                      key={v._id}
-                      className={styles.tableRowClickable}
-                      onClick={() => setSelectedVoyage(v)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedVoyage(v); }}
-                    >
-                      <td data-label="Voyage" className={styles.mono}>{v.voyageNumber}</td>
-                      <td data-label="Vessel" style={{ color: 'var(--color-text-primary)', fontWeight: 'var(--weight-medium)' }}>
-                        {v.vesselName}
-                      </td>
-                      <td data-label="Departure" className={`${styles.mono} ${styles.colDate}`}>{fmtDate(v.departureDate)}</td>
-                      <td data-label="Port Rotation">
-                        <div className={styles.portChain}>
-                          {ports.map((pc, i) => (
-                            <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
-                                <FlagIcon code={pc.country ?? ''} /> {pc.portCode}
+                    <Fragment key={v._id}>
+                      <tr
+                        className={styles.scheduleRow}
+                        onClick={() => toggleRow(v._id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleRow(v._id); }}
+                      >
+                        <td data-label="Voyage" className={styles.mono}>{v.voyageNumber}</td>
+                        <td data-label="Vessel" style={{ color: 'var(--color-text-primary)', fontWeight: 'var(--weight-medium)' }}>
+                          {v.vesselName}
+                        </td>
+                        <td data-label="Departure" className={`${styles.mono} ${styles.colDate}`}>{fmtDate(v.departureDate)}</td>
+                        <td data-label="Route">
+                          <div className={styles.colRoute}>
+                            {firstLoad && (
+                              <span className={styles.routePort}>
+                                <FlagIcon code={firstLoad.country ?? ''} />
+                                {firstLoad.portCode}
                               </span>
-                              {pc.eta && (
-                                <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-                                  {new Date(pc.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                </span>
-                              )}
-                              {i < ports.length - 1 && (
-                                <span style={{ color: 'var(--color-text-tertiary)', fontSize: '11px' }}> →</span>
-                              )}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td data-label="Status">
-                        <span className={styles.badge} style={{ background: vs.bg, color: vs.color }}>
-                          {(v.status ?? '').replace(/_/g, ' ')}
-                        </span>
-                      </td>
-                    </tr>
+                            )}
+                            {firstLoad && lastDisch && (
+                              <span className={styles.routeArrow}>→</span>
+                            )}
+                            {lastDisch && (
+                              <span className={styles.routePort}>
+                                <FlagIcon code={lastDisch.country ?? ''} />
+                                {lastDisch.portCode}
+                              </span>
+                            )}
+                            {v.portCalls.length > 2 && (
+                              <span className={styles.routeMore}>
+                                +{v.portCalls.length - 2} stops
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td data-label="Status">
+                          <span className={styles.badge} style={{ background: vs.bg, color: vs.color }}>
+                            {(v.status ?? '').replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td className={styles.colExpand}>
+                          <span className={styles.expandChevron}>
+                            {isExpanded ? '▲' : '▼'}
+                          </span>
+                        </td>
+                      </tr>
+
+                      {isExpanded && (
+                        <tr className={styles.expandedRow}>
+                          <td colSpan={6} className={styles.expandedCell}>
+                            <div className={styles.portTimeline}>
+                              {[...v.portCalls]
+                                .sort((a, b) => a.sequence - b.sequence)
+                                .map((pc, i) => {
+                                  const isLoad = pc.operations?.includes('LOAD');
+                                  const isDisch = pc.operations?.includes('DISCHARGE');
+                                  const effectiveDate = pc.etd ?? pc.eta ?? null;
+                                  return (
+                                    <div key={`${pc.portCode}-${i}`} className={styles.timelineStop}>
+                                      {i > 0 && <div className={styles.timelineConnector} />}
+                                      <div className={[
+                                        styles.timelineDotSch,
+                                        isLoad  ? styles.timelineDotSchLoad  : '',
+                                        isDisch ? styles.timelineDotSchDisch : '',
+                                      ].filter(Boolean).join(' ')} />
+                                      <div className={styles.timelineInfo}>
+                                        <div className={styles.timelinePortCode}>
+                                          <FlagIcon code={pc.country ?? ''} />
+                                          {pc.portCode}
+                                        </div>
+                                        {pc.portName && (
+                                          <div className={styles.timelinePortName}>
+                                            {pc.portName}
+                                          </div>
+                                        )}
+                                        {effectiveDate && (
+                                          <div className={styles.timelineDate}>
+                                            {fmtDate(effectiveDate)}
+                                          </div>
+                                        )}
+                                        <div className={[
+                                          styles.timelineOp,
+                                          isLoad ? styles.timelineOpLoad : styles.timelineOpDisch,
+                                        ].join(' ')}>
+                                          {isLoad ? '▲ Load' : '▼ Discharge'}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -97,13 +167,6 @@ export default function SchedulesClient({ services }: { services: ServiceData[] 
           </div>
         </div>
       ))}
-
-      {selectedVoyage && (
-        <VoyageActionModal
-          voyage={selectedVoyage}
-          onClose={() => setSelectedVoyage(null)}
-        />
-      )}
     </>
   );
 }
