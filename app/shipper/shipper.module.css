@@ -470,7 +470,17 @@
 /* --- Wizard / request form --- */
 
 .wizard {
+  /* max-width moved to .wizardPage */
+}
+
+.wizardPage {
   max-width: 680px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.wizardPage .pageHeader {
+  max-width: 100%;
 }
 
 .wizardSteps {
@@ -540,9 +550,9 @@
 
 .wizardPanel {
   background: var(--color-bg-secondary);
-  border: var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: var(--space-5);
+  border: var(--border-default);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
 }
 
 .wizardTitle {

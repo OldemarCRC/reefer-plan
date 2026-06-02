@@ -256,7 +256,7 @@ export default function RequestClient({ shipperCode, initialContracts, initialCo
   };
 
   return (
-    <div>
+    <div className={styles.wizardPage}>
       <div className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>New Booking Request</h1>
         <p className={styles.pageSubtitle}>Submit a cargo space request in 3 steps.</p>

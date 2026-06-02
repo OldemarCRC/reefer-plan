@@ -7,6 +7,8 @@
   flex-direction: column;
   gap: var(--space-5);
   max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .pageHeader {
@@ -164,8 +166,8 @@
 
 .tableCard {
   background: var(--color-bg-secondary);
-  border: var(--border-subtle);
-  border-radius: var(--radius-lg);
+  border: var(--border-default);
+  border-radius: var(--radius-xl);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
