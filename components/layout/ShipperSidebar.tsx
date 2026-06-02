@@ -95,7 +95,7 @@ export default function ShipperSidebar({ collapsed, onToggle, mobileOpen = false
   }, []);
 
   return (
-    <aside className={`${styles.sidebar} ${collapsed ? styles['sidebar--collapsed'] : ''} ${mobileOpen ? styles['sidebar--mobileOpen'] : ''}`}>
+    <aside className={`${styles.sidebar} shipper-sidebar ${collapsed ? styles['sidebar--collapsed'] : ''} ${mobileOpen ? styles['sidebar--mobileOpen'] : ''}`}>
       {/* Brand */}
       <div className={styles.brand}>
         <div className={styles.brandIcon}>

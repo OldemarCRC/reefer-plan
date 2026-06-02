@@ -13,8 +13,12 @@
   display: flex;
   flex-direction: column;
   z-index: var(--z-sidebar);
-  transition: width var(--transition-normal);
   overflow: hidden;
+}
+
+/* Only animate after hydration — prevents width flash on page load */
+:global(.transitions-ready) .sidebar {
+  transition: width var(--transition-normal);
 }
 
 .sidebar--collapsed {

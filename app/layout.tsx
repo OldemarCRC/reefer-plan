@@ -60,7 +60,7 @@ export default async function RootLayout({
           so the CSS can collapse the sidebar before React even hydrates.
           Skipped on mobile (≤ 767 px) because those layouts use margin-left: 0.
         */}
-        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var m=window.innerWidth<=767;if(!m&&localStorage.getItem('reefer-sidebar-collapsed')==='true'){document.documentElement.classList.add('sidebar-collapsed');}}catch(e){}})();` }} />
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var m=window.innerWidth<=767;if(!m&&localStorage.getItem('reefer-sidebar-collapsed')==='true'){document.documentElement.classList.add('sidebar-collapsed');}if(!m&&localStorage.getItem('reefer-shipper-sidebar-collapsed')==='true'){document.documentElement.classList.add('shipper-sidebar-collapsed');}}catch(e){}})();` }} />
       </head>
       <body>
         <Providers session={session} fleetStatus={fleetStatus} portTemps={portTemps}>

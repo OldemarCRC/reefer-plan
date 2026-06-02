@@ -7,6 +7,7 @@ import ShipperSidebar from './ShipperSidebar';
 import styles from './ShipperShell.module.css';
 
 const SHIPPER_SIDEBAR_KEY = 'reefer-shipper-sidebar-collapsed';
+const SHIPPER_HTML_CLASS  = 'shipper-sidebar-collapsed';
 
 interface ShipperShellProps {
   children: React.ReactNode;
@@ -17,6 +18,7 @@ export default function ShipperShell({ children, shipperName }: ShipperShellProp
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [transitionsReady, setTransitionsReady] = useState(false);
   const { data: session } = useSession();
   const pathname = usePathname();
 
@@ -27,9 +29,17 @@ export default function ShipperShell({ children, shipperName }: ShipperShellProp
 
     const syncState = (mobile: boolean) => {
       setIsMobile(mobile);
-      if (!mobile) {
-        const stored = localStorage.getItem(SHIPPER_SIDEBAR_KEY);
-        if (stored !== null) setCollapsed(stored === 'true');
+      if (mobile) {
+        document.documentElement.classList.remove(SHIPPER_HTML_CLASS);
+        setCollapsed(false);
+      } else {
+        const stored = localStorage.getItem(SHIPPER_SIDEBAR_KEY) === 'true';
+        setCollapsed(stored);
+        if (stored) {
+          document.documentElement.classList.add(SHIPPER_HTML_CLASS);
+        } else {
+          document.documentElement.classList.remove(SHIPPER_HTML_CLASS);
+        }
       }
     };
 
@@ -38,6 +48,14 @@ export default function ShipperShell({ children, shipperName }: ShipperShellProp
     const handler = (e: MediaQueryListEvent) => syncState(e.matches);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  // Enable transitions only after the corrected state has been painted
+  useEffect(() => {
+    const raf1 = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setTransitionsReady(true));
+    });
+    return () => cancelAnimationFrame(raf1);
   }, []);
 
   // Close mobile sidebar on route change
@@ -52,6 +70,11 @@ export default function ShipperShell({ children, shipperName }: ShipperShellProp
       setCollapsed((prev) => {
         const next = !prev;
         localStorage.setItem(SHIPPER_SIDEBAR_KEY, String(next));
+        if (next) {
+          document.documentElement.classList.add(SHIPPER_HTML_CLASS);
+        } else {
+          document.documentElement.classList.remove(SHIPPER_HTML_CLASS);
+        }
         return next;
       });
     }
@@ -61,7 +84,7 @@ export default function ShipperShell({ children, shipperName }: ShipperShellProp
   const effectiveCollapsed = isMobile ? false : collapsed;
 
   return (
-    <div className={styles.layout}>
+    <div className={`${styles.layout}${transitionsReady ? ' transitions-ready' : ''}`}>
       {mobileOpen && (
         <div className={styles.backdrop} onClick={() => setMobileOpen(false)} />
       )}
@@ -72,7 +95,7 @@ export default function ShipperShell({ children, shipperName }: ShipperShellProp
         shipperName={shipperName}
       />
 
-      <main className={`${styles.main} ${effectiveCollapsed ? styles['main--collapsed'] : ''}`}>
+      <main className={`${styles.main} shipper-main ${effectiveCollapsed ? styles['main--collapsed'] : ''}`}>
         <header className={styles.header}>
           <button
             className={styles.menuToggle}

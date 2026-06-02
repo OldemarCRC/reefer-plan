@@ -298,6 +298,15 @@ input:focus, select:focus, textarea:focus {
   html.sidebar-collapsed .app-header {
     left: var(--sidebar-width-collapsed);
   }
+
+  /* Shipper portal — parallel pre-hydration rules */
+  html.shipper-sidebar-collapsed .shipper-sidebar {
+    width: var(--sidebar-width-collapsed);
+  }
+
+  html.shipper-sidebar-collapsed .shipper-main {
+    margin-left: var(--sidebar-width-collapsed);
+  }
 }
 
 /* Mobile sidebar backdrop (rendered by AppShell when mobileOpen=true) */
