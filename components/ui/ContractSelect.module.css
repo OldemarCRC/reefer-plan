@@ -87,10 +87,26 @@
 }
 
 .triggerChevron {
-  font-size: 10px;
-  color: var(--color-text-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  line-height: 1;
+  color: #94A3B8;
+  transition: color 150ms ease, transform 150ms ease;
+}
+
+.triggerChevronOpen {
+  transform: rotate(180deg);
+  color: var(--color-cyan, #06B6D4);
+}
+
+.trigger:hover .triggerChevron {
+  color: #FFFFFF;
+}
+
+/* Keep cyan when open and also hovered */
+.trigger:hover .triggerChevronOpen {
+  color: var(--color-cyan, #06B6D4);
 }
 
 /* ---- Dropdown panel ---- */

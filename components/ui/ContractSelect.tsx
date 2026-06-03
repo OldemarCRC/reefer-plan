@@ -91,7 +91,14 @@ export default function ContractSelect({
         ) : (
           <span className={styles.triggerPlaceholder}>{placeholder}</span>
         )}
-        <span className={styles.triggerChevron} aria-hidden>{open ? '▲' : '▼'}</span>
+        <span
+          className={[styles.triggerChevron, open ? styles.triggerChevronOpen : ''].filter(Boolean).join(' ')}
+          aria-hidden
+        >
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M3 6L8 11L13 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
       </button>
 
       {open && (
