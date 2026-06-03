@@ -2,7 +2,7 @@
 
 import { useState, Fragment } from 'react';
 import { FlagIcon } from '@/lib/utils/flagIcon';
-import { type VoyageInfo } from '../VoyageActionModal';
+import VoyageActionModal, { type VoyageInfo } from '../VoyageActionModal';
 import styles from '../shipper.module.css';
 
 const VOYAGE_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -26,6 +26,7 @@ function fmtDate(d?: string | null) {
 
 export default function SchedulesClient({ services }: { services: ServiceData[] }) {
   const [expandedVoyageId, setExpandedVoyageId] = useState<string | null>(null);
+  const [selectedVoyage, setSelectedVoyage] = useState<VoyageInfo | null>(null);
 
   const toggleRow = (id: string) =>
     setExpandedVoyageId(prev => prev === id ? null : id);
@@ -66,10 +67,10 @@ export default function SchedulesClient({ services }: { services: ServiceData[] 
                     <Fragment key={v._id}>
                       <tr
                         className={styles.scheduleRow}
-                        onClick={() => toggleRow(v._id)}
+                        onClick={() => setSelectedVoyage(v)}
                         role="button"
                         tabIndex={0}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleRow(v._id); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedVoyage(v); }}
                       >
                         <td data-label="Voyage" className={styles.mono}>{v.voyageNumber}</td>
                         <td data-label="Vessel" style={{ color: 'var(--color-text-primary)', fontWeight: 'var(--weight-medium)' }}>
@@ -105,7 +106,10 @@ export default function SchedulesClient({ services }: { services: ServiceData[] 
                             {(v.status ?? '').replace(/_/g, ' ')}
                           </span>
                         </td>
-                        <td className={styles.colExpand}>
+                        <td
+                          className={styles.colExpand}
+                          onClick={(e) => { e.stopPropagation(); toggleRow(v._id); }}
+                        >
                           <span className={[styles.expandChevron, isExpanded ? styles.expandChevronActive : ''].filter(Boolean).join(' ')}>
                             <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                               <path d="M3 6L8 11L13 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -169,6 +173,13 @@ export default function SchedulesClient({ services }: { services: ServiceData[] 
           </div>
         </div>
       ))}
+
+      {selectedVoyage && (
+        <VoyageActionModal
+          voyage={selectedVoyage}
+          onClose={() => setSelectedVoyage(null)}
+        />
+      )}
     </>
   );
 }
