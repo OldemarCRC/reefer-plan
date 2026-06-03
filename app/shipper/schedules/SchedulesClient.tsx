@@ -106,8 +106,10 @@ export default function SchedulesClient({ services }: { services: ServiceData[] 
                           </span>
                         </td>
                         <td className={styles.colExpand}>
-                          <span className={styles.expandChevron}>
-                            {isExpanded ? '▲' : '▼'}
+                          <span className={[styles.expandChevron, isExpanded ? styles.expandChevronActive : ''].filter(Boolean).join(' ')}>
+                            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                              <path d="M3 6L8 11L13 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
                           </span>
                         </td>
                       </tr>

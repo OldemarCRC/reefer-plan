@@ -1137,8 +1137,25 @@
 }
 
 .expandChevron {
-  font-size: 9px;
-  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #94A3B8;
+  transition: color 150ms ease, transform 150ms ease;
+}
+
+.expandChevronActive {
+  transform: rotate(180deg);
+  color: var(--color-cyan, #06B6D4);
+}
+
+.scheduleRow:hover .expandChevron {
+  color: #FFFFFF;
+}
+
+/* Keep cyan when expanded row is also hovered */
+.scheduleRow:hover .expandChevronActive {
+  color: var(--color-cyan, #06B6D4);
 }
 
 /* Expanded row container */
