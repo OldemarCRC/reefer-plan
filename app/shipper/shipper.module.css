@@ -1493,6 +1493,7 @@
 /* Scoping hooks used only in the @media block below */
 .bookingsTable {}
 .schedulesTable {}
+.recentBookingsTable {}
 
 /* Mobile: all responsive overrides */
 @media (max-width: 767px) {
@@ -1785,5 +1786,81 @@
   /* Hide expanded timeline rows — horizontal scroll not suited to portrait mobile */
   .expandedRow {
     display: none;
+  }
+
+  /* ============================================================
+     RECENT BOOKINGS (dashboard) — mobile card hierarchy
+     Same pattern as .bookingsTable; no Standby column here
+     so Line 5 is a 50/50 two-column footer.
+     ============================================================ */
+
+  /* Positioning context for absolute Status badge */
+  .recentBookingsTable tr {
+    position: relative;
+    padding: 0;
+  }
+
+  /* Line 1 left: Booking # — card header, no label */
+  .recentBookingsTable td[data-label="Booking #"] {
+    padding: var(--space-3) var(--space-3) var(--space-2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    min-height: unset;
+  }
+  .recentBookingsTable td[data-label="Booking #"]::before {
+    display: none;
+  }
+
+  /* Line 1 right: Status badge — absolute top-right of card */
+  .recentBookingsTable td[data-label="Status"] {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-3);
+    padding: 0;
+    min-height: unset;
+    border-bottom: none;
+    background: transparent;
+  }
+  .recentBookingsTable td[data-label="Status"]::before {
+    display: none;
+  }
+
+  /* Lines 2–4: compact info rows */
+  .recentBookingsTable td[data-label="Vessel"],
+  .recentBookingsTable td[data-label="Voyage"],
+  .recentBookingsTable td[data-label="Route"],
+  .recentBookingsTable td[data-label="Week"],
+  .recentBookingsTable td[data-label="Consignee"],
+  .recentBookingsTable td[data-label="Cargo"] {
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-xs);
+    min-height: unset;
+  }
+
+  /* Line 5: two quantities side-by-side (50% each — no Stby column) */
+  .recentBookingsTable td[data-label="Req."],
+  .recentBookingsTable td[data-label="Conf."] {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    width: 50%;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-xs);
+    min-height: unset;
+    border-bottom: none;
+    box-sizing: border-box;
+    text-align: center;
+  }
+  /* Top border separates footer from info rows */
+  .recentBookingsTable td[data-label="Req."] {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  /* Stack label above value */
+  .recentBookingsTable td[data-label="Req."]::before,
+  .recentBookingsTable td[data-label="Conf."]::before {
+    display: block;
+    min-width: 0;
+    margin-right: 0;
+    margin-bottom: 2px;
+    text-align: center;
   }
 }

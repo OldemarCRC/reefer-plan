@@ -95,7 +95,7 @@ export default async function ShipperDashboardPage() {
           </div>
         ) : (
           <div className={styles.tableWrapper}>
-            <table className={styles.table}>
+            <table className={`${styles.table} ${styles.recentBookingsTable}`}>
               <thead>
                 <tr>
                   <th>Booking #</th>
