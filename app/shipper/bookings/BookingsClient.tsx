@@ -115,7 +115,7 @@ export default function BookingsClient({
         </div>
       ) : (
         <div className={styles.tableWrapper}>
-          <table className={styles.table}>
+          <table className={`${styles.table} ${styles.bookingsTable}`}>
             <thead>
               <tr>
                 <th>Booking #</th>

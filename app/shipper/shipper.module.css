@@ -1490,6 +1490,10 @@
   }
 }
 
+/* Scoping hooks used only in the @media block below */
+.bookingsTable {}
+.schedulesTable {}
+
 /* Mobile: all responsive overrides */
 @media (max-width: 767px) {
   /* Page typography */
@@ -1653,5 +1657,133 @@
 
   .bookingDetailHeading {
     gap: var(--space-2);
+  }
+
+  /* ============================================================
+     BOOKINGS TABLE — custom mobile card hierarchy
+     Overrides the generic .table card layout above.
+     ============================================================ */
+
+  /* Positioning context so Status badge can be absolute */
+  .bookingsTable tr {
+    position: relative;
+    padding: 0;
+  }
+
+  /* Hide columns that clutter mobile */
+  .bookingsTable td[data-label="Service"],
+  .bookingsTable td[data-label="Requested"] {
+    display: none;
+  }
+
+  /* Line 1 left: booking # — card header, no label */
+  .bookingsTable td[data-label="Booking #"] {
+    padding: var(--space-3) var(--space-3) var(--space-2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    min-height: unset;
+  }
+  .bookingsTable td[data-label="Booking #"]::before {
+    display: none;
+  }
+
+  /* Line 1 right: status badge — absolute top-right of card */
+  .bookingsTable td[data-label="Status"] {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-3);
+    padding: 0;
+    min-height: unset;
+    border-bottom: none;
+    background: transparent;
+  }
+  .bookingsTable td[data-label="Status"]::before {
+    display: none;
+  }
+
+  /* Lines 2–4: compact info rows */
+  .bookingsTable td[data-label="Vessel"],
+  .bookingsTable td[data-label="Voyage"],
+  .bookingsTable td[data-label="Route"],
+  .bookingsTable td[data-label="Consignee"],
+  .bookingsTable td[data-label="Cargo Type"] {
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-xs);
+    min-height: unset;
+  }
+
+  /* Line 5: three quantities side-by-side (33% each) */
+  .bookingsTable td[data-label="Req."],
+  .bookingsTable td[data-label="Conf."],
+  .bookingsTable td[data-label="Stby."] {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    width: 33.33%;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-xs);
+    min-height: unset;
+    border-bottom: none;
+    box-sizing: border-box;
+    text-align: center;
+  }
+  /* Top border separates the quantities footer from the info rows */
+  .bookingsTable td[data-label="Req."] {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  /* Stack label above value instead of side-by-side */
+  .bookingsTable td[data-label="Req."]::before,
+  .bookingsTable td[data-label="Conf."]::before,
+  .bookingsTable td[data-label="Stby."]::before {
+    display: block;
+    min-width: 0;
+    margin-right: 0;
+    margin-bottom: 2px;
+    text-align: center;
+  }
+
+  /* Edit button — full-width 44px touch target */
+  .bookingsTable td[data-label="Actions"] {
+    padding: var(--space-2) var(--space-3) var(--space-3);
+    min-height: unset;
+    border-bottom: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .bookingsTable td[data-label="Actions"]::before {
+    display: none;
+  }
+  .bookingsTable td[data-label="Actions"] button {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+    font-size: var(--text-sm);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  /* ============================================================
+     SCHEDULES TABLE — mobile card layout
+     The expand/collapse timeline is a desktop feature; on mobile
+     the VoyageActionModal (row click) is the primary action.
+     ============================================================ */
+
+  /* Compact cell padding */
+  .schedulesTable td {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-xs);
+    min-height: unset;
+  }
+
+  /* Status: badge is self-explanatory, no label needed */
+  .schedulesTable td[data-label="Status"]::before {
+    display: none;
+  }
+
+  /* Hide the chevron expand cell (last td in the collapsed row) */
+  .schedulesTable td:last-child {
+    display: none;
+  }
+
+  /* Hide expanded timeline rows — horizontal scroll not suited to portrait mobile */
+  .expandedRow {
+    display: none;
   }
 }

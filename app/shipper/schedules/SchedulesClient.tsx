@@ -41,7 +41,7 @@ export default function SchedulesClient({ services }: { services: ServiceData[] 
           </div>
 
           <div className={styles.tableWrapper}>
-            <table className={styles.table}>
+            <table className={`${styles.table} ${styles.schedulesTable}`}>
               <thead>
                 <tr>
                   <th>Voyage</th>
