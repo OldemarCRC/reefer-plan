@@ -1132,7 +1132,8 @@
 /* Expand chevron column */
 .colExpand {
   width: 24px;
-  text-align: center;
+  text-align: right;
+  padding-right: var(--space-4);
 }
 
 .expandChevron {
@@ -1143,6 +1144,11 @@
 /* Expanded row container */
 .expandedRow {
   background: var(--color-bg-secondary);
+}
+
+.expandedRow td {
+  background: rgba(255, 255, 255, 0.03);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .expandedCell {
@@ -1167,16 +1173,16 @@
 
 .timelineConnector {
   width: 40px;
-  height: 2px;
+  height: 1px;
   background: rgba(255, 255, 255, 0.08);
-  margin-top: 10px;
+  margin-top: 5px;
   flex-shrink: 0;
 }
 
 /* Schedule-specific dot (distinct from .timelineDot used in booking detail) */
 .timelineDotSch {
-  width: 20px;
-  height: 20px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--color-bg-tertiary);
   border: 2px solid rgba(255, 255, 255, 0.08);
@@ -1198,8 +1204,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-left: -10px;
-  margin-top: 28px;
+  margin-left: -5px;
+  margin-top: 14px;
   min-width: 80px;
   max-width: 100px;
 }
@@ -1214,7 +1220,7 @@
 }
 
 .timelinePortName {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--color-text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -1222,13 +1228,13 @@
 }
 
 .timelineDate {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--color-text-tertiary);
   font-variant-numeric: tabular-nums;
 }
 
 .timelineOp {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
