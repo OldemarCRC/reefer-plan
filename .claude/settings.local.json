@@ -30,7 +30,8 @@
       "Bash(stowage-optimizer\\\\venv\\\\Scripts\\\\python.exe stowage-optimizer\\\\solver.py 69e631cd593e9d58097259b9)",
       "Bash(venv\\\\Scripts\\\\python.exe _diag.py)",
       "Bash(\"stowage-optimizer/venv/Scripts/python.exe\" stowage-optimizer/solver.py 69e631cd593e9d58097259b9)",
-      "Bash(npm list *)"
+      "Bash(npm list *)",
+      "Bash(git add *)"
     ]
   }
 }
