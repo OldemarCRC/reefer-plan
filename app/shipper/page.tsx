@@ -126,7 +126,9 @@ export default async function ShipperDashboardPage() {
                         {b.voyageNumber ? `Wk ${b.voyageNumber.slice(-2)}` : '—'}
                       </td>
                       <td data-label="Cargo">{b.cargoType.replace(/_/g, ' ')}</td>
-                      <td data-label="Consignee">{b.consignee?.name || '—'}</td>
+                      <td data-label="Consignee">
+                        <span className={styles.tdVal}>{b.consignee?.name || '—'}</span>
+                      </td>
                       <td data-label="Req." className={styles.mono}>{b.requestedQuantity}</td>
                       <td data-label="Conf." className={styles.mono}>{b.confirmedQuantity || '—'}</td>
                       <td data-label="Route">

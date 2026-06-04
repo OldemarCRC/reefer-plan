@@ -163,6 +163,17 @@
   text-decoration: underline;
 }
 
+/* Value span in mobile card rows — truncates long text cleanly.
+   Usage: <span className={styles.tdVal}>{value}</span> inside a <td>. */
+.tdVal {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;          /* fills the space to the right of the ::before label */
+  text-align: right;
+}
+
 .mono {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -1533,6 +1544,12 @@
     display: block;
   }
 
+  /* Critical: neutralise the desktop min-width so the table never
+     forces horizontal scroll when rendered as a card list. */
+  .table {
+    min-width: 0;
+  }
+
   /* Hide header row */
   .table thead tr {
     display: none;
@@ -1790,33 +1807,45 @@
 
   /* ============================================================
      RECENT BOOKINGS (dashboard) — mobile card hierarchy
-     Same pattern as .bookingsTable; no Standby column here
-     so Line 5 is a 50/50 two-column footer.
+     Card anatomy:
+       ┌──────────────────────────────┐
+       │ BK-001234        [CONFIRMED] │  ← header, Status badge absolute
+       ├──────────────────────────────┤
+       │ VESSEL   Baltic Klipper      │  ← flex row, label | value
+       │ VOYAGE   AC26020             │
+       │ WEEK     Wk 20               │
+       │ ROUTE    COTUB → NLRTM       │
+       │ CONSIGNEE Tesco Stores…      │  ← value truncates via .tdVal
+       │ CARGO    BANANAS             │
+       ├──────────────────────────────┤
+       │ REQ.     140                 │  ← standard flex row (no inline-flex)
+       │ CONF.    140                 │
+       └──────────────────────────────┘
      ============================================================ */
 
-  /* Positioning context for absolute Status badge */
+  /* Positioning context for the absolute Status badge */
   .recentBookingsTable tr {
     position: relative;
     padding: 0;
   }
 
-  /* Line 1 left: Booking # — card header, no label */
+  /* ── Card header: Booking # — full-width title, label hidden ── */
   .recentBookingsTable td[data-label="Booking #"] {
-    padding: var(--space-3) var(--space-3) var(--space-2);
+    padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    min-height: unset;
+    min-height: 0;
   }
   .recentBookingsTable td[data-label="Booking #"]::before {
     display: none;
   }
 
-  /* Line 1 right: Status badge — absolute top-right of card */
+  /* ── Status badge — anchored top-right, removed from flow ── */
   .recentBookingsTable td[data-label="Status"] {
     position: absolute;
-    top: var(--space-3);
+    top: var(--space-2);
     right: var(--space-3);
     padding: 0;
-    min-height: unset;
+    min-height: 0;
     border-bottom: none;
     background: transparent;
   }
@@ -1824,43 +1853,56 @@
     display: none;
   }
 
-  /* Lines 2–4: compact info rows */
+  /* ── Info rows: ultra-compact label | value ── */
   .recentBookingsTable td[data-label="Vessel"],
   .recentBookingsTable td[data-label="Voyage"],
-  .recentBookingsTable td[data-label="Route"],
   .recentBookingsTable td[data-label="Week"],
+  .recentBookingsTable td[data-label="Route"],
   .recentBookingsTable td[data-label="Consignee"],
   .recentBookingsTable td[data-label="Cargo"] {
-    padding: var(--space-1) var(--space-3);
+    padding: 3px var(--space-3);   /* 3px vertical — eliminates dead space */
     font-size: var(--text-xs);
-    min-height: unset;
+    min-height: 0;
+    gap: var(--space-2);
+    align-items: center;
   }
 
-  /* Line 5: two quantities side-by-side (50% each — no Stby column) */
+  /* ── Quantities: standard flex row (label | value) ── */
+  /* Replaces the fragile inline-flex / 50%-width approach entirely.
+     The generic .table td display:flex + justify-content:space-between
+     already renders label on the left and value on the right — no
+     special treatment needed, just compact padding. */
   .recentBookingsTable td[data-label="Req."],
   .recentBookingsTable td[data-label="Conf."] {
-    display: inline-flex;
-    flex-direction: column;
+    display: flex;                  /* explicit: override any residual inline-flex */
+    flex-direction: row;            /* label | value, not column */
     align-items: center;
-    width: 50%;
-    padding: var(--space-2) var(--space-3);
+    justify-content: space-between;
+    width: auto;                    /* drop the 50% width */
+    padding: 3px var(--space-3);
     font-size: var(--text-xs);
-    min-height: unset;
+    min-height: 0;
     border-bottom: none;
     box-sizing: border-box;
-    text-align: center;
+    text-align: left;
   }
-  /* Top border separates footer from info rows */
-  .recentBookingsTable td[data-label="Req."] {
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-  }
-  /* Stack label above value */
+
+  /* ::before for Req./Conf. back to standard label behaviour */
   .recentBookingsTable td[data-label="Req."]::before,
   .recentBookingsTable td[data-label="Conf."]::before {
-    display: block;
-    min-width: 0;
-    margin-right: 0;
-    margin-bottom: 2px;
-    text-align: center;
+    min-width: 80px;        /* restore standard label width */
+    margin-right: var(--space-3);
+    margin-bottom: 0;       /* was 2px (column-stacking artefact) */
+    text-align: left;       /* was center */
+  }
+
+  /* Separator between info rows and quantities */
+  .recentBookingsTable td[data-label="Req."] {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: var(--space-2);
+    margin-top: 2px;
+  }
+  .recentBookingsTable td[data-label="Conf."] {
+    padding-bottom: var(--space-2);
   }
 }
