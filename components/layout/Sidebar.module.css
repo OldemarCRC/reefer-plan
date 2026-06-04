@@ -7,13 +7,17 @@
   top: 0;
   left: 0;
   width: var(--sidebar-width);
-  height: 100vh;
+  /* dvh = dynamic viewport height: shrinks/grows as browser chrome appears.
+     100vh on tablet/mobile browsers includes the URL bar area, cutting off
+     the sidebar footer. 100dvh always reflects the visible viewport. */
+  height: 100dvh;
   background: var(--color-bg-secondary);
   border-right: var(--border-subtle);
   display: flex;
   flex-direction: column;
   z-index: var(--z-sidebar);
-  overflow: hidden;
+  overflow-x: hidden; /* clip horizontal content during width-collapse transition */
+  overflow-y: hidden; /* .nav handles vertical scroll (flex:1, overflow-y:auto) */
 }
 
 /* Width transition only enabled after initial state is painted */
@@ -379,6 +383,30 @@
 
 .tempCold {
   color: #60A5FA;  /* blue-400 */
+}
+
+/* ── Tablet (768–1024px): maximize nav scroll area ──────────────────────────
+   On portrait tablet the visible height is limited. The flex layout already
+   handles this (nav scrolls, brand/footer stay pinned), but we tighten
+   padding so more nav items are visible without scrolling.
+   ─────────────────────────────────────────────────────────────────────────── */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .brand {
+    padding: var(--space-2) var(--space-4);
+    height: 44px; /* slightly shorter brand on tablet */
+  }
+
+  .nav {
+    padding: var(--space-2) var(--space-1);
+  }
+
+  .navItem {
+    padding: var(--space-2) var(--space-2);
+  }
+
+  .widgets {
+    padding: var(--space-2) var(--space-2);
+  }
 }
 
 /* ── Mobile overlay behavior ─────────────────────────────────────────────── */

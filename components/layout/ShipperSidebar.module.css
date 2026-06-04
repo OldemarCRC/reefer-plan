@@ -7,13 +7,14 @@
   top: 0;
   left: 0;
   width: var(--sidebar-width);
-  height: 100vh;
+  height: 100dvh; /* dvh: accounts for tablet/mobile browser chrome */
   background: var(--color-bg-secondary);
   border-right: var(--border-subtle);
   display: flex;
   flex-direction: column;
   z-index: var(--z-sidebar);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: hidden; /* .nav handles vertical scroll (flex:1, overflow-y:auto) */
 }
 
 /* Only animate after hydration — prevents width flash on page load */
@@ -328,6 +329,26 @@
 .sidebar--collapsed .collapseLabel {
   opacity: 0;
   width: 0;
+}
+
+/* ── Tablet (768–1024px): tighter spacing to reveal more nav items ─────────── */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .brand {
+    padding: var(--space-2) var(--space-3);
+    min-height: 44px;
+  }
+
+  .nav {
+    padding: var(--space-2) 0;
+  }
+
+  .navItem {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .userSection {
+    padding: var(--space-2) var(--space-3);
+  }
 }
 
 /* Mobile: slide-in overlay sidebar */

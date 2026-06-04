@@ -130,6 +130,10 @@
   --z-dropdown: 50;
   --z-modal: 100;
   --z-toast: 200;
+
+  /* --- Content Layout Caps --- */
+  --content-max-width: 1400px;    /* dashboard, forms, detail views */
+  --content-max-width-xl: 1600px; /* wide multi-panel views */
 }
 
 
@@ -217,6 +221,13 @@ table {
   width: 100%;
 }
 
+/* Column headers: compact, no orphaned words in dense ERP tables */
+th {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
 /* --- Buttons reset --- */
 button {
   font-family: inherit;
@@ -246,46 +257,76 @@ input:focus, select:focus, textarea:focus {
 
 
 /* ============================================================================
-   APP LAYOUT
+   APP LAYOUT — Mobile-first, 4-breakpoint responsive grid
+   ─────────────────────────────────────────────────────────────────────────────
+   Mobile   ≤ 767px   sidebar = overlay (no space reservation)
+   Tablet   768–1024px sidebar = fixed icon-rail or full; tighter content padding
+   Desktop  1025–1440px standard sidebar + content
+   XL       > 1440px  full width; opt-in centering via .page-cap utilities
    ============================================================================ */
 
 .app-layout {
   display: flex;
-  min-height: 100vh;
+  min-height: 100dvh; /* dvh respects mobile/tablet browser chrome (URL bar) */
 }
 
+/* ── .app-main — mobile-first (no margin-left by default) ─────────────────
+   On mobile the sidebar is a z-index overlay, so main fills the full viewport.
+   The desktop margin-left is layered on from 768px up via the media query.
+   ─────────────────────────────────────────────────────────────────────────── */
 .app-main {
   flex: 1;
-  min-width: 0; /* prevent flex item from expanding body past viewport */
-  margin-left: var(--sidebar-width);
+  min-width: 0;           /* critical: prevents flex child from overflowing viewport */
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  min-height: 100dvh;
+  /* margin-left intentionally absent — mobile default is 0 */
 }
 
-/* Transition only enabled after initial persisted state is painted */
+/* Enable transition ONLY after initial persisted state has been painted.
+   Prevents the margin-left animation from firing during hydration. */
 .transitions-ready .app-main {
   transition: margin-left var(--transition-normal);
 }
 
-.app-main--collapsed {
-  margin-left: var(--sidebar-width-collapsed);
+/* ── Tablet & desktop (≥ 768px): sidebar occupies fixed horizontal space ─── */
+@media (min-width: 768px) {
+  .app-main {
+    margin-left: var(--sidebar-width);
+  }
+
+  .app-main--collapsed {
+    margin-left: var(--sidebar-width-collapsed);
+  }
 }
 
+/* ── .app-content — inner content wrapper ────────────────────────────────── */
 .app-content {
   flex: 1;
-  min-width: 0; /* prevent wide tables from expanding flex item past viewport */
-  padding: var(--space-6);
+  min-width: 0;                     /* prevents table overflow from escaping the column */
+  padding: var(--space-4);          /* mobile: 16px */
   margin-top: var(--header-height);
 }
 
-/* ============================================================================
-   PRE-HYDRATION SIDEBAR STATE
-   Set by the blocking <script> in layout.tsx before the first paint.
-   Keeps the sidebar visually correct while React is still loading/hydrating.
-   Only applied on non-mobile (the inline script already skips mobile).
-   ============================================================================ */
+/* Tablet: comfortable padding without wasting space */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .app-content {
+    padding: var(--space-4) var(--space-5); /* 16px top/bottom · 20px sides */
+  }
+}
 
+/* Desktop: full 24px padding */
+@media (min-width: 1025px) {
+  .app-content {
+    padding: var(--space-6);
+  }
+}
+
+/* ── PRE-HYDRATION SIDEBAR STATE ─────────────────────────────────────────────
+   Applied by the blocking <script> in layout.tsx BEFORE React hydrates.
+   Prevents layout shift between SSR HTML and first client paint.
+   Only fires on non-mobile (the inline script already skips ≤ 767px).
+   ─────────────────────────────────────────────────────────────────────────── */
 @media (min-width: 768px) {
   html.sidebar-collapsed .app-sidebar {
     width: var(--sidebar-width-collapsed);
@@ -309,7 +350,7 @@ input:focus, select:focus, textarea:focus {
   }
 }
 
-/* Mobile sidebar backdrop (rendered by AppShell when mobileOpen=true) */
+/* Mobile sidebar backdrop — rendered by AppShell when mobileOpen = true */
 .sidebar-backdrop {
   position: fixed;
   inset: 0;
@@ -317,18 +358,71 @@ input:focus, select:focus, textarea:focus {
   z-index: calc(var(--z-sidebar) - 1);
 }
 
-/* Mobile layout — sidebar is an overlay, main content fills the full width */
-@media (max-width: 767px) {
-  .app-main,
-  .app-main--collapsed {
-    margin-left: 0;
-  }
 
-  .app-content {
-    padding: var(--space-4); /* tighter padding on small screens */
-  }
+/* ============================================================================
+   CONTENT LAYOUT UTILITIES
+   Opt-in modifiers — apply these class names directly in page JSX.
+   ============================================================================ */
+
+/* ── Reading / dashboard pages — centered max-width column ──────────────────
+   On XL monitors (> 1440px) full-width content becomes hard to scan.
+   Wrap page body in .page-cap to limit and center it.
+   No visual effect below ~1400px — the container is already narrower.
+
+   Usage: <div className="page-cap"> around dashboard/form/detail content
+   ─────────────────────────────────────────────────────────────────────────── */
+.page-cap {
+  width: 100%;
+  max-width: var(--content-max-width);   /* 1400px */
+  margin-inline: auto;
 }
 
+/* Wider variant for multi-panel views that need more breathing room */
+.page-cap-xl {
+  width: 100%;
+  max-width: var(--content-max-width-xl); /* 1600px */
+  margin-inline: auto;
+}
+
+/* ── Horizontal-scroll wrapper for data-dense tables ────────────────────────
+   Prevents wide tables (Bookings, Schedules, Forecasts) from causing a
+   full-page horizontal scroll that shifts the sidebar and header.
+   The scroll is strictly contained — only the table moves, nothing else.
+
+   Usage: <div className="table-scroll"> <table>...</table> </div>
+   ─────────────────────────────────────────────────────────────────────────── */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch; /* momentum scroll on iOS / iPadOS */
+  overscroll-behavior-x: contain;   /* stops table scroll from chaining to page scroll */
+  /* Always-visible thin scrollbar signals that the table is scrollable */
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-text-muted) transparent;
+}
+
+.table-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-text-muted);
+  border-radius: 2px;
+}
+
+.table-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+/* Tables inside the scroll wrapper should never collapse below their
+   natural content width — this is what triggers horizontal scroll. */
+.table-scroll > table {
+  min-width: max-content;
+}
 
 /* ============================================================================
    UTILITY CLASSES (minimal set)
