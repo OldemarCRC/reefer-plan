@@ -109,9 +109,6 @@ export default function ShipperShell({ children, shipperName }: ShipperShellProp
             </svg>
           </button>
           <span className={styles.headerTitle}>Shipper Portal</span>
-          {shipperCode && (
-            <span className={styles.headerShipperCode}>{shipperCode}</span>
-          )}
         </header>
         <div className={styles.content}>
           {children}

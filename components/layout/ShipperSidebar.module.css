@@ -32,10 +32,11 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  min-height: var(--header-height);
+  padding: 0 var(--space-4);
+  height: var(--header-height);
   border-bottom: var(--border-subtle);
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .brandContent {
@@ -334,8 +335,8 @@
 /* ── Tablet (768–1024px): tighter spacing to reveal more nav items ─────────── */
 @media (min-width: 768px) and (max-width: 1024px) {
   .brand {
-    padding: var(--space-2) var(--space-3);
-    min-height: 44px;
+    padding: 0 var(--space-3);
+    /* height stays var(--header-height) — matches main header at all breakpoints */
   }
 
   .nav {

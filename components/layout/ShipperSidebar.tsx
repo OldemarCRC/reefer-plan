@@ -129,9 +129,6 @@ export default function ShipperSidebar({ collapsed, onToggle, mobileOpen = false
             <span className={styles.brandText}>Reefer Planner</span>
             <span className={styles.portalBadge}>Shipper</span>
           </div>
-          {shipperName && (
-            <span className={styles.brandCompany}>{shipperName}</span>
-          )}
         </div>
       </div>
 
