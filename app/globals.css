@@ -119,7 +119,7 @@
   /* --- Layout --- */
   --sidebar-width: 240px;
   --sidebar-width-collapsed: 56px;
-  --header-height: 48px;
+  --header-height: 56px;
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
   --transition-slow: 350ms ease;
