@@ -132,8 +132,8 @@
   --z-toast: 200;
 
   /* --- Content Layout Caps --- */
-  --content-max-width: 1400px;    /* dashboard, forms, detail views */
-  --content-max-width-xl: 1600px; /* wide multi-panel views */
+  --content-max-width: 1600px;    /* dashboard, forms, detail views */
+  --content-max-width-xl: 1920px; /* wide multi-panel views */
 }
 
 

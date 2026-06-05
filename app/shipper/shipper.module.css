@@ -31,7 +31,7 @@
 
 .summaryGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: var(--space-4);
   margin-bottom: var(--space-6);
 }
@@ -499,7 +499,7 @@
 }
 
 .wizardPage {
-  max-width: 680px;
+  max-width: 800px;
   margin: 0 auto;
   width: 100%;
 }
