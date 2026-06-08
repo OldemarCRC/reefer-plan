@@ -3,7 +3,7 @@
 > **Status:** Work in progress — updated alongside development sessions.
 > **Language:** English
 > **Audience:** Exporters / Shippers using the portal to manage bookings and space forecasts.
-> **Last updated:** v1.72.61
+> **Last updated:** v1.72.60
 
 ---
 
