@@ -44,9 +44,11 @@ Thumbs.db
 .vercel
 
 # Datos específicos de barcos o bases de datos locales
-/docs
+docs/*
+!docs/PROJECT_STATUS.md
+!docs/MANUAL_DRAFT_AGENCY.md
+!docs/MANUAL_DRAFT_SHIPPER.md
 
 # Documentación local (no para repositorio)
-PROJECT_STATUS.md
 prompt.md
 vessels.csv
