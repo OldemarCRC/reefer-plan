@@ -552,7 +552,7 @@ export default function VesselProfile({
                     height={centerH * fillPct - 1}
                     rx={1}
                     fill={effectiveColor}
-                    opacity={0.35}
+                    opacity={0.65}
                   />
                 )}
 
@@ -569,21 +569,21 @@ export default function VesselProfile({
                   />
                 )}
 
-                {/* Thin capacity progress bar — bottom edge */}
+                {/* Capacity progress bar — bottom edge */}
                 <rect
                   x={comp.x + 1}
-                  y={comp.y + comp.h - 2}
+                  y={comp.y + comp.h - 5}
                   width={comp.w - 2}
-                  height={2}
+                  height={5}
                   rx={1}
-                  fill="rgba(255,255,255,0.12)"
+                  fill="rgba(255,255,255,0.22)"
                 />
                 {fillPct > 0 && (
                   <rect
                     x={comp.x + 1}
-                    y={comp.y + comp.h - 2}
-                    width={Math.max(2, (comp.w - 2) * Math.min(fillPct, 1))}
-                    height={2}
+                    y={comp.y + comp.h - 5}
+                    width={Math.max(3, (comp.w - 2) * Math.min(fillPct, 1))}
+                    height={5}
                     rx={1}
                     fill={
                       fillPct > 0.90 ? '#f87171' :
@@ -681,7 +681,7 @@ export default function VesselProfile({
                       {/* Col 4 — POL codes */}
                       <text x={comp.x + comp.w * 0.57} y={footerY + CELL_FOOTER_H / 2}
                         textAnchor="middle" dominantBaseline="middle"
-                        style={{ fontSize: '7px', fill: polCodes.length > 0 ? '#60a5fa' : '#334155' }}>
+                        style={{ fontSize: '7px', fill: polCodes.length > 0 ? '#e2e8f0' : '#475569' }}>
                         {polLabel}
                       </text>
                     </>}
