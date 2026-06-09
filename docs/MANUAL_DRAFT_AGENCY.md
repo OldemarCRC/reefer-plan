@@ -3,7 +3,7 @@
 > **Status:** Work in progress — updated alongside development sessions.
 > **Language:** English
 > **Audience:** Shipping agency staff — Planners, Administrators, Stevedores, Checkers.
-> **Last updated:** v1.72.61
+> **Last updated:** v1.72.66
 
 ---
 
@@ -545,9 +545,10 @@ The vessel longitudinal profile shows:
 - **Cell center** — `used/capacity` permanently shown (e.g. `262/388`), below the cargo type abbreviation.
 - **Diagonal stripe overlay** — indicates an ESTIMATED position (from contract estimates, not a confirmed booking).
 - **Cell header strip** — pallet capacity / pallets loaded / available pallets.
-- **Cell footer strip** — design factor | historical factor | actual factor | POL port codes | temperature.
+- **Cell footer strip** — design factor | historical factor | actual factor | POL port codes | temperature. POL codes are displayed in high-contrast light (#e2e8f0) when present, muted slate when the cell has no assigned loading port.
+- **Capacity progress bar** — a 3 px solid bar along the bottom edge of each compartment cell indicates fill level. Color coding: green (≤ 75%), amber (75–90%), red (> 90%). The bar is always visible above the footer strip background.
 
-**Clicking a compartment** opens a fixed right-side slide-over panel (420px wide, 380px when the Unassigned Cargo sidebar is also open). The sidebar auto-collapses when the panel opens to give the SVG more space; it restores when the panel is closed.
+**Clicking a compartment** opens a fixed right-side slide-over panel (420px wide, 380px when the Unassigned Cargo sidebar is also open). The panel opens with a smooth 480 ms fade-in animation; closing is deliberately faster (180 ms) for a snappy feel. The sidebar auto-collapses when the panel opens to give the SVG more space; it restores when the panel is closed.
 
 The compartment detail panel contains two sections:
 
