@@ -569,30 +569,6 @@ export default function VesselProfile({
                   />
                 )}
 
-                {/* Capacity progress bar — bottom edge */}
-                <rect
-                  x={comp.x + 1}
-                  y={comp.y + comp.h - 5}
-                  width={comp.w - 2}
-                  height={5}
-                  rx={1}
-                  fill="rgba(255,255,255,0.22)"
-                />
-                {fillPct > 0 && (
-                  <rect
-                    x={comp.x + 1}
-                    y={comp.y + comp.h - 5}
-                    width={Math.max(3, (comp.w - 2) * Math.min(fillPct, 1))}
-                    height={5}
-                    rx={1}
-                    fill={
-                      fillPct > 0.90 ? '#f87171' :
-                      fillPct > 0.75 ? '#fbbf24' :
-                      '#22c55e'
-                    }
-                  />
-                )}
-
                 {/* HEADER STRIP — capacity / loaded / available */}
                 {showHeader && comp.assignment && (
                   <>
@@ -784,6 +760,30 @@ export default function VesselProfile({
                   >
                     {loaded}/{preferredCap}
                   </text>
+                )}
+
+                {/* Capacity progress bar — rendered last so it sits above footer strip */}
+                <rect
+                  x={comp.x + 1}
+                  y={comp.y + comp.h - 3}
+                  width={comp.w - 2}
+                  height={3}
+                  rx={1}
+                  fill="#1e293b"
+                />
+                {fillPct > 0 && (
+                  <rect
+                    x={comp.x + 1}
+                    y={comp.y + comp.h - 3}
+                    width={Math.max(3, (comp.w - 2) * Math.min(fillPct, 1))}
+                    height={3}
+                    rx={1}
+                    fill={
+                      fillPct > 0.90 ? '#f87171' :
+                      fillPct > 0.75 ? '#fbbf24' :
+                      '#22c55e'
+                    }
+                  />
                 )}
               </g>
             );
