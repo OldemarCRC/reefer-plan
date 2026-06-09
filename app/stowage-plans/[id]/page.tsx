@@ -367,12 +367,9 @@ export default function StowagePlanDetailPage() {
 
       // Only collapse if not already collapsed
       if (!sidebarWasCollapsed.current) {
-        // Small delay so panel animation and sidebar collapse start together
-        setTimeout(() => {
-          window.dispatchEvent(
-            new CustomEvent('collapse-sidebar', { detail: { collapsed: true } })
-          );
-        }, 10);
+        window.dispatchEvent(
+          new CustomEvent('collapse-sidebar', { detail: { collapsed: true } })
+        );
       }
     } else {
       // Restore only if WE collapsed it
